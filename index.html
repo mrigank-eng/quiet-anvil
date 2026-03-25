@@ -324,6 +324,7 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
     <div class="sb-item" onclick="nav('report')"><span class="sb-icon">📜</span>Anvil Report</div>
     <div class="sb-item" onclick="nav('milestones')"><span class="sb-icon">★</span>Milestones</div>
     <div class="sb-item" onclick="nav('share')"><span class="sb-icon">◈</span>Share</div>
+    <div class="sb-item" onclick="nav('food')"><span class="sb-icon">🍽</span>Food Log</div>
     <div class="sb-item" onclick="nav('settings')"><span class="sb-icon">⚙</span>Settings</div>
   </div>
   <div class="sb-footer">
@@ -349,6 +350,7 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
   <div id="screen-report" class="screen"><div class="loading">Building report...</div></div>
   <div id="screen-milestones" class="screen"><div class="loading">Loading milestones...</div></div>
   <div id="screen-share" class="screen"><div class="loading">Building share cards...</div></div>
+  <div id="screen-food" class="screen"><div class="loading">Loading food log...</div></div>
   <div id="screen-settings" class="screen"><div class="loading">Loading settings...</div></div>
 </div>
 
@@ -422,6 +424,53 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
   </div>
 </div>
 
+<!-- FOOD MODAL -->
+<div class="modal-overlay" id="food-modal">
+  <div class="modal">
+    <div class="modal-title">Log a meal</div>
+    <label>Meal type</label>
+    <select id="food-meal-type">
+      <option value="Breakfast">Breakfast</option>
+      <option value="Lunch">Lunch</option>
+      <option value="Dinner">Dinner</option>
+      <option value="Snack">Snack</option>
+    </select>
+    <label>What you ate</label>
+    <textarea id="food-desc" placeholder="Describe the meal..." style="min-height:60px"></textarea>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <input type="checkbox" id="food-healthy" checked style="width:auto;margin:0">
+      <label for="food-healthy" style="margin:0;font-size:14px;color:var(--parch);font-family:var(--ff);cursor:pointer">This meal was healthy</label>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-danger btn-sm" onclick="closeModal('food-modal')">Cancel</button>
+      <button class="btn btn-sm" onclick="submitFoodLog()">Log meal</button>
+    </div>
+  </div>
+</div>
+
+<!-- MISSED DAYS MODAL -->
+<div class="modal-overlay" id="missed-modal">
+  <div class="modal">
+    <div class="modal-title">Day not recorded</div>
+    <div class="modal-sub" id="missed-count" style="color:var(--ember)"></div>
+    <div style="font-family:var(--fc);font-size:16px;color:var(--gold);margin-bottom:14px" id="missed-date"></div>
+    <div class="st">Commandments — how did this day go?</div>
+    <div style="margin-bottom:14px">
+      ${CMDS.map(c=>`<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--border)">
+        <input type="checkbox" id="missed-ct-${c.key}" style="width:auto;margin:0">
+        <label for="missed-ct-${c.key}" style="flex:1;font-size:12px;color:var(--parch);font-family:var(--ff);cursor:pointer;margin:0">${c.label}</label>
+        <span style="font-family:var(--fc);font-size:10px;color:var(--gold)">${c.pts}pt</span>
+      </div>`).join('')}
+    </div>
+    <label>Reflection</label>
+    <textarea id="missed-reflection" placeholder="What happened that day..." style="min-height:60px"></textarea>
+    <div class="modal-btns">
+      <button class="btn btn-danger btn-sm" onclick="skipMissedDay()">Skip this day</button>
+      <button class="btn btn-sm" onclick="submitMissedDay()">Save and continue</button>
+    </div>
+  </div>
+</div>
+
 <!-- UNLOCK -->
 <div class="unlock" id="unlock">
   <div class="unlock-eye">Level unlocked</div>
@@ -439,7 +488,7 @@ const db=createClient(SURL,SKEY);
 
 // ── GAME CONFIG ────────────────────────────────────────
 function getGameStart(){return localStorage.getItem('qa_start')||'2026-03-28';}
-function getGameEnd(){return '2028-06-01';}
+function getGameEnd(){return localStorage.getItem('qa_end')||'2028-06-01';}
 function GSTART(){return new Date(getGameStart());}
 function GEND(){return new Date(getGameEnd());}
 
@@ -531,6 +580,7 @@ let S={
   projects:[],todayLog:null,todaySessions:[],streaks:[],declarations:[],
   allLogs:[],allSessions:[],milestones:[],
   committedProjects:{},
+  sessionPages:{}, // pid -> current page number
   pendingSessionPid:null,pendingSkipPid:null,pendingCT:null,
   calSelected:null,calDate:new Date(),
   chartsDrawn:{}
@@ -541,6 +591,8 @@ const today=()=>new Date().toISOString().split('T')[0];
 const daysLeft=()=>Math.max(0,Math.ceil((GEND()-new Date())/864e5));
 const dayNum=()=>Math.max(1,Math.ceil((new Date()-GSTART())/864e5));
 const weekNum=()=>Math.ceil(dayNum()/7);
+const totalCampaignDays=()=>Math.ceil((GEND()-GSTART())/864e5);
+const maxPoints=()=>totalCampaignDays()*80;
 
 function getCatCounts(pid,sessions){
   const proj=PROJECTS.find(x=>x.id===pid);
@@ -679,6 +731,8 @@ async function loadData(){
   }
   document.getElementById('sb-countdown').textContent=daysLeft()+' days';
   renderActive();
+  // Check for missed days after first load
+  if(!S._missedChecked){S._missedChecked=true;setTimeout(checkMissedDays,800);}
 }
 
 async function loadAll(){
@@ -782,6 +836,7 @@ function renderActive(){
   else if(id==='report')renderReport();
   else if(id==='milestones')renderMilestones();
   else if(id==='share')renderShare();
+  else if(id==='food')renderFood();
   else if(id==='settings')renderSettings();
 }
 
@@ -893,7 +948,7 @@ function renderForge(){
 
   document.getElementById('screen-forge').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
-      <div><div class="pt">Daily Forge</div><div style="font-size:13px;color:var(--ash)">${dateStr} · Day ${dayNum()} of 795 · Week ${weekNum()} of 114</div></div>
+      <div><div class="pt">Daily Forge</div><div style="font-size:13px;color:var(--ash)">${dateStr} · Day ${dayNum()} of ${totalCampaignDays()} · Week ${weekNum()} of 114</div></div>
       <div style="text-align:right"><div style="font-family:var(--fc);font-size:32px;color:var(--gold);line-height:1">${daysLeft()}</div><div style="font-size:11px;color:var(--ash)">days to reckoning</div></div>
     </div>
 
@@ -1084,7 +1139,7 @@ async function submitDeclaration(){
 // ── ARMOURY ────────────────────────────────────────────
 function renderArmoury(){
   const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,s?.total_tangible||0);})):0;
-  const metaTitle=metaLvl>0?META_T[metaLvl-1]:META_T[0];
+  const metaTitle=metaLvl>0?META_T[metaLvl-1]:'Working toward '+META_T[0];
 
   // Pillar summaries
   const pillarData={Soul:{pts:0,maxPts:20,projects:[]},Body:{pts:0,maxPts:20,projects:[]},Business:{pts:0,maxPts:20,projects:[]}};
@@ -1124,27 +1179,34 @@ function renderArmoury(){
     const nextT=getTargetTitle(proj.id,total);
     const pr=getProg(proj.id,total);
     const next=getNextAt(proj.id,total);
+    const ceilPct=Math.round(total/proj.ceiling*100);
     cardsHTML+=`<div class="ac" onclick="nav('${proj.key}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-        <div>
-          <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.1em;margin-bottom:2px">${proj.pillar}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.1em;margin-bottom:3px">${proj.pillar.toUpperCase()}</div>
           <div style="font-size:14px;color:var(--parch);font-weight:500;margin-bottom:3px">${proj.id}</div>
-          <div style="font-family:var(--fc);font-size:14px;color:var(--gold)">${curT}</div>
-          <div style="font-size:12px;color:var(--ash);margin-top:2px">${total.toLocaleString()} ${proj.unit}</div>
+          <div style="font-family:var(--fc);font-size:13px;color:var(--gold);margin-bottom:4px">${curT}</div>
+          <div style="font-size:12px;color:var(--ash)">${total.toLocaleString()} ${proj.unit}</div>
         </div>
-        <div style="text-align:right"><div style="font-family:var(--fc);font-size:28px;color:var(--parch);line-height:1">${l}<span style="font-size:11px;color:var(--ash)">/10</span></div></div>
+        <div style="text-align:right;flex-shrink:0;padding-left:10px">
+          <div style="font-family:var(--fc);font-size:28px;color:var(--parch);line-height:1">${l}<span style="font-size:11px;color:var(--ash)">/10</span></div>
+          <div style="font-family:var(--fc);font-size:11px;color:var(--ash);margin-top:3px">${ceilPct}% done</div>
+        </div>
       </div>
       <div class="prog-track"><div class="prog-fill" style="width:${pr}%"></div></div>
       <div style="font-size:11px;color:var(--ash);font-style:italic;margin-top:4px">${next?(next-total).toLocaleString()+' '+proj.unit+' to '+nextT:'Ceiling reached'}</div>
     </div>`;
   });
 
+  // Fix meta title — show working toward if level 0
+  const metaDisplayTitle = metaLvl > 0 ? metaTitle : 'Working toward ' + META_T[0];
+
   document.getElementById('screen-armoury').innerHTML=`
     <div class="pt">The Armoury</div>
     <div class="ps">Complete campaign overview — click any project to open its page</div>
     <div class="card card-gold" style="margin-bottom:20px">
-      <div style="font-family:var(--fc);font-size:28px;color:var(--gold);margin-bottom:4px">${metaTitle}</div>
-      <div style="font-size:13px;color:var(--ash)">Meta Level ${metaLvl} of 10 · Day ${dayNum()} of 795</div>
+      <div style="font-family:var(--fc);font-size:28px;color:var(--gold);margin-bottom:4px">${metaDisplayTitle}</div>
+      <div style="font-size:13px;color:var(--ash)">Meta Level ${metaLvl} of 10 · Day ${dayNum()} of ${totalCampaignDays()}</div>
     </div>
     <div class="st">Pillar balance</div>
     <div class="g3" style="margin-bottom:20px">${pillarHTML}</div>
@@ -1161,7 +1223,7 @@ async function renderProject(screenKey){
 
   await loadAll();
   const allPS=S.allSessions.filter(x=>x.project===proj.id&&x.tangible_logged>0);
-  const recent=allPS.slice(-20).reverse();
+  const sessPage=S.sessionPages[proj.id]||0;const SESS_PER_PAGE=10;const sortedPS=[...allPS].reverse();const recent=sortedPS.slice(sessPage*SESS_PER_PAGE,(sessPage+1)*SESS_PER_PAGE);
   const totalPts=allPS.reduce((s,x)=>s+(x.points_earned||0),0);
   const totalPen=S.allSessions.filter(x=>x.project===proj.id).reduce((s,x)=>s+(x.penalty||0),0);
 
@@ -1175,53 +1237,61 @@ async function renderProject(screenKey){
   // Personal best
   const pb=personalBest(proj.id);
 
-  // Category distribution with floor indicators
+  // Category distribution with floor indicators — clean UX
   let catHTML='';
   if(proj.cats.length>0&&allPS.length>0){
-    const nextLvlIdx=l; // index of next level to unlock (0-based)
-    catHTML=`<div class="st">Category distribution${proj.floors?' & level floors':''}</div><div class="card" style="margin-bottom:14px">`;
+    const nextLvlIdx=l;
+    const hasFloors=proj.floors&&nextLvlIdx<proj.levels.length;
+
+    // Floor summary line
+    let floorSummaryLine='';
+    if(hasFloors){
+      const unmetFloors=Object.keys(proj.floors).filter(cat=>(catCounts[cat]||0)<proj.floors[cat][nextLvlIdx]);
+      const metCount=Object.keys(proj.floors).length-unmetFloors.length;
+      const totalFloors=Object.keys(proj.floors).length;
+      floorSummaryLine=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 12px;background:${unmetFloors.length===0?'var(--safe-dim)':'var(--warn-dim)'};border-radius:6px;border:0.5px solid ${unmetFloors.length===0?'var(--safe)':'var(--warn)'}">
+        <span style="font-size:12px;color:${unmetFloors.length===0?'var(--safe)':'var(--warn)'};font-family:var(--fc);font-size:11px">${unmetFloors.length===0?'✓ All floors met for Level '+(nextLvlIdx+1):'⚠ '+unmetFloors.length+' floor'+(unmetFloors.length>1?'s':'')+' unmet for Level '+(nextLvlIdx+1)}</span>
+        <span style="font-size:11px;color:var(--ash);margin-left:auto">${metCount}/${totalFloors} met</span>
+      </div>`;
+    }
+
+    catHTML=`<div class="st">Category distribution${hasFloors?' — floors for Level '+(nextLvlIdx+1):''}</div><div class="card" style="margin-bottom:14px">${floorSummaryLine}`;
     proj.cats.forEach(function(cat){
       const cnt=catCounts[cat]||0;
-      const totalSess=allPS.length;
-      const pct=totalSess>0?Math.round(cnt/totalSess*100):0;
-      let floorInfo='';
-      if(proj.floors&&proj.floors[cat]){
-        const nextFloor=nextLvlIdx<proj.floors[cat].length?proj.floors[cat][nextLvlIdx]:null;
-        if(nextFloor!==null){
-          const floorPct=Math.min(100,Math.round(cnt/nextFloor*100));
-          const met=cnt>=nextFloor;
-          floorInfo=`<div style="margin-top:4px;display:flex;align-items:center;gap:6px">
-            <div style="font-size:10px;color:${met?'var(--safe)':'var(--ash)'}">Floor L${nextLvlIdx+1}: ${cnt}/${nextFloor}</div>
-            <div style="flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${floorPct}%;background:${met?'var(--safe)':'var(--warn)'}"></div></div>
-            <div style="font-size:10px;color:${met?'var(--safe)':'var(--warn)'}";>${met?'✓':Math.max(0,nextFloor-cnt)+' more'}</div>
-          </div>`;
-        }
+      const distPct=allPS.length>0?Math.round(cnt/allPS.length*100):0;
+      let floorPill='';
+      if(hasFloors&&proj.floors[cat]){
+        const req=proj.floors[cat][nextLvlIdx];
+        const met=cnt>=req;
+        const fpct=Math.min(100,Math.round(cnt/req*100));
+        floorPill=`<div style="display:flex;align-items:center;gap:6px;margin-top:5px;padding-top:5px;border-top:0.5px solid var(--border)">
+          <div style="font-size:10px;color:var(--ash);width:80px;flex-shrink:0">L${nextLvlIdx+1} floor</div>
+          <div style="flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${fpct}%;background:${met?'var(--safe)':'var(--warn)'}"></div></div>
+          <div style="font-size:10px;font-family:var(--fc);color:${met?'var(--safe)':'var(--warn)'};width:70px;text-align:right">${met?'✓ '+cnt+'/'+req:cnt+'/'+req}</div>
+        </div>`;
       }
-      catHTML+=`<div class="cat-row" style="flex-direction:column;align-items:stretch;margin-bottom:10px">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:2px">
+      catHTML+=`<div style="margin-bottom:${floorPill?'12px':'8px'}">
+        <div style="display:flex;align-items:center;gap:10px">
           <div class="cat-label">${cat}</div>
-          <div class="cat-track"><div class="cat-fill" style="width:${pct}%"></div></div>
-          <div class="cat-val">${cnt} <span style="color:var(--ash)">(${pct}%)</span></div>
+          <div class="cat-track"><div class="cat-fill" style="width:${distPct}%"></div></div>
+          <div class="cat-val">${cnt} <span style="color:var(--ash);font-size:10px">(${distPct}%)</span></div>
         </div>
-        ${floorInfo}
+        ${floorPill}
       </div>`;
     });
     catHTML+='</div>';
   }
 
-  // Floor status summary for current level
+  // Floor warning banner
   let floorStatusHTML='';
-  if(proj.floors){
-    const nextLvlIdx=l;
-    if(nextLvlIdx<proj.levels.length){
-      const allMet=Object.keys(proj.floors).every(function(cat){return(catCounts[cat]||0)>=proj.floors[cat][nextLvlIdx];});
-      const totalMet=total>=proj.levels[nextLvlIdx];
-      if(totalMet&&!allMet){
-        floorStatusHTML=`<div class="pen-banner" style="background:var(--warn-dim);border-color:var(--warn);margin-bottom:14px">
-          <div style="width:8px;height:8px;border-radius:50%;background:var(--warn);flex-shrink:0"></div>
-          <div style="flex:1;font-size:12px;color:#F0D080">Total tangible reached for Level ${nextLvlIdx+1} but category floors not yet met. Complete the required sessions per category to unlock ${proj.titles[nextLvlIdx]}.</div>
-        </div>`;
-      }
+  if(proj.floors&&l<proj.levels.length){
+    const allMet=Object.keys(proj.floors).every(cat=>(catCounts[cat]||0)>=proj.floors[cat][l]);
+    if(total>=proj.levels[l]&&!allMet){
+      const unmet=Object.keys(proj.floors).filter(cat=>(catCounts[cat]||0)<proj.floors[cat][l]);
+      floorStatusHTML=`<div class="pen-banner" style="background:var(--warn-dim);border-color:var(--warn);margin-bottom:14px">
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--warn);flex-shrink:0"></div>
+        <div><div style="font-size:13px;color:#F0D080;margin-bottom:2px">Tangible threshold met but floors not cleared for ${proj.titles[l]}</div><div style="font-size:11px;color:var(--ash)">Still needed: ${unmet.join(', ')}</div></div>
+      </div>`;
     }
   }
 
@@ -1242,8 +1312,14 @@ async function renderProject(screenKey){
     </div>`;
   }).join('');
 
+  const totalPages=Math.ceil(allPS.length/SESS_PER_PAGE);
+  const paginationHTML=totalPages>1?`<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;font-size:12px">
+    <button class="btn btn-xs" onclick="sessPageChange('${proj.id}','${screenKey}',${sessPage-1})" ${sessPage===0?'disabled style="opacity:0.3"':''}>← Prev</button>
+    <span style="color:var(--ash)">Page ${sessPage+1} of ${totalPages} · ${allPS.length} total sessions</span>
+    <button class="btn btn-xs" onclick="sessPageChange('${proj.id}','${screenKey}',${sessPage+1})" ${sessPage>=totalPages-1?'disabled style="opacity:0.3"':''}>Next →</button>
+  </div>`:'';
   const sessHTML=recent.length>0?`<table class="dt"><thead><tr><th>Date</th><th>Amount</th><th>Category</th>${proj.hasLang?'<th>Language</th>':''}<th>Notes</th></tr></thead>
-    <tbody>${recent.map(s=>`<tr><td style="color:var(--ash)">${s.date}</td><td style="font-family:var(--fc);font-size:12px;color:var(--gold)">${s.tangible_logged} ${proj.unit}</td><td>${s.category||'—'}</td>${proj.hasLang?`<td>${s.language||'—'}</td>`:''}<td style="color:var(--ash)">${s.notes||'—'}</td></tr>`).join('')}</tbody></table>`
+    <tbody>${recent.map(s=>`<tr><td style="color:var(--ash)">${s.date}</td><td style="font-family:var(--fc);font-size:12px;color:var(--gold)">${s.tangible_logged} ${proj.unit}</td><td>${s.category||'—'}</td>${proj.hasLang?`<td>${s.language||'—'}</td>`:''}<td style="color:var(--ash)">${s.notes||'—'}</td></tr>`).join('')}</tbody></table>${paginationHTML}`
     :'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:12px 0">No sessions logged yet.</div>';
 
   document.getElementById('screen-'+screenKey).innerHTML=`
@@ -1348,11 +1424,28 @@ function renderTemper(){
 
 // ── WILLMASTER ─────────────────────────────────────────
 function renderWillmaster(){
+  // Build 30-day heatmap data from allLogs
+  const heatDays=30;
+  const heatData={};
+  const now=new Date();
+  for(let i=heatDays-1;i>=0;i--){
+    const d=new Date(now);d.setDate(d.getDate()-i);
+    const ds=d.toISOString().split('T')[0];
+    heatData[ds]={};
+    CMDS.forEach(c=>heatData[ds][c.key]=null);
+  }
+  S.allLogs.forEach(function(l){
+    if(heatData[l.date]){
+      CMDS.forEach(c=>{heatData[l.date][c.key]=l[c.key];});
+    }
+  });
+  const heatDates=Object.keys(heatData).sort();
+
   document.getElementById('screen-willmaster').innerHTML=`
     <div class="pt">The Willmaster</div>
-    <div class="ps">Streak progression through 11 titles per commandment</div>
+    <div class="ps">Streak progression · 11 titles per commandment · 30-day heatmap</div>
     <div class="g4" style="margin-bottom:24px">
-      <div class="sb"><div class="sb-num" style="color:var(--gold)">${S.streaks.reduce((m,s)=>Math.max(m,s.current_streak||0),0)}</div><div class="sb-lbl">Best Current Streak</div></div>
+      <div class="sb"><div class="sb-num" style="color:var(--gold)">${S.streaks.reduce((m,s)=>Math.max(m,s.current_streak||0),0)}</div><div class="sb-lbl">Best Streak</div></div>
       <div class="sb"><div class="sb-num">${S.streaks.reduce((m,s)=>Math.max(m,s.longest_streak||0),0)}</div><div class="sb-lbl">All-Time Best</div></div>
       <div class="sb"><div class="sb-num" style="color:var(--safe)">${S.streaks.filter(s=>(s.current_streak||0)>=7).length}</div><div class="sb-lbl">Active (7d+)</div></div>
       <div class="sb"><div class="sb-num" style="color:var(--ember)">${S.streaks.reduce((t,s)=>t+(s.total_breaks||0),0)}</div><div class="sb-lbl">Total Breaks</div></div>
@@ -1360,27 +1453,48 @@ function renderWillmaster(){
     ${CMDS.map(function(c){
       const streak=S.streaks.find(s=>s.commandment===c.short)||{};
       const cur=streak.current_streak||0;const longest=streak.longest_streak||0;
-      const curTitle=ctTitleFn(c.key,cur);
+      const curTitle=ctTitleFn(c.key,cur);const next=ctNextFn(c.key,cur);
       const todayKept=S.todayLog?.[c.key]===true;const todayBroke=S.todayLog?.[c.key]===false;
+
+      // 30-day heatmap
+      const heatHTML=heatDates.map(function(ds){
+        const val=heatData[ds][c.key];
+        const bg=val===true?'var(--safe)':val===false?'var(--ember)':'var(--border)';
+        const d=new Date(ds);
+        return`<div title="${ds}" style="width:10px;height:10px;border-radius:2px;background:${bg};flex-shrink:0"></div>`;
+      }).join('');
+
+      // Level progress bars
       const rowsHTML=CT_THR.map(function(t,i){
         const prevT=i===0?0:CT_THR[i-1];
         const done=cur>=t;const isCur=!done&&cur>=prevT;
-        let barPct=done?100:isCur?Math.max(0,Math.min(100,Math.round(((cur-prevT)/(t-prevT))*100))):0;
+        const barPct=done?100:isCur?Math.max(0,Math.min(100,Math.round(((cur-prevT)/(t-prevT))*100))):0;
         const barColor=done?'var(--safe)':isCur?'var(--gold)':'var(--border)';
-        return`<div class="lj-row ${isCur?'current':done?'done':'future'}" style="padding:5px 8px">
+        return`<div class="lj-row ${isCur?'current':done?'done':'future'}" style="padding:4px 8px;margin-bottom:3px">
           <div class="lj-dot" style="background:${isCur?'var(--gold)':done?'var(--safe)':'var(--border2)'}"></div>
-          <div class="lj-title" style="color:${isCur?'var(--gold)':done?'var(--safe)':'var(--ash)'}">${CT_TITLES[c.key][i]}</div>
+          <div class="lj-title" style="color:${isCur?'var(--gold)':done?'var(--safe)':'var(--ash)'};font-size:11px">${CT_TITLES[c.key][i]}</div>
           <div class="lj-bar-track"><div class="lj-bar-fill" style="width:${barPct}%;background:${barColor}"></div></div>
-          <div class="lj-threshold">${t} days</div>
-          <div class="lj-tag" style="color:${isCur?'var(--gold)':done?'var(--safe)':'var(--border2)'}">${isCur?barPct+'%':done?'✓':''}</div>
+          <div class="lj-threshold" style="font-size:10px">${t}d</div>
+          <div class="lj-tag" style="color:${isCur?'var(--gold)':done?'var(--safe)':'var(--border2)'};">${isCur?barPct+'%':done?'✓':''}</div>
         </div>`;
       }).join('');
+
       return`<div class="card" style="margin-bottom:12px;border-color:${todayKept?'var(--safe)':todayBroke?'var(--ember)':'var(--border)'}">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
-          <div><div style="font-size:14px;color:var(--parch);font-weight:500;margin-bottom:3px">${c.label}</div>
-            <div style="display:flex;gap:14px"><div style="font-family:var(--fc);font-size:13px;color:var(--gold)">${curTitle}</div><div style="font-size:12px;color:var(--ash)">${cur} day streak</div>${longest>0?`<div style="font-size:12px;color:var(--ash)">Longest: ${longest}</div>`:''}</div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+          <div style="flex:1">
+            <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:4px">
+              <div style="font-size:14px;color:var(--parch);font-weight:500">${c.label}</div>
+              <div style="font-family:var(--fc);font-size:10px;color:var(--gold)">${c.pts}pt${c.pts>1?'s':''}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:8px">
+              <div style="font-family:var(--fc);font-size:13px;color:var(--gold)">${curTitle}</div>
+              <div style="font-size:12px;color:var(--ash)">${cur} day streak</div>
+              ${next?`<div style="font-size:12px;color:var(--ash)">→ <span style="color:var(--parch)">${next.title}</span> in ${next.rem} days</div>`:''}
+              ${longest>0?`<div style="font-size:12px;color:var(--ash)">Best: ${longest}</div>`:''}
+            </div>
+            <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.1em;margin-bottom:4px">LAST 30 DAYS</div>
+            <div style="display:flex;gap:2px;flex-wrap:wrap">${heatHTML}</div>
           </div>
-          <div style="font-family:var(--fc);font-size:10px;color:var(--gold)">${c.pts} pt${c.pts>1?'s':''}</div>
         </div>
         ${rowsHTML}
       </div>`;
@@ -1393,7 +1507,7 @@ function renderMeta(){
   const pLvls=PROJECTS.map(function(proj){const s=S.projects.find(p=>p.project===proj.id)||{};const total=s.total_tangible||0;return{proj,l:getLvl(proj.id,total),total};});
   const metaLvl=Math.min(...pLvls.map(p=>p.l));
   const weakest=pLvls.find(p=>p.l===metaLvl);
-  const metaTitle=metaLvl>0?META_T[metaLvl-1]:META_T[0];
+  const metaTitle=metaLvl>0?META_T[metaLvl-1]:'Working toward '+META_T[0];
   const metaDesc=metaLvl>0?META_D[metaLvl-1]:META_D[0];
   const ljHTML=META_T.map(function(t,i){
     const done=metaLvl>i+1;const cur=metaLvl===i+1||(metaLvl===0&&i===0);
@@ -1429,118 +1543,6 @@ function renderMeta(){
 }
 
 // ── CALENDAR ───────────────────────────────────────────
-async function renderCalendar(){
-  await loadAll();
-  const el=document.getElementById('screen-calendar');
-  const dayData={};
-  S.allSessions.forEach(function(s){
-    if(!dayData[s.date])dayData[s.date]={nonCtPts:0,pen:0,sessions:[],ctKept:0,ctBroke:0,total:0};
-    dayData[s.date].nonCtPts+=(s.points_earned||0);
-    dayData[s.date].pen+=(s.penalty||0);
-    dayData[s.date].sessions.push(s);
-  });
-  S.allLogs.forEach(function(l){
-    if(!dayData[l.date])dayData[l.date]={nonCtPts:0,pen:0,sessions:[],ctKept:0,ctBroke:0,total:0};
-    dayData[l.date].ct=l;
-    dayData[l.date].ctPts=ctPts(l);
-    CMDS.forEach(function(c){if(l[c.key]===true)dayData[l.date].ctKept++;else if(l[c.key]===false)dayData[l.date].ctBroke++;});
-    dayData[l.date].total=(dayData[l.date].nonCtPts||0)+(dayData[l.date].ctPts||0)+(dayData[l.date].pen||0);
-  });
-
-  function scoreColor(t){if(!t||t<=0)return'var(--border)';if(t>=70)return'var(--gold)';if(t>=50)return'var(--safe)';if(t>=30)return'var(--warn)';return'var(--ember)';}
-
-  const year=S.calDate.getFullYear();const month=S.calDate.getMonth();
-  const firstDay=new Date(year,month,1).getDay();
-  const daysInMonth=new Date(year,month+1,0).getDate();
-  const monthName=S.calDate.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
-  const todayStr=today();
-
-  let gridHTML='';
-  ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(function(d){gridHTML+=`<div class="cal-day-hdr">${d}</div>`;});
-  for(let i=0;i<firstDay;i++)gridHTML+=`<div class="cal-day empty"></div>`;
-  for(let d=1;d<=daysInMonth;d++){
-    const dateStr=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-    const data=dayData[dateStr];
-    const isFuture=dateStr>todayStr;
-    const isSelected=S.calSelected===dateStr;
-    const t=data?.total||0;
-    const pct=Math.round(t/80*100);
-
-    // Pillar dots
-    let pillarDots='';
-    if(data){
-      const pillarPts={Soul:0,Body:0,Business:0};
-      (data.sessions||[]).forEach(function(s){const p=PROJECTS.find(x=>x.id===s.project);if(p)pillarPts[p.pillar]+=(s.points_earned||0);});
-      ['Soul','Body','Business'].forEach(function(pillar){
-        const pts=pillarPts[pillar];const max=20;
-        const color=pts>=max?'var(--gold)':pts>0?'var(--safe)':'var(--border)';
-        pillarDots+=`<div class="cal-pillar-dot" style="background:${color}"></div>`;
-      });
-    }
-    gridHTML+=`<div class="cal-day ${isFuture?'future':data?'':'future'} ${isSelected?'selected':''}" onclick="${!isFuture&&data?'calSelect(\''+dateStr+'\')':''}">
-      <div class="cal-day-num">${d}</div>
-      ${data?`<div class="cal-score" style="color:${scoreColor(t)}">${t}</div>`:''}
-      ${data?`<div class="cal-pillars">${pillarDots}<div class="cal-pillar-dot" style="background:${data.ctKept===10?'var(--gold)':data.ctKept>0?'var(--safe)':'var(--border)'}"></div></div>`:''}
-      ${data?`<div class="cal-prog"><div class="cal-prog-fill" style="width:${pct}%;background:${scoreColor(t)}"></div></div>`:''}
-    </div>`;
-  }
-
-  // Detail panel
-  let detailHTML='';
-  if(S.calSelected&&dayData[S.calSelected]){
-    const data=dayData[S.calSelected];
-    const sessHTML=data.sessions.filter(s=>s.tangible_logged>0).map(function(s){
-      return`<div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:0.5px solid var(--border)">
-        <span style="color:var(--ash)">${s.project}</span><span>${s.category||'—'}</span>
-        <span style="font-family:var(--fc);font-size:11px;color:var(--gold)">${s.tangible_logged} ${s.unit}</span>
-        <span style="color:${s.points_earned>0?'var(--safe)':'var(--ember)'}">${s.points_earned>0?'+'+s.points_earned:s.penalty}</span>
-      </div>`;
-    }).join('')||'<div style="font-size:12px;color:var(--ash);font-style:italic">No sessions</div>';
-    const ctDetailHTML=data.ct?CMDS.map(function(c){const v=data.ct[c.key];
-      return`<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0">
-        <div style="width:8px;height:8px;border-radius:2px;background:${v===true?'var(--safe)':v===false?'var(--ember)':'var(--border)'}"></div>
-        <span style="flex:1;color:${v===true?'var(--safe)':v===false?'var(--ember)':'var(--ash)'}">${c.label}</span>
-        <span style="font-family:var(--fc);font-size:10px;color:var(--gold)">${v===true?'+'+c.pts:'—'}</span>
-      </div>`;
-    }).join(''):'<div style="font-size:12px;color:var(--ash);font-style:italic">No CT data</div>';
-    detailHTML=`<div class="card" style="margin-top:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div style="font-family:var(--fc);font-size:14px;color:var(--gold)">${S.calSelected}</div>
-        <div style="font-family:var(--fc);font-size:20px;color:var(--gold)">${data.total||0}<span style="font-size:11px;color:var(--ash)">/80</span></div>
-      </div>
-      <div class="st">Sessions</div>${sessHTML}
-      <div class="st" style="margin-top:12px">Clean Temper — ${data.ctKept||0} kept · ${data.ctBroke||0} broken</div>
-      ${ctDetailHTML}
-      ${data.ct?.reflection?`<div class="st" style="margin-top:12px">Reflection</div><div style="font-size:13px;color:var(--parch);font-style:italic;line-height:1.6">${data.ct.reflection}</div>`:''}
-    </div>`;
-  }
-
-  // Legend
-  const legendHTML=`<div style="display:flex;align-items:center;gap:12px;margin-top:12px;font-size:11px;color:var(--ash);flex-wrap:wrap">
-    <span>Score colour:</span>
-    <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--gold)"></div>70+</span>
-    <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--safe)"></div>50+</span>
-    <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--warn)"></div>30+</span>
-    <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--ember)"></div>&lt;30</span>
-    <span style="margin-left:8px">Dots: Soul · Body · Business · CT</span>
-  </div>`;
-
-  el.innerHTML=`
-    <div class="pt">Calendar</div>
-    <div class="ps">Every day of the campaign — tap any date to see what was forged</div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <button class="cal-nav-btn" onclick="calPrev()">← Prev</button>
-      <div style="font-family:var(--fc);font-size:14px;color:var(--parch)">${monthName}</div>
-      <button class="cal-nav-btn" onclick="calNext()">Next →</button>
-    </div>
-    <div class="card"><div class="cal-grid">${gridHTML}</div>${legendHTML}</div>
-    ${detailHTML}
-  `;
-}
-function calPrev(){S.calDate.setMonth(S.calDate.getMonth()-1);renderCalendar();}
-function calNext(){S.calDate.setMonth(S.calDate.getMonth()+1);renderCalendar();}
-function calSelect(d){S.calSelected=S.calSelected===d?null:d;renderCalendar();}
-
 // ── REPORT ─────────────────────────────────────────────
 async function renderReport(){
   document.getElementById('screen-report').innerHTML='<div class="loading">Building Anvil Report...</div>';
@@ -1550,7 +1552,7 @@ async function renderReport(){
   const gTotal=gNCT+gCT;
   const tPen=S.allSessions.reduce((s,r)=>s+(r.penalty||0),0);
   const net=gTotal+tPen;
-  const pct=((net/63600)*100).toFixed(1);
+  const pct=((net/maxPoints())*100).toFixed(1);
   const dLogged=S.allLogs.length;
   const avg=dLogged>0?Math.round(net/dLogged):0;
   const perfDays=S.allLogs.filter(l=>ctPts(l)===20).length;
@@ -1634,25 +1636,6 @@ async function renderReport(){
 }
 
 // ── MILESTONES ─────────────────────────────────────────
-async function renderMilestones(){
-  await loadAll();
-  const msHTML=S.milestones.length>0?S.milestones.map(function(m){return`<div style="display:flex;gap:16px;padding:12px 0;border-bottom:0.5px solid var(--border)">
-    <div style="font-size:12px;color:var(--ash);width:90px;flex-shrink:0">${m.date}</div>
-    <div style="flex:1"><div style="font-size:13px;color:var(--parch);margin-bottom:3px">${m.description}</div>
-      <div style="font-size:11px;color:var(--ash)">${m.project}${m.tangible_at_time!==null?' · '+m.tangible_at_time+' '+(PROJECTS.find(p=>p.id===m.project)?.unit||''):''}${m.level_at_time!==null?' · Level '+m.level_at_time:''}</div>
-    </div></div>`;}).join('')
-  :'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:20px 0">No milestones yet.</div>';
-  document.getElementById('screen-milestones').innerHTML=`
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
-      <div><div class="pt">Milestones</div><div class="ps">Singular moments that belong to no formula</div></div>
-      <button class="btn btn-sm" onclick="openMilestone()">+ Log milestone</button>
-    </div>
-    <div class="card">${msHTML}</div>
-  `;
-  const sel=document.getElementById('ms-project');
-  sel.innerHTML='<option value="">Select project</option>';
-  PROJECTS.forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.id;sel.appendChild(o);});
-}
 function openMilestone(){document.getElementById('ms-modal').classList.add('open');}
 async function submitMilestone(){
   const pid=document.getElementById('ms-project').value;
@@ -1704,7 +1687,7 @@ function buildDailyCard(){
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
       <div>
         <div style="font-size:11px;letter-spacing:0.1em;color:#8a6a1a;margin-bottom:4px">${dayStr}</div>
-        <div style="font-size:13px;letter-spacing:0.08em;color:#8a6a1a">Day ${dayNum()} of 795</div>
+        <div style="font-size:13px;letter-spacing:0.08em;color:#8a6a1a">Day ${dayNum()} of ${totalCampaignDays()}</div>
       </div>
       <div style="text-align:right">
         <div style="font-family:Cinzel,serif;font-size:48px;color:#D4A84C;line-height:1">${total+pen}</div>
@@ -1730,7 +1713,7 @@ function buildDailyCard(){
 
 function buildCampaignCard(){
   const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,s?s.total_tangible:0);})):0;
-  const metaTitle=metaLvl>0?META_T[metaLvl-1]:META_T[0];
+  const metaTitle=metaLvl>0?META_T[metaLvl-1]:'Working toward '+META_T[0];
   const bestStreak=S.streaks.reduce((m,s)=>Math.max(m,s.current_streak||0),0);
   const bestStreakCmd=S.streaks.find(s=>(s.current_streak||0)===bestStreak);
 
@@ -1739,7 +1722,7 @@ function buildCampaignCard(){
     <div style="margin-bottom:6px">
       <div style="font-size:9px;letter-spacing:0.15em;color:#8a6a1a;margin-bottom:6px">META RANK</div>
       <div style="font-family:Cinzel,serif;font-size:32px;color:#D4A84C;line-height:1;margin-bottom:4px">${metaTitle}</div>
-      <div style="font-size:10px;letter-spacing:0.1em;color:#8a6a1a">Level ${metaLvl} of 10 · Day ${dayNum()} of 795</div>
+      <div style="font-size:10px;letter-spacing:0.1em;color:#8a6a1a">Level ${metaLvl} of 10 · Day ${dayNum()} of ${totalCampaignDays()}</div>
     </div>
     <div class="sc-divider"></div>
     <div style="margin-bottom:16px">
@@ -1787,7 +1770,7 @@ function buildUnlockCard(pid){
     <div class="sc-divider"></div>
     <div style="display:flex;justify-content:space-between;margin-top:8px">
       <div><div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:2px">TANGIBLE AT UNLOCK</div><div style="font-size:13px;color:#D4A84C;font-family:Cinzel,serif">${total.toLocaleString()} ${proj.unit}</div></div>
-      <div style="text-align:right"><div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:2px">DAY</div><div style="font-size:13px;color:#F0E4CC">${dayNum()} of 795</div></div>
+      <div style="text-align:right"><div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:2px">DAY</div><div style="font-size:13px;color:#F0E4CC">${dayNum()} of ${totalCampaignDays()}</div></div>
     </div>
     <div class="sc-mark">quiet-anvil.vercel.app</div>
   </div>`;
@@ -1814,23 +1797,22 @@ function renderSettings(){
         <button class="btn btn-sm" onclick="startChangePIN()">Change PIN</button>
       </div>
     </div>
-    <div class="st">Game start date</div>
+    <div class="st">Campaign dates</div>
     <div class="card" style="margin-bottom:20px">
-      <div style="font-size:13px;color:var(--ash);margin-bottom:10px">Changing this recalculates all day numbers and week numbers from the new start date.</div>
-      <label>Start date</label>
-      <input type="date" id="start-date-input" value="${getGameStart()}" style="max-width:200px">
-      <button class="btn btn-sm btn-safe" onclick="saveStartDate()">Save start date</button>
-    </div>
-    <div class="st">Campaign reference</div>
-    <div class="card" style="margin-bottom:20px">
-      <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:0.5px solid var(--border)"><span style="color:var(--ash)">Game end</span><span>June 1, 2028</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:0.5px solid var(--border)"><span style="color:var(--ash)">Total days</span><span>795</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0"><span style="color:var(--ash)">Maximum points</span><span>63,600</span></div>
+      <div style="font-size:13px;color:var(--ash);margin-bottom:14px">Changing either date recalculates all day numbers, week numbers, and maximum points.</div>
+      <div class="g2">
+        <div><label>Start date</label><input type="date" id="start-date-input" value="${getGameStart()}"><button class="btn btn-sm btn-safe" onclick="saveStartDate()" style="margin-top:4px;width:100%">Save start date</button></div>
+        <div><label>End date</label><input type="date" id="end-date-input" value="${getGameEnd()}"><button class="btn btn-sm btn-safe" onclick="saveEndDate()" style="margin-top:4px;width:100%">Save end date</button></div>
+      </div>
+      <div style="margin-top:14px;padding-top:14px;border-top:0.5px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:0.5px solid var(--border)"><span style="color:var(--ash)">Total campaign days</span><span style="font-family:var(--fc);color:var(--gold)">${totalCampaignDays()}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0"><span style="color:var(--ash)">Maximum possible points</span><span style="font-family:var(--fc);color:var(--gold)">${maxPoints().toLocaleString()}</span></div>
+      </div>
     </div>
     <div class="st">Daily points per project</div>
     <div class="card" style="margin-bottom:20px">
-      ${PROJECTS.map(p=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:0.5px solid var(--border)"><span style="color:var(--ash)">${p.id}</span><span style="font-family:var(--fc);color:var(--gold)">${p.pts} pts/day</span></div>`).join('')}
-      <div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0"><span style="color:var(--ash)">Clean Temper</span><span style="font-family:var(--fc);color:var(--gold)">20 pts/day</span></div>
+      ${PROJECTS.map(p=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:0.5px solid var(--border)"><span style="color:var(--ash)">${p.id}</span><span style="font-family:var(--fc);color:var(--gold)">${p.pts} pts/day</span></div>`).join('')}
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0"><span style="color:var(--ash)">Clean Temper</span><span style="font-family:var(--fc);color:var(--gold)">20 pts/day</span></div>
     </div>
     <div class="st">Data</div>
     <div class="card">
@@ -1845,8 +1827,499 @@ function saveStartDate(){
   if(!val){alert('Please enter a valid date.');return;}
   localStorage.setItem('qa_start',val);
   document.getElementById('sb-countdown').textContent=daysLeft()+' days';
-  alert('Start date updated to '+val+'. All day and week numbers recalculated.');
+  alert('Start date saved. All campaign numbers updated.');
   renderSettings();
+}
+
+function saveEndDate(){
+  const val=document.getElementById('end-date-input').value;
+  if(!val){alert('Please enter a valid date.');return;}
+  localStorage.setItem('qa_end',val);
+  document.getElementById('sb-countdown').textContent=daysLeft()+' days';
+  alert('End date saved. All campaign numbers updated.');
+  renderSettings();
+}
+
+// ── MISSED DAYS CATCH-UP ──────────────────────────────
+let missedDays=[];
+let missedDayIndex=0;
+
+async function checkMissedDays(){
+  // Find all dates from game start to yesterday with no closed daily_log
+  const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);
+  const start=new Date(getGameStart());
+  if(yesterday<start)return;
+  const{data:logs}=await db.from('daily_log').select('date,day_closed').order('date');
+  const closedDates=new Set((logs||[]).filter(l=>l.day_closed).map(l=>l.date));
+  missedDays=[];
+  const d=new Date(start);
+  while(d<=yesterday){
+    const ds=d.toISOString().split('T')[0];
+    if(!closedDates.has(ds))missedDays.push(ds);
+    d.setDate(d.getDate()+1);
+  }
+  if(missedDays.length>0){
+    missedDayIndex=0;
+    showMissedDayPrompt();
+  }
+}
+
+function showMissedDayPrompt(){
+  if(missedDayIndex>=missedDays.length)return;
+  const dateStr=missedDays[missedDayIndex];
+  const remaining=missedDays.length-missedDayIndex;
+  document.getElementById('missed-date').textContent=dateStr;
+  document.getElementById('missed-count').textContent=remaining+' day'+(remaining>1?'s':'')+' need recording';
+  document.getElementById('missed-reflection').value='';
+  // Reset CT checkboxes
+  CMDS.forEach(function(c){
+    const el=document.getElementById('missed-ct-'+c.key);
+    if(el)el.checked=false;
+  });
+  document.getElementById('missed-modal').classList.add('open');
+}
+
+async function submitMissedDay(){
+  const dateStr=missedDays[missedDayIndex];
+  const reflection=document.getElementById('missed-reflection').value.trim();
+  if(!reflection){alert('Please write a reflection for this day.');return;}
+  const ctVals={};
+  CMDS.forEach(function(c){
+    const el=document.getElementById('missed-ct-'+c.key);
+    ctVals[c.key]=el?el.checked:false;
+  });
+  // Upsert daily_log for that date
+  const{data:existing}=await db.from('daily_log').select('id').eq('date',dateStr).single();
+  if(existing){
+    await db.from('daily_log').update({...ctVals,reflection,day_closed:true,c10_reflection:true}).eq('date',dateStr);
+  } else {
+    await db.from('daily_log').insert({date:dateStr,...ctVals,reflection,day_closed:true,c10_reflection:true});
+  }
+  // Update streaks for kept commandments
+  const{data:streaks}=await db.from('commandment_streaks').select('*');
+  for(const c of CMDS){
+    if(ctVals[c.key]===true){
+      const streak=(streaks||[]).find(s=>s.commandment===c.short)||{};
+      const ns=(streak.current_streak||0)+1;
+      await db.from('commandment_streaks').update({current_streak:ns,longest_streak:Math.max(streak.longest_streak||0,ns)}).eq('commandment',c.short);
+    }
+  }
+  missedDayIndex++;
+  if(missedDayIndex<missedDays.length){
+    showMissedDayPrompt();
+  } else {
+    closeModal('missed-modal');
+    S.allLogs=[];S.allSessions=[];
+    await loadData();
+  }
+}
+
+function skipMissedDay(){
+  missedDayIndex++;
+  if(missedDayIndex<missedDays.length)showMissedDayPrompt();
+  else closeModal('missed-modal');
+}
+
+// ── FOOD LOG ───────────────────────────────────────────
+let foodView='month';
+let foodCalDate=new Date();
+
+async function renderFood(){
+  document.getElementById('screen-food').innerHTML='<div class="loading">Loading food log...</div>';
+  const{data:foodLogs}=await db.from('food_log').select('*').order('date',{ascending:false});
+  const logs=foodLogs||[];
+
+  // Build day lookup
+  const dayMap={};
+  logs.forEach(function(l){
+    if(!dayMap[l.date])dayMap[l.date]={meals:[],hasUnhealthy:false,hasHealthy:false};
+    dayMap[l.date].meals.push(l);
+    if(l.healthy)dayMap[l.date].hasHealthy=true;
+    else dayMap[l.date].hasUnhealthy=true;
+  });
+
+  function dayColor(d){
+    if(!d)return'var(--border)';
+    if(d.hasUnhealthy&&d.hasHealthy)return'var(--warn)';
+    if(d.hasUnhealthy)return'var(--ember)';
+    return'var(--safe)';
+  }
+
+  // Today's entries
+  const todayLogs=logs.filter(l=>l.date===today());
+  const todayHTML=todayLogs.length>0?todayLogs.map(function(l){
+    return`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+      <div style="font-family:var(--fc);font-size:10px;color:var(--gold);width:80px;flex-shrink:0">${l.meal_type}</div>
+      <div style="flex:1;color:var(--parch)">${l.description}</div>
+      <div style="font-size:11px;padding:3px 8px;border-radius:4px;background:${l.healthy?'var(--safe-dim)':'var(--ember-dim)'};color:${l.healthy?'var(--safe)':'var(--ember)'};flex-shrink:0">${l.healthy?'Healthy':'Unhealthy'}</div>
+    </div>`;
+  }).join(''):'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:8px 0">No meals logged today</div>';
+
+  // Heatmap HTML
+  let heatHTML='';
+  if(foodView==='month'){
+    const year=foodCalDate.getFullYear();const month=foodCalDate.getMonth();
+    const firstDay=new Date(year,month,1).getDay();
+    const daysInMonth=new Date(year,month+1,0).getDate();
+    const monthName=foodCalDate.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+    let grid='';
+    ['S','M','T','W','T','F','S'].forEach(d=>grid+=`<div style="font-family:var(--fc);font-size:9px;color:var(--ash);text-align:center;padding:4px 0">${d}</div>`);
+    for(let i=0;i<firstDay;i++)grid+=`<div></div>`;
+    for(let d=1;d<=daysInMonth;d++){
+      const ds=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      const data=dayMap[ds];const isFuture=ds>today();
+      const color=isFuture?'var(--card2)':data?dayColor(data):'var(--border)';
+      const meals=data?data.meals.length:0;
+      grid+=`<div style="background:${color};border-radius:4px;padding:4px;min-height:40px;opacity:${isFuture?0.3:1};cursor:${data?'pointer':'default'}" onclick="${data?'foodDayClick(\''+ds+'\')':''}">
+        <div style="font-family:var(--fc);font-size:9px;color:var(--parch)">${d}</div>
+        ${data?`<div style="font-size:9px;color:rgba(255,255,255,0.7)">${meals}m</div>`:''}
+      </div>`;
+    }
+    heatHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <button class="cal-nav-btn" onclick="foodCalPrev()">← Prev</button>
+      <div style="font-family:var(--fc);font-size:14px;color:var(--parch)">${monthName}</div>
+      <button class="cal-nav-btn" onclick="foodCalNext()">Next →</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${grid}</div>`;
+  } else if(foodView==='week'){
+    const startOfWeek=new Date();startOfWeek.setDate(startOfWeek.getDate()-startOfWeek.getDay());
+    let weekHTML='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">';
+    const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    for(let i=0;i<7;i++){
+      const d=new Date(startOfWeek);d.setDate(d.getDate()+i);
+      const ds=d.toISOString().split('T')[0];
+      const data=dayMap[ds];const isFuture=ds>today();
+      const color=isFuture?'var(--card2)':data?dayColor(data):'var(--card2)';
+      const meals=data?data.meals:[];
+      weekHTML+=`<div style="background:${color};border-radius:8px;padding:10px;opacity:${isFuture?0.3:1}">
+        <div style="font-family:var(--fc);font-size:9px;color:var(--parch);margin-bottom:6px">${dayNames[i]} ${d.getDate()}</div>
+        ${meals.map(m=>`<div style="font-size:11px;margin-bottom:3px;color:var(--parch)"><span style="font-family:var(--fc);font-size:8px;color:${m.healthy?'var(--safe)':'var(--ember)'}">${m.meal_type.substring(0,1)}</span> ${m.description.substring(0,20)}${m.description.length>20?'...':''}</div>`).join('')||`<div style="font-size:11px;color:rgba(255,255,255,0.3)">—</div>`}
+      </div>`;
+    }
+    weekHTML+='</div>';
+    heatHTML=weekHTML;
+  } else {
+    // Year heatmap
+    const year=foodCalDate.getFullYear();
+    const startDate=new Date(year,0,1);
+    const weeks=[];let week=[];
+    const firstDow=startDate.getDay();
+    for(let i=0;i<firstDow;i++)week.push(null);
+    let dd=new Date(startDate);
+    while(dd.getFullYear()===year){week.push(new Date(dd));if(week.length===7){weeks.push(week);week=[];}dd.setDate(dd.getDate()+1);}
+    if(week.length>0){while(week.length<7)week.push(null);weeks.push(week);}
+    let yHTML='<div style="overflow-x:auto"><div style="display:flex;gap:2px">';
+    const mPos={};weeks.forEach(function(w,wi){w.forEach(function(day){if(day&&day.getDate()===1)mPos[wi]=day.toLocaleDateString('en-GB',{month:'short'});});});
+    weeks.forEach(function(w,wi){
+      yHTML+=`<div style="display:flex;flex-direction:column;gap:2px"><div style="font-family:var(--fc);font-size:8px;color:var(--ash);height:14px;line-height:14px">${mPos[wi]||''}</div>`;
+      w.forEach(function(day){
+        if(!day){yHTML+=`<div style="width:12px;height:12px"></div>`;return;}
+        const ds=day.toISOString().split('T')[0];
+        const data=dayMap[ds];const isFuture=ds>today();
+        const color=isFuture?'var(--card2)':data?dayColor(data):'rgba(74,66,56,0.4)';
+        yHTML+=`<div style="width:12px;height:12px;border-radius:2px;background:${color}" title="${ds}"></div>`;
+      });
+      yHTML+='</div>';
+    });
+    yHTML+='</div></div>';
+    yHTML+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+      <button class="cal-nav-btn" onclick="foodCalPrev()">← ${year-1}</button>
+      <div style="font-family:var(--fc);font-size:13px;color:var(--parch)">${year}</div>
+      <button class="cal-nav-btn" onclick="foodCalNext()">${year+1} →</button>
+    </div>`;
+    heatHTML=yHTML;
+  }
+
+  document.getElementById('screen-food').innerHTML=`
+    <div class="pt">Food Log</div>
+    <div class="ps">Personal record · Healthy or unhealthy · No game impact</div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="st" style="margin-bottom:0">Today's meals</div>
+      <button class="btn btn-sm" onclick="openFoodModal()">+ Log meal</button>
+    </div>
+    <div class="card" style="margin-bottom:24px">${todayHTML}</div>
+
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <button class="cal-nav-btn ${foodView==='week'?'active':''}" onclick="setFoodView('week')">Week</button>
+      <button class="cal-nav-btn ${foodView==='month'?'active':''}" onclick="setFoodView('month')">Month</button>
+      <button class="cal-nav-btn ${foodView==='year'?'active':''}" onclick="setFoodView('year')">Year</button>
+      <div style="margin-left:auto;display:flex;gap:10px;font-size:11px;align-items:center">
+        <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--safe)"></div>All healthy</span>
+        <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--warn)"></div>Mixed</span>
+        <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--ember)"></div>Unhealthy</span>
+      </div>
+    </div>
+    <div class="card">${heatHTML}</div>
+  `;
+}
+
+function setFoodView(v){foodView=v;renderFood();}
+function foodCalPrev(){
+  if(foodView==='year')foodCalDate.setFullYear(foodCalDate.getFullYear()-1);
+  else foodCalDate.setMonth(foodCalDate.getMonth()-1);
+  renderFood();
+}
+function foodCalNext(){
+  if(foodView==='year')foodCalDate.setFullYear(foodCalDate.getFullYear()+1);
+  else foodCalDate.setMonth(foodCalDate.getMonth()+1);
+  renderFood();
+}
+
+function openFoodModal(){
+  document.getElementById('food-modal').classList.add('open');
+  document.getElementById('food-desc').value='';
+  document.getElementById('food-healthy').checked=true;
+}
+
+async function submitFoodLog(){
+  const mealType=document.getElementById('food-meal-type').value;
+  const desc=document.getElementById('food-desc').value.trim();
+  const healthy=document.getElementById('food-healthy').checked;
+  if(!desc){alert('Please describe what you ate.');return;}
+  await db.from('food_log').insert({date:today(),meal_type:mealType,description:desc,healthy});
+  closeModal('food-modal');
+  renderFood();
+}
+
+function foodDayClick(dateStr){
+  // Could expand to show day detail — for now just a visual
+}
+
+// ── MILESTONES WITH FILTER ─────────────────────────────
+let milestoneFilter='all';
+
+async function renderMilestones(){
+  await loadAll();
+  const filtered=milestoneFilter==='all'?S.milestones:S.milestones.filter(m=>m.project===milestoneFilter);
+  const msHTML=filtered.length>0?filtered.map(function(m){
+    return`<div style="display:flex;gap:16px;padding:12px 0;border-bottom:0.5px solid var(--border)">
+      <div style="font-family:var(--fc);font-size:11px;color:var(--ash);width:90px;flex-shrink:0;padding-top:2px">${m.date}</div>
+      <div style="flex:1">
+        <div style="font-size:13px;color:var(--parch);margin-bottom:4px;line-height:1.5">${m.description}</div>
+        <div style="display:flex;gap:10px;font-size:11px">
+          <span style="color:var(--gold);font-family:var(--fc)">${m.project}</span>
+          ${m.tangible_at_time!==null?`<span style="color:var(--ash)">${m.tangible_at_time} ${PROJECTS.find(p=>p.id===m.project)?.unit||''}</span>`:''}
+          ${m.level_at_time!==null?`<span style="color:var(--ash)">Level ${m.level_at_time}</span>`:''}
+        </div>
+      </div>
+    </div>`;
+  }).join('')
+  :'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:20px 0">No milestones yet.</div>';
+
+  const filterOptions=`<option value="all">All projects</option>${PROJECTS.map(p=>`<option value="${p.id}" ${milestoneFilter===p.id?'selected':''}>${p.id}</option>`).join('')}`;
+
+  document.getElementById('screen-milestones').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div><div class="pt">Milestones</div><div class="ps">Singular moments that belong to no formula</div></div>
+      <button class="btn btn-sm" onclick="openMilestone()">+ Log milestone</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+      <label style="margin:0;font-size:12px;color:var(--ash)">Filter by project</label>
+      <select onchange="milestoneFilter=this.value;renderMilestones()" style="width:auto;margin:0;font-size:13px;padding:6px 10px">${filterOptions}</select>
+      <span style="font-size:12px;color:var(--ash)">${filtered.length} milestone${filtered.length!==1?'s':''}</span>
+    </div>
+    <div class="card">${msHTML}</div>
+  `;
+  const sel=document.getElementById('ms-project');
+  if(sel){sel.innerHTML='<option value="">Select project</option>';PROJECTS.forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.id;sel.appendChild(o);});}
+}
+
+// ── CALENDAR 3 VIEWS ───────────────────────────────────
+let calView='month';
+
+async function renderCalendar(){
+  await loadAll();
+  const el=document.getElementById('screen-calendar');
+  const dayData={};
+  S.allSessions.forEach(function(s){
+    if(!dayData[s.date])dayData[s.date]={pts:0,pen:0,sessions:[],ctKept:0,ctBroke:0,total:0,ct:null};
+    dayData[s.date].pts+=(s.points_earned||0);
+    dayData[s.date].pen+=(s.penalty||0);
+    dayData[s.date].sessions.push(s);
+  });
+  S.allLogs.forEach(function(l){
+    if(!dayData[l.date])dayData[l.date]={pts:0,pen:0,sessions:[],ctKept:0,ctBroke:0,total:0,ct:null};
+    dayData[l.date].ct=l;
+    const cp=ctPts(l);
+    CMDS.forEach(function(c){if(l[c.key]===true)dayData[l.date].ctKept++;else if(l[c.key]===false)dayData[l.date].ctBroke++;});
+    dayData[l.date].total=(dayData[l.date].pts||0)+cp+(dayData[l.date].pen||0);
+  });
+
+  function scoreColor(t){if(!t||t<=0)return'var(--border)';if(t>=70)return'var(--gold)';if(t>=50)return'var(--safe)';if(t>=30)return'var(--warn)';return'var(--ember)';}
+
+  let contentHTML='';
+
+  if(calView==='month'){
+    const year=S.calDate.getFullYear();const month=S.calDate.getMonth();
+    const firstDay=new Date(year,month,1).getDay();
+    const daysInMonth=new Date(year,month+1,0).getDate();
+    const monthName=S.calDate.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+    const todayStr=today();
+    let grid='';
+    ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d=>grid+=`<div style="font-family:var(--fc);font-size:9px;letter-spacing:0.08em;color:var(--ash);text-align:center;padding:6px 0">${d}</div>`);
+    for(let i=0;i<firstDay;i++)grid+=`<div></div>`;
+    for(let d=1;d<=daysInMonth;d++){
+      const ds=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      const data=dayData[ds];const isFuture=ds>todayStr;const isSel=S.calSelected===ds;
+      const t=data?.total||0;const pct=Math.round(t/80*100);
+      let pillarDots='';
+      if(data){
+        const pPts={Soul:0,Body:0,Business:0};
+        (data.sessions||[]).forEach(s=>{const p=PROJECTS.find(x=>x.id===s.project);if(p)pPts[p.pillar]+=(s.points_earned||0);});
+        ['Soul','Body','Business'].forEach(pillar=>{pillarDots+=`<div style="width:6px;height:6px;border-radius:50%;background:${pPts[pillar]>0?'var(--safe)':'var(--border)'}"></div>`;});
+        pillarDots+=`<div style="width:6px;height:6px;border-radius:50%;background:${data.ctKept===10?'var(--gold)':data.ctKept>0?'var(--safe)':'var(--border)'}"></div>`;
+      }
+      grid+=`<div style="background:${isSel?'var(--gold-dim)':data&&!isFuture?'var(--card)':'var(--card2)'};border:0.5px solid ${isSel?'var(--gold)':'var(--border)'};border-radius:8px;padding:7px 5px;min-height:68px;cursor:${!isFuture&&data?'pointer':'default'};opacity:${isFuture?0.3:1};transition:border-color 0.2s" onclick="${!isFuture&&data?'calSelect(\''+ds+'\')':''}">
+        <div style="font-family:var(--fc);font-size:10px;color:var(--ash);margin-bottom:3px">${d}</div>
+        ${data&&!isFuture?`
+          <div style="font-family:var(--fc);font-size:14px;color:${scoreColor(t)};line-height:1;margin-bottom:4px">${t}</div>
+          <div style="display:flex;gap:2px;margin-bottom:3px">${pillarDots}</div>
+          <div style="height:2px;background:var(--border);border-radius:1px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${scoreColor(t)}"></div></div>
+        `:''}
+      </div>`;
+    }
+    contentHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <button class="cal-nav-btn" onclick="calPrev()">← Prev</button>
+      <div style="font-family:var(--fc);font-size:14px;color:var(--parch)">${monthName}</div>
+      <button class="cal-nav-btn" onclick="calNext()">Next →</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${grid}</div>`;
+
+  } else if(calView==='week'){
+    const sow=new Date(S.calDate);sow.setDate(sow.getDate()-sow.getDay());
+    const eow=new Date(sow);eow.setDate(eow.getDate()+6);
+    const sowStr=sow.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+    const eowStr=eow.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+    let weekHTML='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px">';
+    const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    for(let i=0;i<7;i++){
+      const d=new Date(sow);d.setDate(d.getDate()+i);
+      const ds=d.toISOString().split('T')[0];
+      const data=dayData[ds];const isFuture=ds>today();const isSel=S.calSelected===ds;
+      const t=data?.total||0;
+      // Session list
+      const sessHTML=(data?.sessions||[]).filter(s=>s.tangible_logged>0).map(s=>`<div style="font-size:10px;padding:3px 0;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between"><span style="color:var(--ash)">${s.project.replace('The ','')}</span><span style="color:var(--gold);font-family:var(--fc)">${s.tangible_logged}${PROJECTS.find(p=>p.id===s.project)?.unit||''}</span></div>`).join('');
+      const ctHTML=data?.ct?CMDS.map(c=>`<div style="width:8px;height:8px;border-radius:2px;background:${data.ct[c.key]===true?'var(--safe)':data.ct[c.key]===false?'var(--ember)':'var(--border)'}"></div>`).join(''):'';
+      weekHTML+=`<div style="background:${isSel?'var(--gold-dim)':data&&!isFuture?'var(--card)':'var(--card2)'};border:0.5px solid ${isSel?'var(--gold)':'var(--border)'};border-radius:8px;padding:10px;opacity:${isFuture?0.3:1};cursor:${!isFuture&&data?'pointer':'default'}" onclick="${!isFuture&&data?'calSelect(\''+ds+'\')':''}">
+        <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.1em;margin-bottom:2px">${dayNames[i]}</div>
+        <div style="font-family:var(--fc);font-size:12px;color:var(--ash);margin-bottom:6px">${d.getDate()}</div>
+        ${data&&!isFuture?`
+          <div style="font-family:var(--fc);font-size:18px;color:${scoreColor(t)};margin-bottom:8px">${t}</div>
+          ${sessHTML}
+          <div style="display:flex;gap:2px;flex-wrap:wrap;margin-top:6px">${ctHTML}</div>
+        `:'<div style="font-size:11px;color:var(--border2);font-style:italic">—</div>'}
+      </div>`;
+    }
+    weekHTML+='</div>';
+    contentHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <button class="cal-nav-btn" onclick="calPrev()">← Prev week</button>
+      <div style="font-family:var(--fc);font-size:13px;color:var(--parch)">${sowStr} — ${eowStr}</div>
+      <button class="cal-nav-btn" onclick="calNext()">Next week →</button>
+    </div>${weekHTML}`;
+
+  } else {
+    // Year heatmap
+    const year=S.calDate.getFullYear();
+    const startDate=new Date(year,0,1);
+    const weeks=[];let week=[];
+    const firstDow=startDate.getDay();
+    for(let i=0;i<firstDow;i++)week.push(null);
+    let dd=new Date(startDate);
+    while(dd.getFullYear()===year){week.push(new Date(dd));if(week.length===7){weeks.push(week);week=[];}dd.setDate(dd.getDate()+1);}
+    if(week.length>0){while(week.length<7)week.push(null);weeks.push(week);}
+    const mPos={};weeks.forEach(function(w,wi){w.forEach(function(d){if(d&&d.getDate()===1)mPos[wi]=d.toLocaleDateString('en-GB',{month:'short'});});});
+    let yHTML='<div style="overflow-x:auto"><div style="display:flex;gap:2px">';
+    yHTML+='<div style="display:flex;flex-direction:column;gap:2px;margin-right:4px;padding-top:16px">';
+    ['','Mon','','Wed','','Fri',''].forEach(l=>yHTML+=`<div style="font-family:var(--fc);font-size:8px;color:var(--ash);height:12px;line-height:12px;width:24px">${l}</div>`);
+    yHTML+='</div>';
+    weeks.forEach(function(w,wi){
+      yHTML+=`<div style="display:flex;flex-direction:column;gap:2px"><div style="font-family:var(--fc);font-size:8px;color:var(--ash);height:14px;line-height:14px">${mPos[wi]||''}</div>`;
+      w.forEach(function(day){
+        if(!day){yHTML+=`<div style="width:12px;height:12px"></div>`;return;}
+        const ds=day.toISOString().split('T')[0];
+        const data=dayData[ds];const isFuture=ds>today();const t=data?.total||0;
+        const bg=isFuture?'var(--card2)':data?scoreColor(t):'rgba(74,66,56,0.3)';
+        yHTML+=`<div style="width:12px;height:12px;border-radius:2px;background:${bg};cursor:${data?'pointer':'default'}" title="${ds}: ${t} pts" onclick="${data?'calSelect(\''+ds+'\')':''}"></div>`;
+      });
+      yHTML+='</div>';
+    });
+    yHTML+='</div></div>';
+    contentHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <button class="cal-nav-btn" onclick="calPrev()">← ${year-1}</button>
+      <div style="font-family:var(--fc);font-size:14px;color:var(--parch)">${year}</div>
+      <button class="cal-nav-btn" onclick="calNext()">${year+1} →</button>
+    </div>${yHTML}`;
+  }
+
+  // Selected day detail
+  let detailHTML='';
+  if(S.calSelected&&dayData[S.calSelected]){
+    const data=dayData[S.calSelected];
+    const sessRows=(data.sessions||[]).filter(s=>s.tangible_logged>0).map(s=>`<tr>
+      <td style="color:var(--ash)">${s.project}</td>
+      <td>${s.category||'—'}</td>
+      <td style="font-family:var(--fc);font-size:12px;color:var(--gold)">${s.tangible_logged} ${s.unit}</td>
+      <td style="color:${s.points_earned>0?'var(--safe)':'var(--ember)'}">${s.points_earned>0?'+'+s.points_earned:s.penalty}</td>
+    </tr>`).join('')||`<tr><td colspan="4" style="color:var(--ash);font-style:italic">No sessions</td></tr>`;
+    const ctRows=data.ct?CMDS.map(c=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px">
+      <div style="width:8px;height:8px;border-radius:2px;flex-shrink:0;background:${data.ct[c.key]===true?'var(--safe)':data.ct[c.key]===false?'var(--ember)':'var(--border)'}"></div>
+      <span style="flex:1;color:${data.ct[c.key]===true?'var(--safe)':data.ct[c.key]===false?'var(--ember)':'var(--ash)'}">${c.label}</span>
+      <span style="font-family:var(--fc);font-size:10px;color:var(--gold)">${data.ct[c.key]===true?'+'+c.pts:'—'}</span>
+    </div>`).join(''):'<div style="font-size:12px;color:var(--ash);font-style:italic">No CT data</div>';
+    detailHTML=`<div class="card" style="margin-top:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="font-family:var(--fc);font-size:16px;color:var(--gold)">${S.calSelected}</div>
+        <div style="font-family:var(--fc);font-size:24px;color:var(--gold)">${data.total||0}<span style="font-size:12px;color:var(--ash)"> /80</span></div>
+      </div>
+      <div class="st">Sessions</div>
+      <table class="dt" style="margin-bottom:14px"><thead><tr><th>Project</th><th>Category</th><th>Tangible</th><th>Points</th></tr></thead><tbody>${sessRows}</tbody></table>
+      <div class="st">Clean Temper — ${data.ctKept||0} kept · ${data.ctBroke||0} broken</div>
+      ${ctRows}
+      ${data.ct?.reflection?`<div class="st" style="margin-top:12px">Reflection</div><div style="font-size:13px;color:var(--parch);font-style:italic;line-height:1.7;margin-top:6px">${data.ct.reflection}</div>`:''}
+    </div>`;
+  }
+
+  const legendHTML=`<div style="display:flex;align-items:center;gap:12px;margin-top:12px;font-size:11px;color:var(--ash);flex-wrap:wrap">
+    <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--gold)"></div>70+ pts</span>
+    <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--safe)"></div>50+ pts</span>
+    <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--warn)"></div>30+ pts</span>
+    <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--ember)"></div>&lt;30 pts</span>
+    ${calView==='month'?'<span style="margin-left:8px">Dots: Soul · Body · Business · CT</span>':''}
+  </div>`;
+
+  el.innerHTML=`
+    <div class="pt">Calendar</div>
+    <div class="ps">Every day of the campaign — click any date to see full detail</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+      <button class="cal-nav-btn ${calView==='week'?'active':''}" onclick="setCalView('week')">Week</button>
+      <button class="cal-nav-btn ${calView==='month'?'active':''}" onclick="setCalView('month')">Month</button>
+      <button class="cal-nav-btn ${calView==='year'?'active':''}" onclick="setCalView('year')">Year</button>
+    </div>
+    <div class="card">${contentHTML}${legendHTML}</div>
+    ${detailHTML}
+  `;
+}
+
+function setCalView(v){calView=v;S.calSelected=null;renderCalendar();}
+function calPrev(){
+  if(calView==='month')S.calDate.setMonth(S.calDate.getMonth()-1);
+  else if(calView==='week')S.calDate.setDate(S.calDate.getDate()-7);
+  else S.calDate.setFullYear(S.calDate.getFullYear()-1);
+  renderCalendar();
+}
+function calNext(){
+  if(calView==='month')S.calDate.setMonth(S.calDate.getMonth()+1);
+  else if(calView==='week')S.calDate.setDate(S.calDate.getDate()+7);
+  else S.calDate.setFullYear(S.calDate.getFullYear()+1);
+  renderCalendar();
+}
+function calSelect(d){S.calSelected=S.calSelected===d?null:d;renderCalendar();}
+
+// ── SESSION PAGINATION HELPER ──────────────────────────
+function sessPageChange(pid, screenKey, newPage){
+  S.sessionPages[pid]=newPage;
+  renderProject(screenKey);
 }
 
 // ── UTILS ──────────────────────────────────────────────
