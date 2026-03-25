@@ -839,12 +839,15 @@ async function loadData(){
     db.from('daily_log').select('*').eq('date',today()).single(),
     db.from('sessions').select('*').eq('date',today()),
     db.from('commandment_streaks').select('*').order('points',{ascending:false}),
-    db.from('declarations').select('*').order('start_date',{ascending:false}).limit(20)
+    db.from('declarations').select('*').order('start_date',{ascending:false}).limit(50)
   ]);
   S.projects=pR.data||[];
-  // Build projectConfig lookup by project id
+  // Load project_config separately — fault tolerant (table may not exist yet)
   S.projectConfig={};
-  (cfR.data||[]).forEach(function(row){S.projectConfig[row.project]=row;});
+  try{
+    const{data:cfData}=await db.from('project_config').select('*');
+    (cfData||[]).forEach(function(row){S.projectConfig[row.project]=row;});
+  }catch(e){console.warn('project_config table not found — using defaults');}
   // Run auto-close-yesterday (Option B streak timing)
   await autoCloseYesterday();
   S.todayLog=lR.data||null;
