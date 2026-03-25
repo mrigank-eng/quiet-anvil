@@ -979,7 +979,8 @@ function renderForge(){
   }
 
 
-  // Projects
+  // Projects — with catCounts for floor-aware titles
+  const forgeCatCounts=getCatCountsAll();
   let projHTML='';
   ['Soul','Body','Business'].forEach(function(pillar){
     const pp=PROJECTS.filter(p=>p.pillar===pillar);
@@ -990,6 +991,7 @@ function renderForge(){
       const tangToday=todayTangFor(proj.id);
       const sum=S.projects.find(p=>p.project===proj.id)||{};
       const totalT=sum.total_tangible||0;
+      const projCC=forgeCatCounts[proj.id]||{};
       const declared=isProjectDeclared(proj.id);
       let sessListHTML='';
       if(sessions.length>0){
@@ -1245,7 +1247,7 @@ async function submitSession(){
     S.committedProjects[S.pendingSessionPid].hasSession=true;
     await saveCommitted();
   }
-  closeModal('session-modal');S.allSessions=[];await loadData();
+  closeModal('session-modal');S.allSessions=[];S.sessionPages={};await loadData();
   if(newLvl>oldLvl)showUnlock(proj.titles[newLvl-1],proj.id+' — Level '+newLvl+' of 10',UNLOCK_MSGS[proj.id]?.[newLvl-1]||'The forge marks you.');
 }
 
@@ -1356,8 +1358,10 @@ async function submitDeclaration(){
 }
 
 // ── ARMOURY ────────────────────────────────────────────
-function renderArmoury(){
-  const armCC=getCatCountsAll();const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,s?.total_tangible||0,armCC[p.id]||{});})):0;
+async function renderArmoury(){
+  await loadAll();
+  const armCatCounts=getCatCountsAll();
+  const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,s?.total_tangible||0,armCatCounts[p.id]||{});})):0;
   const metaTitle=metaLvl>0?META_T[metaLvl-1]:'Working toward '+META_T[0];
 
   // Pillar summaries
@@ -1365,8 +1369,8 @@ function renderArmoury(){
   PROJECTS.forEach(function(proj){
     const s=S.projects.find(p=>p.project===proj.id)||{};
     const total=s.total_tangible||0;
-    const l=getLvl(proj.id,total);
-    pillarData[proj.pillar].projects.push({proj,l:getLvl(proj.id,total,armCatCounts[proj.id]||{}),total});
+    const l=getLvl(proj.id,total,armCatCounts[proj.id]||{});
+    pillarData[proj.pillar].projects.push({proj,l,total});
   });
 
   const pillarHTML=Object.keys(pillarData).map(function(pillar){
@@ -1405,7 +1409,6 @@ function renderArmoury(){
   }).join('');
 
   let cardsHTML='';
-  const armCatCounts=getCatCountsAll();
   PROJECTS.forEach(function(proj){
     const s=S.projects.find(p=>p.project===proj.id)||{};
     const total=s.total_tangible||0;
@@ -1877,7 +1880,7 @@ function renderMeta(){
   const metaTitle=metaLvl>0?META_T[metaLvl-1]:'Working toward '+META_T[0];
   const metaDesc=metaLvl>0?META_D[metaLvl-1]:META_D[0];
   const ljHTML=META_T.map(function(t,i){
-    const done=metaLvl>i+1;const cur=metaLvl===i+1||(metaLvl===0&&i===0);
+    const done=metaLvl>i+1;const cur=(metaLvl===i+1)||(metaLvl===0&&i===0);
     return`<div class="lj-row ${cur?'current':done?'done':'future'}">
       <div class="lj-dot" style="background:${cur?'var(--gold)':done?'var(--safe)':'var(--border2)'}"></div>
       <div class="lj-title" style="color:${cur?'var(--gold)':done?'var(--safe)':'var(--ash)'}">${t}</div>
@@ -1945,7 +1948,7 @@ async function renderReport(){
     const ceilPct=Math.round(total/proj.ceiling*100);
     return`<tr>
       <td style="font-size:13px">${proj.id}</td>
-      <td style="font-family:var(--fc);font-size:11px;color:var(--gold)">${dispTitle(proj.id,total)}</td>
+      <td style="font-family:var(--fc);font-size:11px;color:var(--gold)">${dispTitle(proj.id,total,shareCC[proj.id]||{})}</td>
       <td style="text-align:center;font-family:var(--fc);font-size:12px">${l}/10</td>
       <td style="text-align:center;font-size:12px">${total.toLocaleString()} ${proj.unit}</td>
       <td style="text-align:center;font-size:12px">${sc}</td>
@@ -2214,6 +2217,7 @@ function buildDailyCard(){
 }
 
 function buildCampaignCard(){
+  const shareCC=getCatCountsAll();
   const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,s?s.total_tangible:0);})):0;
   const metaTitle=metaLvl>0?META_T[metaLvl-1]:'Working toward '+META_T[0];
   const bestStreak=S.streaks.reduce((m,s)=>Math.max(m,s.current_streak||0),0);
@@ -2233,7 +2237,7 @@ function buildCampaignCard(){
         const total=s.total_tangible||0;
         const l=getLvl(proj.id,total);
         const pr=getProg(proj.id,total);
-        const curT=getCurTitle(proj.id,total)||getTargetTitle(proj.id,total);
+        const curT=getCurTitle(proj.id,total,shareCC[proj.id]||{})||getTargetTitle(proj.id,total,shareCC[proj.id]||{});
         return`<div class="sc-prog-row">
           <div class="sc-prog-label">
             <div class="sc-prog-name">${proj.id.toUpperCase()}</div>
