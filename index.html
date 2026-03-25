@@ -1317,9 +1317,13 @@ async function submitSession(){
   // Update project summary total
   const oldSum=S.projects.find(p=>p.project===S.pendingSessionPid)||{};
   const oldTotal=oldSum.total_tangible||0;
-  const oldLvl=getLvl(S.pendingSessionPid,oldTotal);
+  const sessCC=getCatCountsAll();
+  const oldLvl=getLvl(S.pendingSessionPid,oldTotal,sessCC[S.pendingSessionPid]||{});
   const newTotal=oldTotal+tangible;
-  const newLvl=getLvl(S.pendingSessionPid,newTotal);
+  // Rebuild catCounts with new session included
+  const newSessCC=Object.assign({},sessCC[S.pendingSessionPid]||{});
+  if(category&&newSessCC[category]!==undefined)newSessCC[category]=(newSessCC[category]||0)+tangible;
+  const newLvl=getLvl(S.pendingSessionPid,newTotal,newSessCC);
   await db.from('project_summary').update({total_tangible:newTotal,last_session:today()}).eq('project',S.pendingSessionPid);
 
   if(S.committedProjects[S.pendingSessionPid]){
@@ -1676,17 +1680,26 @@ async function renderProject(screenKey){
   // Level journey
   const ljHTML=proj.levels.map(function(threshold,i){
     const prevT=i===0?0:proj.levels[i-1];
-    const done=total>=threshold;
-    const cur=!done&&total>=prevT;
-    let barPct=done?100:cur?Math.max(0,Math.min(100,Math.round(((total-prevT)/(threshold-prevT))*100))):0;
-    const barColor=done?'var(--safe)':cur?'var(--gold)':'var(--border)';
-    const cls=cur?'current':done?'done':'future';
+    const totalMet=total>=threshold;
+    const floorsMet=floorsMetForLevel(proj.id,i,catCounts);
+    // done = total threshold met AND all floors for this level met
+    const done=totalMet&&floorsMet;
+    // floor-blocked = total threshold met but floors not met
+    const floorBlocked=totalMet&&!floorsMet;
+    // current = actively working toward this level (total between prev and this threshold, not blocked)
+    const isCur=!done&&!floorBlocked&&(total>=prevT&&total<threshold);
+    const barPct=done?100:isCur?Math.max(0,Math.min(100,Math.round(((total-prevT)/(threshold-prevT))*100))):floorBlocked?100:0;
+    const barColor=done?'var(--safe)':isCur?'var(--gold)':floorBlocked?'var(--warn)':'var(--border)';
+    const dotColor=done?'var(--safe)':isCur?'var(--gold)':floorBlocked?'var(--warn)':'var(--border2)';
+    const titleColor=done?'var(--safe)':isCur?'var(--gold)':floorBlocked?'var(--warn)':'var(--ash)';
+    const tag=done?'✓':isCur?barPct+'%':floorBlocked?'⚠':'';
+    const cls=done?'done':isCur?'current':floorBlocked?'blocked':'future';
     return`<div class="lj-row ${cls}">
-      <div class="lj-dot" style="background:${cur?'var(--gold)':done?'var(--safe)':'var(--border2)'}"></div>
-      <div class="lj-title" style="color:${cur?'var(--gold)':done?'var(--safe)':'var(--ash)'}">${proj.titles[i]}</div>
+      <div class="lj-dot" style="background:${dotColor}"></div>
+      <div class="lj-title" style="color:${titleColor}">${proj.titles[i]}</div>
       <div class="lj-bar-track"><div class="lj-bar-fill" style="width:${barPct}%;background:${barColor}"></div></div>
       <div class="lj-threshold">${threshold.toLocaleString()} ${proj.unit}</div>
-      <div class="lj-tag" style="color:${cur?'var(--gold)':done?'var(--safe)':'var(--border2)'}">${cur?barPct+'%':done?'✓':''}</div>
+      <div class="lj-tag" style="color:${dotColor};font-size:${floorBlocked?'14px':'inherit'}">${tag}</div>
     </div>`;
   }).join('');
 
@@ -1984,7 +1997,7 @@ function renderMeta(){
   const metaTitle=metaLvl>0?META_T[metaLvl-1]:'Working toward '+META_T[0];
   const metaDesc=metaLvl>0?META_D[metaLvl-1]:META_D[0];
   const ljHTML=META_T.map(function(t,i){
-    const done=metaLvl>i+1;const cur=(metaLvl===i+1)||(metaLvl===0&&i===0);
+    const done=metaLvl>i;const cur=metaLvl===i;
     return`<div class="lj-row ${cur?'current':done?'done':'future'}">
       <div class="lj-dot" style="background:${cur?'var(--gold)':done?'var(--safe)':'var(--border2)'}"></div>
       <div class="lj-title" style="color:${cur?'var(--gold)':done?'var(--safe)':'var(--ash)'}">${t}</div>
@@ -2217,7 +2230,10 @@ async function renderReport(){
       let runningTotal=0;
       dates.forEach(function(date,idx){
         const prev=runningTotal;runningTotal+=dailyVals[idx];
-        const prevLvl=getLvl(proj.id,prev);const newLvl=getLvl(proj.id,runningTotal);
+        const repCC=getCatCountsAll();
+      const prevCC=Object.assign({},repCC[proj.id]||{});
+      const newCC=Object.assign({},repCC[proj.id]||{});
+      const prevLvl=getLvl(proj.id,prev,prevCC);const newLvl=getLvl(proj.id,runningTotal,newCC);
         if(newLvl>prevLvl){levelAnnotations[idx]={lvl:newLvl,title:proj.titles[newLvl-1]};}
       });
 
@@ -2252,7 +2268,7 @@ async function submitMilestone(){
   if(!pid||!desc){toast('Select a project and enter a description.','error');return;}
   const s=S.projects.find(p=>p.project===pid)||{};
   const total=s.total_tangible||0;
-  await db.from('milestones').insert({date:today(),project:pid,description:desc,tangible_at_time:total,level_at_time:getLvl(pid,total)});
+  await db.from('milestones').insert({date:today(),project:pid,description:desc,tangible_at_time:total,level_at_time:getLvl(pid,total,getCatCountsAll()[pid]||{})});
   closeModal('ms-modal');S.milestones=[];S.allSessions=[];S.allLogs=[];
   await loadAll();renderMilestones();
 }
@@ -2322,7 +2338,8 @@ function buildDailyCard(){
 
 function buildCampaignCard(){
   const shareCC=getCatCountsAll();
-  const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,s?s.total_tangible:0);})):0;
+  const repMetaCC=getCatCountsAll();
+  const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,s?s.total_tangible:0,repMetaCC[p.id]||{});})):0;
   const metaTitle=metaLvl>0?META_T[metaLvl-1]:'Working toward '+META_T[0];
   const bestStreak=S.streaks.reduce((m,s)=>Math.max(m,s.current_streak||0),0);
   const bestStreakCmd=S.streaks.find(s=>(s.current_streak||0)===bestStreak);
