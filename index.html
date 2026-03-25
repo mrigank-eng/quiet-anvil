@@ -598,7 +598,7 @@ let S={
 // ── HELPERS ────────────────────────────────────────────
 const today=()=>new Date().toISOString().split('T')[0];
 const daysLeft=()=>Math.max(0,Math.ceil((GEND()-new Date())/864e5));
-const dayNum=()=>Math.max(1,Math.ceil((new Date()-GSTART())/864e5));
+const dayNum=()=>{const d=Math.ceil((new Date()-GSTART())/864e5);return d<1?0:d;};
 const weekNum=()=>Math.ceil(dayNum()/7);
 const totalCampaignDays=()=>Math.ceil((GEND()-GSTART())/864e5);
 const maxPoints=()=>totalCampaignDays()*80;
@@ -1044,6 +1044,14 @@ async function submitProject(pid){
   if(sessions.length>0){
     S.committedProjects[pid].submitted=true;S.committedProjects[pid].hasSession=true;
     await saveCommitted();renderForge();
+  } else if(isProjectDeclared(pid)){
+    // Declaration active — submit with no penalty, no modal needed
+    S.committedProjects[pid].submitted=true;S.committedProjects[pid].hasSession=false;
+    S.committedProjects[pid].skipReason='Declaration active — no penalty';
+    await db.from('sessions').insert({date:today(),project:pid,tangible_logged:0,unit:proj.unit,points_earned:0,penalty:0,notes:'Skipped — declaration active'});
+    await saveCommitted();
+    toast(proj.id+' submitted — no penalty (declaration active)','info');
+    S.allSessions=[];await loadData();
   } else {
     S.pendingSkipPid=pid;
     document.getElementById('skip-title').textContent=proj.id+' — no sessions logged';
@@ -1349,9 +1357,16 @@ function renderArmoury(){
   document.getElementById('screen-armoury').innerHTML=`
     <div class="pt">The Armoury</div>
     <div class="ps">Complete campaign overview — click any project to open its page</div>
-    <div class="card card-gold" style="margin-bottom:20px">
-      <div style="font-family:var(--fc);font-size:28px;color:var(--gold);margin-bottom:4px">${metaDisplayTitle}</div>
-      <div style="font-size:13px;color:var(--ash)">Meta Level ${metaLvl} of 10 · Day ${dayNum()} of ${totalCampaignDays()}</div>
+    <div class="card card-gold" style="margin-bottom:20px;padding:20px 24px">
+      <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.2em;color:var(--ash);margin-bottom:8px">META RANK</div>
+      <div style="font-family:var(--fc);font-size:28px;color:var(--gold);margin-bottom:6px;line-height:1.1">${metaDisplayTitle}</div>
+      <div style="display:flex;align-items:center;gap:16px">
+        <span style="font-family:var(--fc);font-size:11px;color:var(--ash)">Level ${metaLvl} of 10</span>
+        <span style="color:var(--border2)">·</span>
+        <span style="font-family:var(--fc);font-size:11px;color:var(--ash)">Day ${dayNum()} of ${totalCampaignDays()}</span>
+        <span style="color:var(--border2)">·</span>
+        <span style="font-family:var(--fc);font-size:11px;color:var(--ash)">${daysLeft()} days remaining</span>
+      </div>
     </div>
     <div class="st">Pillar balance</div>
     <div class="g3" style="margin-bottom:20px">${pillarHTML}</div>
@@ -1418,16 +1433,14 @@ async function renderProject(screenKey){
           const req=proj.floors[cat][nextLvlIdx];
           const met=cnt>=req;
           const fpct=Math.min(100,Math.round(cnt/req*100));
-          return`<div style="margin-bottom:10px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-              <div style="font-size:13px;color:${met?'var(--safe)':'var(--parch)'}">${cat}</div>
-              <div style="display:flex;align-items:center;gap:8px">
-                <div style="font-size:12px;color:var(--ash)">${cnt} / ${req} ${proj.unit}</div>
-                <div style="font-size:11px;font-family:var(--fc);padding:2px 8px;border-radius:4px;background:${met?'var(--safe-dim)':'var(--warn-dim)'};color:${met?'var(--safe)':'var(--warn)'}">${met?'✓ Met':'Need '+(req-cnt)+' more'}</div>
-              </div>
-            </div>
+          return`<div style="display:grid;grid-template-columns:130px 1fr auto;align-items:center;gap:12px;padding:7px 0;border-bottom:0.5px solid var(--border)">
+            <div style="font-size:13px;color:${met?'var(--safe)':'var(--parch)'}">${cat}</div>
             <div style="height:5px;background:var(--card2);border-radius:3px;overflow:hidden">
-              <div style="height:100%;width:${fpct}%;background:${met?'var(--safe)':'var(--warn)'};border-radius:3px;transition:width 0.4s"></div>
+              <div style="height:100%;width:${fpct}%;background:${met?'var(--safe)':'var(--warn)'};border-radius:3px"></div>
+            </div>
+            <div style="text-align:right;min-width:100px">
+              <span style="font-family:var(--fc);font-size:11px;color:${met?'var(--safe)':'var(--warn)'}">${cnt}/${req} ${proj.unit}</span>
+              ${met?'<span style="color:var(--safe);margin-left:6px;font-size:12px">✓</span>':''}
             </div>
           </div>`;
         }).join('')}
@@ -1977,7 +1990,7 @@ async function renderReport(){
 
       // Cumulative chart
       const cCtx=document.getElementById('proj-cum-'+proj.key);
-      if(cCtx)new Chart(cCtx,{type:'line',data:{labels:dates,datasets:[{data:cumVals,borderColor:color,backgroundColor:color+'18',borderWidth:2,fill:true,tension:0.4,pointBackgroundColor:pointBg,pointRadius:Math.max(3,pointR[0]||3)}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{afterBody:function(items){const idx=items[0].dataIndex;const date=dates[idx];const ms=projMilestones.find(m=>m.date===date);const lvlAnn=levelAnnotations[idx];const lines=[];if(ms)lines.push('★ '+ms.description.substring(0,40));if(lvlAnn)lines.push('↑ Level '+lvlAnn.lvl+': '+lvlAnn.title);return lines;}}}},scales:{x:{ticks:{color:'#A09080',font:{size:8},maxTicksLimit:8},grid:{color:'rgba(74,66,56,0.3)'}},y:{ticks:{color:'#A09080',font:{size:8},callback:v=>v+' '+proj.unit},grid:{color:'rgba(74,66,56,0.3)'}}}}});
+      if(cCtx){const pUnit=proj.unit;new Chart(cCtx,{type:'line',data:{labels:dates,datasets:[{data:cumVals,borderColor:color,backgroundColor:color+'18',borderWidth:2,fill:true,tension:0.4,pointBackgroundColor:pointBg,pointRadius:Math.max(3,pointR[0]||3)}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{afterBody:function(items){const idx=items[0].dataIndex;const date=dates[idx];const ms=projMilestones.find(function(m){return m.date===date;});const lvlAnn=levelAnnotations[idx];const lines=[];if(ms)lines.push('★ '+ms.description.substring(0,40));if(lvlAnn)lines.push('↑ Level '+lvlAnn.lvl+': '+lvlAnn.title);return lines;}}}},scales:{x:{ticks:{color:'#A09080',font:{size:8},maxTicksLimit:8},grid:{color:'rgba(74,66,56,0.3)'}},y:{beginAtZero:true,ticks:{color:'#A09080',font:{size:8},callback:function(v){return v+' '+pUnit;}},grid:{color:'rgba(74,66,56,0.3)'}}}}});};
     });
   },150);
 }
