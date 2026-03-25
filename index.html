@@ -816,13 +816,25 @@ async function closeDay(){
 
   await db.from('daily_log').update({reflection,c10_reflection:true,day_closed:true}).eq('date',today());
 
-  // Update CT streaks
+  // Update CT streaks — only once per day
   for(const c of CMDS){
     const kept=S.todayLog?.[c.key]===true;
     const streak=S.streaks.find(s=>s.commandment===c.short)||{};
+    // Only update if we haven't already updated today
+    if(streak.streak_last_updated===today()) continue;
     if(kept){
       const ns=(streak.current_streak||0)+1;
-      await db.from('commandment_streaks').update({current_streak:ns,longest_streak:Math.max(streak.longest_streak||0,ns)}).eq('commandment',c.short);
+      await db.from('commandment_streaks').update({
+        current_streak:ns,
+        longest_streak:Math.max(streak.longest_streak||0,ns),
+        streak_last_updated:today()
+      }).eq('commandment',c.short);
+    } else if(S.todayLog?.[c.key]===false){
+      // Broken today — streak already reset when break was recorded
+      // Just mark as updated so we don't double-process
+      await db.from('commandment_streaks').update({
+        streak_last_updated:today()
+      }).eq('commandment',c.short);
     }
   }
 
