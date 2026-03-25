@@ -4,9 +4,78 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>The Quiet Anvil</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2">
+document.addEventListener("DOMContentLoaded", function(){
+  console.log("🔥 App starting...");
+  initApp();
+});
+
+async function initApp(){
+  try{
+    console.log("📡 Loading data...");
+    if(typeof loadAllData === "function"){
+      await loadAllData();
+    }
+    console.log("🎨 Rendering UI...");
+    if(typeof renderAll === "function"){
+      renderAll();
+    } else if(typeof nav === "function"){
+      nav('forge');
+    }
+  }catch(e){
+    console.error("❌ INIT ERROR:", e);
+  }
+}
+
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js">
+document.addEventListener("DOMContentLoaded", function(){
+  console.log("🔥 App starting...");
+  initApp();
+});
+
+async function initApp(){
+  try{
+    console.log("📡 Loading data...");
+    if(typeof loadAllData === "function"){
+      await loadAllData();
+    }
+    console.log("🎨 Rendering UI...");
+    if(typeof renderAll === "function"){
+      renderAll();
+    } else if(typeof nav === "function"){
+      nav('forge');
+    }
+  }catch(e){
+    console.error("❌ INIT ERROR:", e);
+  }
+}
+
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
+document.addEventListener("DOMContentLoaded", function(){
+  console.log("🔥 App starting...");
+  initApp();
+});
+
+async function initApp(){
+  try{
+    console.log("📡 Loading data...");
+    if(typeof loadAllData === "function"){
+      await loadAllData();
+    }
+    console.log("🎨 Rendering UI...");
+    if(typeof renderAll === "function"){
+      renderAll();
+    } else if(typeof nav === "function"){
+      nav('forge');
+    }
+  }catch(e){
+    console.error("❌ INIT ERROR:", e);
+  }
+}
+
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -607,7 +676,10 @@ function calcFloors(projId, newCeiling){
 // Get effective project config — merge hardcoded defaults with DB overrides
 function getEffectiveProject(pid){
   var base = PROJECTS_DEFAULT.find(function(p){return p.id===pid;});
-  if(!base)return null;
+  if(!base){
+    console.error("❌ Invalid project ID:", pid);
+    return null;
+  }
   var override = S.projectConfig[pid];
   if(!override)return base;
   var ceiling = override.ceiling || base.ceiling;
@@ -620,7 +692,9 @@ function getEffectiveProject(pid){
 
 // Get all active effective projects
 function getActiveProjects(){
-  return PROJECTS_DEFAULT.map(getEffectiveProject).filter(function(p){return p.isActive !== false;});
+  return PROJECTS_DEFAULT
+    .map(getEffectiveProject)
+    .filter(function(p){ return p && p.isActive !== false; });
 }
 
 
@@ -3527,6 +3601,29 @@ function closeUnlock(){document.getElementById('unlock').classList.remove('open'
 
 // ── INIT ───────────────────────────────────────────────
 document.getElementById('pin-screen').classList.add('active');
+
+document.addEventListener("DOMContentLoaded", function(){
+  console.log("🔥 App starting...");
+  initApp();
+});
+
+async function initApp(){
+  try{
+    console.log("📡 Loading data...");
+    if(typeof loadAllData === "function"){
+      await loadAllData();
+    }
+    console.log("🎨 Rendering UI...");
+    if(typeof renderAll === "function"){
+      renderAll();
+    } else if(typeof nav === "function"){
+      nav('forge');
+    }
+  }catch(e){
+    console.error("❌ INIT ERROR:", e);
+  }
+}
+
 </script>
 </body>
 </html>
