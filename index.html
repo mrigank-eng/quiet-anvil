@@ -934,6 +934,7 @@ function renderForge(){
           footHTML+=`<button class="btn btn-xs" onclick="openSession('${proj.id}')">+ Add more</button>`;
         } else {
           footHTML+=`<span style="font-size:11px;color:var(--ember);font-family:var(--fc)">✗ Skipped${declared?' (declaration active)':''}</span>`;
+          footHTML+=`<button class="btn btn-xs btn-safe" onclick="addSessionToSkipped('${proj.id}')">+ Add session now</button>`;
         }
       }
       footHTML+='</div>';
@@ -1038,6 +1039,24 @@ async function submitProject(pid){
     document.getElementById('skip-reason').value='';
     document.getElementById('skip-modal').classList.add('open');
   }
+}
+
+// Allow adding session to a previously skipped project — resets penalty
+async function addSessionToSkipped(pid){
+  // Remove the penalty session logged for this project today
+  const{data:penSess}=await db.from('sessions')
+    .select('id').eq('date',today()).eq('project',pid).eq('tangible_logged',0);
+  for(const s of (penSess||[])){
+    await db.from('sessions').delete().eq('id',s.id);
+  }
+  // Reset committed state so user can submit fresh
+  S.committedProjects[pid].submitted=false;
+  S.committedProjects[pid].hasSession=false;
+  delete S.committedProjects[pid].skipReason;
+  await saveCommitted();
+  S.allSessions=[];
+  await loadData();
+  openSession(pid);
 }
 
 async function confirmSkip(){
@@ -1290,7 +1309,10 @@ function renderArmoury(){
         </div>
       </div>
       <div class="prog-track"><div class="prog-fill" style="width:${pr}%"></div></div>
-      <div style="font-size:11px;color:var(--ash);font-style:italic;margin-top:4px">${next?(next-total).toLocaleString()+' '+proj.unit+' to '+nextT:'Ceiling reached'}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+        <div style="font-size:11px;color:var(--ash);font-style:italic">${next?(next-total).toLocaleString()+' '+proj.unit+' to '+nextT:'Ceiling reached'}</div>
+        <div style="font-family:var(--fc);font-size:10px;color:var(--ash)">${pr}% to next</div>
+      </div>
     </div>`;
   });
 
@@ -1431,10 +1453,10 @@ async function renderProject(screenKey){
   document.getElementById('screen-'+screenKey).innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
       <div>
-        <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.12em;margin-bottom:4px">${proj.pillar}</div>
-        <div class="pt">${proj.id}</div>
-        <div style="font-family:var(--fc);font-size:18px;color:var(--gold);margin-top:4px">${dispTitle(proj.id,total,catCounts)}</div>
-        <div style="font-size:13px;color:var(--ash);margin-top:4px">${total.toLocaleString()} ${proj.unit} logged</div>
+        <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.18em;margin-bottom:8px">${proj.pillar.toUpperCase()} · ${proj.pts} PTS / DAY</div>
+        <div style="font-family:var(--fc);font-size:26px;color:var(--parch);letter-spacing:0.04em;line-height:1.1;margin-bottom:10px">${proj.id}</div>
+        <div style="font-family:var(--fc);font-size:13px;color:var(--gold);letter-spacing:0.06em;margin-bottom:6px">${dispTitle(proj.id,total,catCounts)}</div>
+        <div style="font-size:13px;color:var(--ash)">${total.toLocaleString()} ${proj.unit} logged · Level ${l} of 10</div>
       </div>
       <div class="lvl-badge"><div class="lvl-num">${l}</div><div class="lvl-lbl">of 10</div></div>
     </div>
@@ -1448,7 +1470,19 @@ async function renderProject(screenKey){
       <div class="sm"><div class="sm-val" style="color:${totalPen<0?'var(--ember)':'var(--ash)'}">${totalPen}</div><div class="sm-lbl">Penalties</div></div>
     </div>
 
-    ${pb?`<div class="card card-gold" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-family:var(--fc);font-size:9px;letter-spacing:0.15em;color:var(--ash);margin-bottom:3px">Personal Best</div><div style="font-size:13px;color:var(--parch)">${pb.date}${pb.category?' · '+pb.category:''}</div></div><div style="font-family:var(--fc);font-size:24px;color:var(--gold)">${pb.tangible_logged} ${proj.unit}</div></div>`:''}
+    ${pb?`<div class="card card-gold" style="margin-bottom:14px">
+      <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.2em;color:var(--ash);margin-bottom:10px">Personal Best</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-size:13px;color:var(--ash);margin-bottom:6px">${(()=>{const d=new Date(pb.date);return d.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});})()}</div>
+          ${pb.category?`<div style="font-family:var(--fc);font-size:11px;letter-spacing:0.1em;color:var(--parch);background:var(--card2);padding:4px 10px;border-radius:4px;display:inline-block">${pb.category}</div>`:''}
+        </div>
+        <div style="text-align:right">
+          <div style="font-family:var(--fc);font-size:32px;color:var(--gold);line-height:1">${fmtT(pb.tangible_logged,proj.unit)}</div>
+          <div style="font-family:var(--fc);font-size:11px;color:var(--ash);letter-spacing:0.08em;margin-top:2px">${proj.unit.toUpperCase()}</div>
+        </div>
+      </div>
+    </div>`:''}
 
     <div class="card" style="margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span style="color:var(--ash)">Progress toward ceiling</span><span style="color:var(--gold);font-family:var(--fc)">${Math.round(total/proj.ceiling*100)}%</span></div>
@@ -1534,16 +1568,20 @@ function renderTemper(){
 
 // ── WILLMASTER ─────────────────────────────────────────
 function renderWillmaster(){
-  // Build 90-day heatmap — oldest left, newest right
+  // Build heatmap — from 90 days ago to TODAY only (left=oldest, right=most recent)
+  // Only past and today — no future boxes
   const heatDays=90;
   const heatData={};
   const now=new Date();
+  const todayStr=today();
   for(let i=heatDays-1;i>=0;i--){
     const d=new Date(now);d.setDate(d.getDate()-i);
-    heatData[d.toISOString().split('T')[0]]={};
-    CMDS.forEach(c=>heatData[d.toISOString().split('T')[0]][c.key]=null);
+    const ds=d.toISOString().split('T')[0];
+    if(ds<=todayStr){ // only past days and today
+      heatData[ds]={};
+      CMDS.forEach(c=>heatData[ds][c.key]=null);
+    }
   }
-  // Also include full allLogs history for streaks over 90 days
   S.allLogs.forEach(function(l){if(heatData[l.date])CMDS.forEach(c=>{heatData[l.date][c.key]=l[c.key];});});
   const heatDates=Object.keys(heatData).sort(); // oldest first = left to right
 
@@ -1656,12 +1694,7 @@ function renderMeta(){
     </div>`;
   }).join('');
   const projRows=pLvls.map(function(x){
-    const daysSince=x.total>0&&S.allSessions.length?(()=>{
-      const last=S.allSessions.filter(s=>s.project===x.proj.id).slice(-1)[0];
-      if(!last)return null;
-      const diff=Math.floor((new Date()-new Date(last.date))/864e5);
-      return diff===0?'Today':diff===1?'Yesterday':diff+'d ago';
-    })():null;
+    const daysSince=null; // removed per spec
     return`<div style="padding:10px 0;border-bottom:0.5px solid var(--border)">
       <div style="display:flex;align-items:center;gap:12px">
         <div style="flex:1;min-width:0">
@@ -1767,11 +1800,11 @@ async function renderReport(){
       <div class="g2" style="align-items:start">
         <div>
           <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.12em;margin-bottom:6px">DAILY ${p.unit.toUpperCase()}</div>
-          <canvas id="proj-daily-${p.key}" height="120"></canvas>
+          <div style="position:relative;height:130px"><canvas id="proj-daily-${p.key}"></canvas></div>
         </div>
         <div>
           <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.12em;margin-bottom:6px">CUMULATIVE ${p.unit.toUpperCase()}</div>
-          <canvas id="proj-cum-${p.key}" height="120"></canvas>
+          <div style="position:relative;height:130px"><canvas id="proj-cum-${p.key}"></canvas></div>
         </div>
       </div>
     </div>
@@ -1795,7 +1828,7 @@ async function renderReport(){
     <div class="st">Composite score over time</div>
     <div class="card" style="margin-bottom:20px">
       <div style="font-size:11px;color:var(--ash);margin-bottom:8px">Total points per day · All projects + CT in distinct colours</div>
-      <canvas id="report-chart" height="180"></canvas>
+      <div style="position:relative;height:200px"><canvas id="report-chart"></canvas></div>
     </div>
 
     <div class="g2" style="align-items:start;margin-bottom:20px">
@@ -1855,7 +1888,7 @@ async function renderReport(){
     const ctDataset={label:'CT',data:allDates.map(d=>{const l=S.allLogs.find(x=>x.date===d);return l?ctPts(l):0;}),backgroundColor:ctColor,borderColor:'#A08050',borderWidth:1,fill:true,tension:0.3,pointRadius:0};
 
     const ctx=document.getElementById('report-chart');
-    if(ctx)new Chart(ctx,{type:'line',data:{labels:allDates,datasets:[...projDatasets,ctDataset]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:true,labels:{color:'#A09080',font:{size:9},boxWidth:10}}},scales:{x:{stacked:true,ticks:{color:'#A09080',font:{size:9},maxTicksLimit:12},grid:{color:'rgba(74,66,56,0.4)'}},y:{stacked:true,ticks:{color:'#A09080',font:{size:9}},grid:{color:'rgba(74,66,56,0.4)'}}}}});
+    if(ctx)new Chart(ctx,{type:'line',data:{labels:allDates,datasets:[...projDatasets,ctDataset]},options:{responsive:true,maintainAspectRatio:false,animation:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:true,labels:{color:'#A09080',font:{size:9},boxWidth:10}}},scales:{x:{stacked:true,ticks:{color:'#A09080',font:{size:9},maxTicksLimit:12},grid:{color:'rgba(74,66,56,0.4)'}},y:{stacked:true,ticks:{color:'#A09080',font:{size:9}},grid:{color:'rgba(74,66,56,0.4)'}}}}});
 
     // Per-project individual charts
     PROJECTS.forEach(function(proj,i){
@@ -2525,14 +2558,25 @@ async function renderCalendar(){
       const ds=d.toISOString().split('T')[0];
       const data=dayData[ds];const isFuture=ds>today();const isSel=S.calSelected===ds;
       const t=data?.total||0;
-      // Session list
-      const sessHTML=(data?.sessions||[]).filter(s=>s.tangible_logged>0).map(s=>`<div style="font-size:10px;padding:3px 0;border-bottom:0.5px solid var(--border);display:flex;justify-content:space-between"><span style="color:var(--ash)">${s.project.replace('The ','')}</span><span style="color:var(--gold);font-family:var(--fc)">${s.tangible_logged}${PROJECTS.find(p=>p.id===s.project)?.unit||''}</span></div>`).join('');
-      const ctHTML=data?.ct?CMDS.map(c=>`<div style="width:8px;height:8px;border-radius:2px;background:${data.ct[c.key]===true?'var(--safe)':data.ct[c.key]===false?'var(--ember)':'var(--border)'}"></div>`).join(''):'';
+      // Aggregate sessions by project for clean display
+      const projTotals={};
+      (data?.sessions||[]).filter(s=>s.tangible_logged>0).forEach(function(s){
+        if(!projTotals[s.project])projTotals[s.project]=0;
+        projTotals[s.project]+=s.tangible_logged;
+      });
+      const sessHTML=Object.keys(projTotals).map(function(pid){
+        const proj=PROJECTS.find(p=>p.id===pid);
+        return`<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;border-bottom:0.5px solid var(--border)">
+          <span style="font-size:9px;color:var(--ash);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pid.replace('The ','')}</span>
+          <span style="font-family:var(--fc);font-size:9px;color:var(--gold);margin-left:4px;flex-shrink:0">${fmtT(projTotals[pid],proj?proj.unit:'')}${proj?proj.unit:''}</span>
+        </div>`;
+      }).join('');
+      const ctHTML=data?.ct?CMDS.map(c=>`<div style="width:7px;height:7px;border-radius:2px;background:${data.ct[c.key]===true?'var(--safe)':data.ct[c.key]===false?'var(--ember)':'var(--border)'}"></div>`).join(''):'';
       weekHTML+=`<div style="background:${isSel?'var(--gold-dim)':data&&!isFuture?'var(--card)':'var(--card2)'};border:0.5px solid ${isSel?'var(--gold)':'var(--border)'};border-radius:8px;padding:10px;opacity:${isFuture?0.3:1};cursor:${!isFuture&&data?'pointer':'default'}" onclick="${!isFuture&&data?'calSelect(\''+ds+'\')':''}">
         <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.1em;margin-bottom:2px">${dayNames[i]}</div>
         <div style="font-family:var(--fc);font-size:12px;color:var(--ash);margin-bottom:6px">${d.getDate()}</div>
         ${data&&!isFuture?`
-          <div style="font-family:var(--fc);font-size:18px;color:${scoreColor(t)};margin-bottom:8px">${t}</div>
+          <div style="font-family:var(--fc);font-size:18px;color:${scoreColor(t)};line-height:1;margin-bottom:6px">${fmtPts(t)}<span style="font-size:9px;color:var(--ash);margin-left:2px">pts</span></div>
           ${sessHTML}
           <div style="display:flex;gap:2px;flex-wrap:wrap;margin-top:6px">${ctHTML}</div>
         `:'<div style="font-size:11px;color:var(--border2);font-style:italic">—</div>'}
@@ -2587,27 +2631,67 @@ async function renderCalendar(){
   let detailHTML='';
   if(S.calSelected&&dayData[S.calSelected]){
     const data=dayData[S.calSelected];
-    const sessRows=(data.sessions||[]).filter(s=>s.tangible_logged>0).map(s=>`<tr>
-      <td style="color:var(--ash)">${s.project}</td>
-      <td>${s.category||'—'}</td>
-      <td style="font-family:var(--fc);font-size:12px;color:var(--gold)">${s.tangible_logged} ${s.unit}</td>
-      <td style="color:${s.points_earned>0?'var(--safe)':'var(--ember)'}">${s.points_earned>0?'+'+s.points_earned:s.penalty}</td>
-    </tr>`).join('')||`<tr><td colspan="4" style="color:var(--ash);font-style:italic">No sessions</td></tr>`;
-    const ctRows=data.ct?CMDS.map(c=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px">
+    const d=new Date(S.calSelected);
+    const dateFormatted=d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+    // Aggregate sessions by project for clean display
+    const projMap={};
+    (data.sessions||[]).filter(s=>s.tangible_logged>0).forEach(function(s){
+      if(!projMap[s.project])projMap[s.project]={sessions:[],total:0,pts:0,proj:PROJECTS.find(p=>p.id===s.project)};
+      projMap[s.project].sessions.push(s);
+      projMap[s.project].total+=s.tangible_logged;
+      projMap[s.project].pts+=s.points_earned||0;
+    });
+
+    const projRows=Object.keys(projMap).map(function(pid){
+      const pd=projMap[pid];
+      const proj=pd.proj;
+      // Individual session lines with notes
+      const sesLines=pd.sessions.map(function(s){
+        return`<div style="display:flex;align-items:center;gap:8px;padding:3px 0 3px 12px;border-left:2px solid var(--border)">
+          ${s.category?`<span style="font-family:var(--fc);font-size:10px;color:var(--ash);letter-spacing:0.06em">${s.category}</span>`:''}
+          ${s.notes?`<span style="font-size:12px;color:var(--ash);flex:1">— ${s.notes}</span>`:'<span style="flex:1"></span>'}
+          <span style="font-family:var(--fc);font-size:11px;color:var(--gold)">${fmtT(s.tangible_logged,proj?proj.unit:'')} ${proj?proj.unit:''}</span>
+        </div>`;
+      }).join('');
+      return`<div style="padding:10px 0;border-bottom:0.5px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${pd.sessions.length>1?'6px':'0px'}">
+          <div>
+            <div style="font-size:14px;color:var(--parch);font-weight:500">${pid}</div>
+            ${pd.sessions.length>1?`<div style="font-size:11px;color:var(--ash)">${pd.sessions.length} sessions</div>`:''}
+          </div>
+          <div style="text-align:right">
+            <div style="font-family:var(--fc);font-size:16px;color:var(--gold)">${fmtT(pd.total,proj?proj.unit:'')} <span style="font-size:11px">${proj?proj.unit:''}</span></div>
+            <div style="font-size:11px;color:var(--safe)">+${fmtPts(pd.pts)} pts</div>
+          </div>
+        </div>
+        ${pd.sessions.length>1?sesLines:''}
+        ${pd.sessions.length===1&&pd.sessions[0].notes?`<div style="font-size:12px;color:var(--ash);margin-top:4px;padding-left:2px;font-style:italic">${pd.sessions[0].notes}</div>`:''}
+      </div>`;
+    }).join('')||'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:8px 0">No sessions logged</div>';
+
+    const ctRows=data.ct?CMDS.map(c=>`<div style="display:flex;align-items:center;gap:8px;padding:4px 0">
       <div style="width:8px;height:8px;border-radius:2px;flex-shrink:0;background:${data.ct[c.key]===true?'var(--safe)':data.ct[c.key]===false?'var(--ember)':'var(--border)'}"></div>
-      <span style="flex:1;color:${data.ct[c.key]===true?'var(--safe)':data.ct[c.key]===false?'var(--ember)':'var(--ash)'}">${c.label}</span>
-      <span style="font-family:var(--fc);font-size:10px;color:var(--gold)">${data.ct[c.key]===true?'+'+c.pts:'—'}</span>
+      <span style="flex:1;font-size:12px;color:${data.ct[c.key]===true?'var(--safe)':data.ct[c.key]===false?'var(--ember)':'var(--ash)'}">${c.label}</span>
+      <span style="font-family:var(--fc);font-size:10px;color:${data.ct[c.key]===true?'var(--gold)':'var(--ash)'}">${data.ct[c.key]===true?'+'+c.pts:'—'}</span>
     </div>`).join(''):'<div style="font-size:12px;color:var(--ash);font-style:italic">No CT data</div>';
+
     detailHTML=`<div class="card" style="margin-top:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-        <div style="font-family:var(--fc);font-size:16px;color:var(--gold)">${S.calSelected}</div>
-        <div style="font-family:var(--fc);font-size:24px;color:var(--gold)">${data.total||0}<span style="font-size:12px;color:var(--ash)"> /80</span></div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+        <div>
+          <div style="font-family:var(--fc);font-size:10px;color:var(--ash);letter-spacing:0.12em;margin-bottom:4px">Day ${Math.max(1,Math.ceil((new Date(S.calSelected)-GSTART())/864e5))} of ${totalCampaignDays()}</div>
+          <div style="font-family:var(--fc);font-size:15px;color:var(--gold)">${dateFormatted}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-family:var(--fc);font-size:28px;color:var(--gold);line-height:1">${fmtPts(data.total||0)}</div>
+          <div style="font-size:11px;color:var(--ash)">of 80 pts</div>
+        </div>
       </div>
       <div class="st">Sessions</div>
-      <table class="dt" style="margin-bottom:14px"><thead><tr><th>Project</th><th>Category</th><th>Tangible</th><th>Points</th></tr></thead><tbody>${sessRows}</tbody></table>
+      <div style="margin-bottom:14px">${projRows}</div>
       <div class="st">Clean Temper — ${data.ctKept||0} kept · ${data.ctBroke||0} broken</div>
-      ${ctRows}
-      ${data.ct?.reflection?`<div class="st" style="margin-top:12px">Reflection</div><div style="font-size:13px;color:var(--parch);font-style:italic;line-height:1.7;margin-top:6px">${data.ct.reflection}</div>`:''}
+      <div style="margin-bottom:${data.ct?.reflection?'14px':'0'}">${ctRows}</div>
+      ${data.ct?.reflection?`<div class="st">Reflection</div><div style="font-size:14px;color:var(--parch);font-style:italic;line-height:1.7;margin-top:6px">${data.ct.reflection}</div>`:''}
     </div>`;
   }
 
