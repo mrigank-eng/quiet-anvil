@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Quiet Anvil</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+--bg:#2A2420;--sidebar:#1E1A16;--card:#332D28;--card2:#3D3530;--border:#4A4238;--border2:#5A5248;
+--ash:#A09080;--parch:#F0E4CC;--gold:#D4A84C;--gold2:#A07828;--gold-dim:rgba(212,168,76,0.12);
+--ember:#D04030;--ember-dim:rgba(208,64,48,0.12);--safe:#2A8060;--safe-dim:rgba(42,128,96,0.12);
+--warn:#D08820;--ff:'EB Garamond',serif;--fc:'Cinzel',serif;--sw:220px;
+}
+body{background:var(--bg);color:var(--parch);font-family:var(--ff);font-size:15px;line-height:1.6;min-height:100vh;display:flex}
+
+/* SIDEBAR */
+.sidebar{width:var(--sw);background:var(--sidebar);border-right:0.5px solid var(--border);display:flex;flex-direction:column;min-height:100vh;flex-shrink:0;position:fixed;top:0;left:0;bottom:0;overflow-y:auto}
+.sb-logo{padding:20px 16px 16px;border-bottom:0.5px solid var(--border)}
+.sb-logo-title{font-family:var(--fc);font-size:13px;color:var(--gold);letter-spacing:0.15em;line-height:1.2}
+.sb-logo-sub{font-size:11px;color:var(--ash);margin-top:3px;font-style:italic}
+.sb-sec{padding:10px 0}
+.sb-sec-label{font-family:var(--fc);font-size:8px;letter-spacing:0.2em;color:var(--ash);padding:0 16px;margin-bottom:4px}
+.sb-item{display:flex;align-items:center;gap:8px;padding:7px 16px;cursor:pointer;color:var(--ash);font-size:13px;border-left:2px solid transparent;transition:all 0.15s}
+.sb-item:hover{color:var(--parch);background:rgba(255,255,255,0.04)}
+.sb-item.active{color:var(--gold);border-left-color:var(--gold);background:var(--gold-dim)}
+.sb-icon{font-size:14px;width:16px;text-align:center;flex-shrink:0}
+.sb-div{height:0.5px;background:var(--border);margin:6px 16px}
+.sb-footer{padding:12px 16px;margin-top:auto;border-top:0.5px solid var(--border)}
+.sb-footer-label{font-size:10px;color:var(--ash);margin-bottom:2px}
+.sb-footer-val{font-family:var(--fc);font-size:11px;color:var(--gold)}
+
+/* MAIN */
+.main{margin-left:var(--sw);flex:1;min-height:100vh;padding:28px 32px;max-width:1100px}
+
+/* SCREEN */
+.screen{display:none}.screen.active{display:block}
+
+/* CARDS */
+.card{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:14px}
+.card-gold{border-color:var(--gold2)}.card-ember{border-color:var(--ember)}.card-safe{border-color:var(--safe)}
+
+/* GRIDS */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px}
+
+/* SCORE BOXES */
+.sb{background:var(--card2);border-radius:8px;padding:14px;text-align:center}
+.sb-num{font-family:var(--fc);font-size:28px;line-height:1;margin-bottom:3px}
+.sb-lbl{font-size:11px;color:var(--ash);letter-spacing:0.06em}
+
+/* SECTION TITLE */
+.st{font-family:var(--fc);font-size:10px;letter-spacing:0.18em;color:var(--gold);margin-bottom:12px;display:flex;align-items:center;gap:10px}
+.st::after{content:'';flex:1;height:0.5px;background:var(--border)}
+
+/* PAGE TITLE */
+.pt{font-family:var(--fc);font-size:22px;color:var(--gold);margin-bottom:4px;letter-spacing:0.05em}
+.ps{font-size:13px;color:var(--ash);font-style:italic;margin-bottom:24px}
+
+/* PROGRESS */
+.prog-track{height:5px;background:var(--card2);border-radius:3px;overflow:hidden;margin:6px 0}
+.prog-fill{height:100%;border-radius:3px;background:var(--safe);transition:width 0.6s}
+.prog-fill-gold{background:var(--gold)}
+
+/* PENALTY BANNER */
+.pen-banner{background:var(--ember-dim);border:0.5px solid var(--ember);border-radius:8px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px}
+.pen-dot{width:8px;height:8px;border-radius:50%;background:var(--ember);flex-shrink:0;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* LEVEL BADGE */
+.lvl-badge{background:var(--card2);border:0.5px solid var(--gold2);border-radius:8px;padding:10px 14px;text-align:center}
+.lvl-num{font-family:var(--fc);font-size:36px;color:var(--gold);line-height:1}
+.lvl-lbl{font-size:10px;color:var(--ash);letter-spacing:0.08em}
+
+/* FORMS */
+input,select,textarea{background:var(--card2);border:0.5px solid var(--border);border-radius:6px;color:var(--parch);font-family:var(--ff);font-size:14px;padding:9px 12px;width:100%;outline:none;margin-bottom:10px;transition:border-color 0.2s}
+input:focus,select:focus,textarea:focus{border-color:var(--gold2)}
+textarea{resize:none;min-height:70px}
+select option{background:var(--card2)}
+label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-family:var(--fc);letter-spacing:0.06em}
+
+/* BUTTONS */
+.btn{padding:9px 18px;background:transparent;border:0.5px solid var(--gold2);border-radius:8px;font-family:var(--fc);font-size:11px;color:var(--gold);letter-spacing:0.1em;cursor:pointer;transition:all 0.2s}
+.btn:hover{background:var(--gold-dim)}
+.btn-block{width:100%;display:block;text-align:center}
+.btn-safe{border-color:var(--safe);color:var(--safe)}.btn-safe:hover{background:var(--safe-dim)}
+.btn-danger{border-color:var(--ember);color:var(--ember)}.btn-danger:hover{background:var(--ember-dim)}
+.btn-sm{padding:5px 12px;font-size:10px}
+.btn-xs{padding:4px 8px;font-size:9px}
+
+/* CHECKBOX */
+.chk{width:18px;height:18px;border:1.5px solid var(--border2);border-radius:4px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s}
+.chk:hover{border-color:var(--gold)}
+.chk.on{background:var(--safe);border-color:var(--safe)}
+.chk.on::after{content:'';width:9px;height:6px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translateY(-1px)}
+.chk.broken{background:var(--ember);border-color:var(--ember)}
+
+/* CT BUTTONS */
+.ct-btn-kept{padding:5px 14px;background:transparent;border:0.5px solid var(--safe);border-radius:6px;font-family:var(--fc);font-size:10px;color:var(--safe);cursor:pointer;transition:all 0.2s}
+.ct-btn-kept:hover,.ct-btn-kept.active{background:var(--safe-dim)}
+.ct-btn-broke{padding:5px 14px;background:transparent;border:0.5px solid var(--ember);border-radius:6px;font-family:var(--fc);font-size:10px;color:var(--ember);cursor:pointer;transition:all 0.2s}
+.ct-btn-broke:hover,.ct-btn-broke.active{background:var(--ember-dim)}
+
+/* STREAK DOTS */
+.s-dots{display:flex;gap:3px;flex-wrap:wrap;margin:6px 0}
+.s-dot{width:10px;height:10px;border-radius:2px}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(20,16,12,0.88);z-index:500;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card);border:0.5px solid var(--gold2);border-radius:12px;padding:24px;width:100%;max-width:440px}
+.modal-title{font-family:var(--fc);font-size:14px;color:var(--gold);letter-spacing:0.1em;margin-bottom:6px}
+.modal-sub{font-size:13px;color:var(--ash);font-style:italic;margin-bottom:16px}
+.modal-btns{display:flex;gap:10px;margin-top:8px}
+
+/* UNLOCK */
+.unlock{display:none;position:fixed;inset:0;background:var(--sidebar);z-index:600;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px}
+.unlock.open{display:flex}
+.unlock-eye{font-family:var(--fc);font-size:10px;color:var(--ash);letter-spacing:0.25em;margin-bottom:20px}
+.unlock-title{font-family:var(--fc);font-size:42px;color:var(--gold);margin-bottom:10px;animation:fadeUp 1s ease}
+.unlock-sub{font-family:var(--fc);font-size:12px;color:var(--ash);letter-spacing:0.15em;margin-bottom:20px}
+.unlock-msg{font-size:15px;color:var(--parch);font-style:italic;max-width:380px;margin-bottom:32px;line-height:1.7}
+@keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+
+/* TABLE */
+.dt{width:100%;border-collapse:collapse;font-size:13px}
+.dt th{font-family:var(--fc);font-size:9px;letter-spacing:0.12em;color:var(--ash);padding:8px 10px;border-bottom:0.5px solid var(--border);text-align:left}
+.dt td{padding:8px 10px;border-bottom:0.5px solid var(--border);color:var(--parch)}
+.dt tr:last-child td{border-bottom:none}
+.dt tr:hover td{background:rgba(255,255,255,0.02)}
+
+/* STAT MINI */
+.sm{text-align:center;padding:12px 8px;background:var(--card2);border-radius:8px}
+.sm-val{font-family:var(--fc);font-size:22px;color:var(--parch);line-height:1}
+.sm-lbl{font-size:10px;color:var(--ash);margin-top:3px}
+
+/* LOADING */
+.loading{padding:60px;text-align:center;font-family:var(--fc);font-size:11px;color:var(--ash);letter-spacing:0.12em}
+
+/* PROJECT CARD IN ARMOURY */
+.ac{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:14px 16px;cursor:pointer;transition:border-color 0.2s;margin-bottom:10px}
+.ac:hover{border-color:var(--gold2)}
+
+/* LEVEL JOURNEY ROW */
+.lj-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;margin-bottom:6px}
+.lj-row.done{background:var(--safe-dim)}
+.lj-row.current{background:var(--gold-dim);border:0.5px solid rgba(212,168,76,0.25)}
+.lj-row.future{opacity:0.4}
+.lj-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.lj-title{font-family:var(--fc);font-size:12px;width:180px;flex-shrink:0}
+.lj-bar-track{flex:1;height:6px;background:var(--card2);border-radius:3px;overflow:hidden}
+.lj-bar-fill{height:100%;border-radius:3px;transition:width 0.6s}
+.lj-threshold{font-size:11px;color:var(--ash);width:80px;text-align:right;flex-shrink:0}
+.lj-tag{font-size:10px;font-family:var(--fc);width:50px;text-align:right;flex-shrink:0}
+
+/* CAT BAR */
+.cat-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.cat-label{font-size:12px;color:var(--ash);width:160px;flex-shrink:0}
+.cat-track{flex:1;height:5px;background:var(--card2);border-radius:3px;overflow:hidden}
+.cat-fill{height:100%;border-radius:3px;background:var(--safe)}
+.cat-val{font-size:12px;color:var(--parch);width:60px;text-align:right}
+
+/* FORGE PROJECT BLOCK */
+.fp-block{background:var(--card2);border:0.5px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px}
+.fp-header{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.fp-commit-check{width:18px;height:18px;border:1.5px solid var(--border2);border-radius:4px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s}
+.fp-commit-check:hover{border-color:var(--gold)}
+.fp-commit-check.committed{background:var(--gold-dim);border-color:var(--gold2)}
+.fp-commit-check.committed::after{content:'✓';color:var(--gold);font-size:11px}
+.fp-name{font-size:14px;color:var(--parch);font-weight:500;flex:1}
+.fp-pts{font-family:var(--fc);font-size:11px;color:var(--gold)}
+.fp-title{font-size:12px;color:var(--ash);font-style:italic;margin-bottom:8px;padding-left:28px}
+.fp-sessions{padding-left:28px;margin-bottom:8px}
+.fp-session-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ash);padding:3px 0;border-bottom:0.5px solid var(--border)}
+.fp-session-row:last-child{border-bottom:none}
+.fp-session-tangible{font-family:var(--fc);font-size:11px;color:var(--gold);margin-left:auto}
+.fp-footer{display:flex;align-items:center;gap:8px;padding-left:28px}
+.fp-total{font-size:12px;color:var(--ash)}
+.fp-total span{color:var(--gold);font-family:var(--fc)}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sb-logo">
+    <div class="sb-logo-title">The Quiet Anvil</div>
+    <div class="sb-logo-sub">March 28, 2026 — June 1, 2028</div>
+  </div>
+  <div class="sb-sec">
+    <div class="sb-item active" onclick="nav('forge')"><span class="sb-icon">⚒</span>Daily Forge</div>
+    <div class="sb-item" onclick="nav('armoury')"><span class="sb-icon">⚔</span>The Armoury</div>
+  </div>
+  <div class="sb-div"></div>
+  <div class="sb-sec">
+    <div class="sb-sec-label">Projects</div>
+    <div class="sb-item" onclick="nav('proj-practice')"><span class="sb-icon">🎸</span>Practice Room</div>
+    <div class="sb-item" onclick="nav('proj-gulmohar')"><span class="sb-icon">🌸</span>Gulmohar Letters</div>
+    <div class="sb-item" onclick="nav('proj-ironforge')"><span class="sb-icon">🔨</span>Iron Forge</div>
+    <div class="sb-item" onclick="nav('proj-ledger')"><span class="sb-icon">🏔</span>Iron Ledger</div>
+    <div class="sb-item" onclick="nav('proj-water')"><span class="sb-icon">🌊</span>Water Forge</div>
+    <div class="sb-item" onclick="nav('proj-giving')"><span class="sb-icon">💼</span>The Giving</div>
+  </div>
+  <div class="sb-div"></div>
+  <div class="sb-sec">
+    <div class="sb-item" onclick="nav('temper')"><span class="sb-icon">🔥</span>Clean Temper</div>
+    <div class="sb-item" onclick="nav('willmaster')"><span class="sb-icon">⚡</span>The Willmaster</div>
+    <div class="sb-item" onclick="nav('meta')"><span class="sb-icon">◎</span>Meta Rank</div>
+    <div class="sb-item" onclick="nav('report')"><span class="sb-icon">📜</span>Anvil Report</div>
+    <div class="sb-item" onclick="nav('milestones')"><span class="sb-icon">★</span>Milestones</div>
+  </div>
+  <div class="sb-footer">
+    <div class="sb-footer-label">Days to Reckoning</div>
+    <div class="sb-footer-val" id="sb-countdown">—</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <div id="screen-forge" class="screen active"><div class="loading">Opening the forge...</div></div>
+  <div id="screen-armoury" class="screen"><div class="loading">Loading armoury...</div></div>
+  <div id="screen-proj-practice" class="screen"><div class="loading">Loading...</div></div>
+  <div id="screen-proj-gulmohar" class="screen"><div class="loading">Loading...</div></div>
+  <div id="screen-proj-ironforge" class="screen"><div class="loading">Loading...</div></div>
+  <div id="screen-proj-ledger" class="screen"><div class="loading">Loading...</div></div>
+  <div id="screen-proj-water" class="screen"><div class="loading">Loading...</div></div>
+  <div id="screen-proj-giving" class="screen"><div class="loading">Loading...</div></div>
+  <div id="screen-temper" class="screen"><div class="loading">Loading commandments...</div></div>
+  <div id="screen-willmaster" class="screen"><div class="loading">Loading Willmaster...</div></div>
+  <div id="screen-meta" class="screen"><div class="loading">Loading meta rank...</div></div>
+  <div id="screen-report" class="screen"><div class="loading">Building report...</div></div>
+  <div id="screen-milestones" class="screen"><div class="loading">Loading milestones...</div></div>
+</div>
+
+<!-- SESSION MODAL -->
+<div class="modal-overlay" id="session-modal">
+  <div class="modal">
+    <div class="modal-title" id="session-modal-title">Log session</div>
+    <div class="modal-sub" id="session-modal-sub"></div>
+    <label>Amount</label>
+    <input type="number" id="session-tangible" step="any" min="0">
+    <div id="session-cat-wrap">
+      <label>Category</label>
+      <select id="session-category"><option value="">Select category (optional)</option></select>
+    </div>
+    <div id="session-lang-wrap" style="display:none">
+      <label>Language</label>
+      <select id="session-language"><option value="">Select language</option><option>Urdu</option><option>Hindi</option><option>English</option></select>
+    </div>
+    <label>Notes — what you worked on</label>
+    <input type="text" id="session-notes" placeholder="Brief description...">
+    <div class="modal-btns">
+      <button class="btn btn-danger btn-sm" onclick="closeModal('session-modal')">Cancel</button>
+      <button class="btn btn-sm" onclick="submitSession()">Log session</button>
+    </div>
+  </div>
+</div>
+
+<!-- SUBMIT PROJECT MODAL (no sessions) -->
+<div class="modal-overlay" id="skip-modal">
+  <div class="modal">
+    <div class="modal-title" id="skip-modal-title">Project not logged</div>
+    <div class="modal-sub" id="skip-modal-sub">You committed to this project but logged nothing today.</div>
+    <label>What happened — record honestly</label>
+    <textarea id="skip-reason" placeholder="Why this project was not done today..."></textarea>
+    <div class="modal-btns">
+      <button class="btn btn-danger btn-sm" onclick="closeModal('skip-modal')">Cancel</button>
+      <button class="btn btn-sm" onclick="confirmSkip()">Record and submit project</button>
+    </div>
+  </div>
+</div>
+
+<!-- CT BREAK MODAL -->
+<div class="modal-overlay" id="ct-modal">
+  <div class="modal">
+    <div class="modal-title" id="ct-modal-title">Breaking the streak</div>
+    <div class="modal-sub" id="ct-modal-sub"></div>
+    <label>What happened — record honestly</label>
+    <textarea id="ct-reason" placeholder="Record the reason..."></textarea>
+    <div class="modal-btns">
+      <button class="btn btn-sm" onclick="closeModal('ct-modal')">Cancel</button>
+      <button class="btn btn-danger btn-sm" onclick="confirmCTBreak()">Record and mark broken</button>
+    </div>
+  </div>
+</div>
+
+<!-- MILESTONE MODAL -->
+<div class="modal-overlay" id="ms-modal">
+  <div class="modal">
+    <div class="modal-title">Log a milestone</div>
+    <label>Project</label>
+    <select id="ms-project"><option value="">Select project</option></select>
+    <label>Description</label>
+    <textarea id="ms-desc" placeholder="What happened. What it means."></textarea>
+    <div class="modal-btns">
+      <button class="btn btn-danger btn-sm" onclick="closeModal('ms-modal')">Cancel</button>
+      <button class="btn btn-sm" onclick="submitMilestone()">Log milestone</button>
+    </div>
+  </div>
+</div>
+
+<!-- LEVEL UNLOCK -->
+<div class="unlock" id="unlock">
+  <div class="unlock-eye">Level unlocked</div>
+  <div class="unlock-title" id="ul-title"></div>
+  <div class="unlock-sub" id="ul-sub"></div>
+  <div class="unlock-msg" id="ul-msg"></div>
+  <button class="btn btn-sm" onclick="closeUnlock()">Carry this forward</button>
+</div>
+
+<script>
+const SURL='https://fswqranekmivhaykfgzy.supabase.co';
+const SKEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZzd3FyYW5la21pdmhheWtmZ3p5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQzNzczNDksImV4cCI6MjA4OTk1MzM0OX0.GiFsWEoSrVutiUk86WdtUleX7hiZu5bydpw2Bg9Igu4';
+const {createClient}=supabase;
+const db=createClient(SURL,SKEY);
+
+const GSTART=new Date('2026-03-28');
+const GEND=new Date('2028-06-01');
+
+const PROJECTS=[
+  {id:'The Practice Room',key:'proj-practice',pillar:'Soul',pts:10,unit:'hrs',ceiling:1200,
+   levels:[50,100,170,260,370,500,640,790,970,1200],
+   titles:['The Listener','The Initiated','The Woodshedder','The Deliberate','The Emerging','The Interpreter','The Composer','The Troubadour','The Resonant','The Intimate'],
+   cats:['Learning','Practising','Creating','Ear Training'],hasLang:false},
+  {id:'The Gulmohar Letters',key:'proj-gulmohar',pillar:'Soul',pts:10,unit:'entries',ceiling:800,
+   levels:[27,55,96,151,218,307,396,499,629,800],
+   titles:['The Dormant','The Rooted','The Rising','The Bud','The First Fragrance','The Whorl','The Unfurled','The Scarlet Promise','The Falling Flame',"In Gulmohar's Shade"],
+   cats:['Scribing','Memorising','Recording','Original Composition'],hasLang:true},
+  {id:'The Iron Forge',key:'proj-ironforge',pillar:'Body',pts:10,unit:'sessions',ceiling:585,
+   levels:[20,40,70,110,160,225,290,365,460,585],
+   titles:['The Raw','First Iron','Bar Bearer','Forging Under','Form Drawn','The Annealed','Labors Wrought','Final Temper','Titan Marked','Living Iron'],
+   cats:['Chest','Back','Shoulders','Legs','Biceps','Triceps','Forearms','Core'],hasLang:false},
+  {id:'The Iron Ledger',key:'proj-ledger',pillar:'Body',pts:5,unit:'km',ceiling:1200,
+   levels:[40,80,140,220,320,450,580,730,920,1200],
+   titles:['First Steps','Road Taken','The Climbing','The Unbroken','Miles Held','Distance Kept','The Long Ascent','The Gradient','Mountain Walker','The Summit Keeper'],
+   cats:[],hasLang:false},
+  {id:'The Water Forge',key:'proj-water',pillar:'Body',pts:5,unit:'laps',ceiling:41000,
+   levels:[1400,2800,4900,7700,11200,15750,20300,25550,32200,41000],
+   titles:['First Tide','Sea Marked','The Calling Deep','Lashing Wave','Unending Tide','Tidal Force','The Longing Sea','Wave Strider','The Fathomless','Ocean Master'],
+   cats:['Freestyle','Backstroke','Breaststroke','Butterfly','Mixed'],hasLang:false},
+  {id:'The Giving',key:'proj-giving',pillar:'Business',pts:20,unit:'sessions',ceiling:660,
+   levels:[22,45,78,123,179,252,325,410,515,660],
+   titles:['The Untested','The Reckoner','The Apprentice','The Wayfarer','The Dealer',"The Craftsman's Hand",'The Trade Wind','The Merchant','The House Built','The Giver'],
+   cats:['Legal','Market Research','Product + Brand Design','Operations','Business Planning'],hasLang:false}
+];
+
+const CMDS=[
+  {key:'c1_direction',short:'C1',label:'Thou shalt not begin the day without direction',pts:1},
+  {key:'c2_protein',short:'C2',label:'Thou shalt not neglect protein',pts:2},
+  {key:'c3_no_junk',short:'C3',label:'Thou shalt not consume junk food and sugar',pts:3},
+  {key:'c4_no_flour',short:'C4',label:'Thou shalt not consume refined flour, onion, or garlic',pts:2},
+  {key:'c5_no_late_cal',short:'C5',label:'Thou shalt not consume calories after 7pm',pts:2},
+  {key:'c6_composure',short:'C6',label:'Thou shalt not lose composure',pts:2},
+  {key:'c7_no_dopamine',short:'C7',label:'Thou shalt reject cheap dopamine',pts:4},
+  {key:'c8_no_scroll',short:'C8',label:'Thou shalt not doomscroll nor consume social media',pts:2},
+  {key:'c9_gadgets_down',short:'C9',label:'Thou shalt lay down thy gadgets by 10:30pm',pts:1},
+  {key:'c10_reflection',short:'C10',label:'Thou shalt not end the day without reflection',pts:1}
+];
+
+const CT_TITLES={
+  c1_direction:['Dawn Seer','Path Caller','Will Carver','Line Binder','Course Warden','Day Forger','Fate Smith','The Undeviating','The Directed','The Dawnborn','The Dawn Keeper'],
+  c2_protein:['First Offering','Steady Ritual','Measured Nourish','Sacred Sustenance','Unbroken Intake','Enduring Provision','Ever-Fed One','The Flesh Forger','The Sacred Feeder','The Eternal Table','The Body Sovereign'],
+  c3_no_junk:['First Refusal','Clean Severance','Clear Blood','Sealed Gate','Inner Sanctum','The Untouched','Holy Vessel','The Immaculate','The Undefiled','Holy Flesh','The Clean Sovereign'],
+  c4_no_flour:['The Initiate','The Admitted','The Ordained','The Anointed','The Consecrated','The Hallowed','The Transfigured','The Exalted','The Beatified','The Ascendant','The Sanctified'],
+  c5_no_late_cal:['First Hunger','Held Appetite','Closed Kitchen','The Night Fast','Bent Craving','Hunger Stilled','The Ascetic','The Hollow','The Empty Hour','The Starved Light','The Eternal Fast'],
+  c6_composure:['First Restraint','Held Flame','Sealed Temper','Bound Storm','Crowned Nerve','Sovereign Stillness','The Immutable','The Stonefaced','The Deep Current','The Eye of Storm','The Unburning'],
+  c7_no_dopamine:['The Stirred','The Tempted','The Withholder','Rising Serpent','The Redirected','The Refined','The Transmuter','The Integrated','The Jungian Hero','The Sovereign Fire','The Alchemist'],
+  c8_no_scroll:['The Hooked','The Pulled','The Resisting','The Unhooked','The Withdrawn','The Reclaimed','The Self-Held','The Unseized','The Still Mind','The Deep Watcher','The Attention Sovereign'],
+  c9_gadgets_down:['Dying Sun','Fading Light','First Night','Moon Bound','Star Walker','Dream Keeper','Dawn King','Dream Catcher','The Celestial','The Starbound','The Night Sovereign'],
+  c10_reflection:['The Recalling','The Observer','The Witness','The Examiner','The Judged','The Aware','The Knowing','The Unmasked','The Reckoner','The Clear Mirror','The Final Authority']
+};
+const CT_THR=[7,15,30,60,120,240,365,480,600,720,800];
+
+const UNLOCK_MSGS={
+  'The Practice Room':['The first serious hour. The strings remember nothing yet. You do.','The craft has a name now. You have been initiated.','The grind is real. Repetition has purpose.','Deliberate now. Nothing accidental about your practice.','Something is surfacing. Not borrowed. Yours.','You can take music and make it yours.','Creation. Not reproduction.','The wandering musician. You play for life now.','The music moves through you. Not just from you.','The instrument and you are no longer separate things.'],
+  'The Gulmohar Letters':['The seed buried. The shade found for the first time.','The roots draw from something deep.','The first visible movement above ground.','Closed but trembling with what is inside.','You sense something before you see it.','The inner architecture reveals itself.','Open now. No going back.',"Colour arriving quietly.",'Peak beauty. Surrendering at full bloom.',"You did not sit under the tree. You became it."],
+  'The Iron Forge':['Raw. Unheated. Potential only.','The first real encounter with iron.','The bar is yours now. You bear what others do not.','Under the hammer. Being worked.','Something is emerging from the raw material.','Heat and cooling cycles have set something permanent.','The labor is visible in the material.','Tempering. The character is being fixed.','Marked by something mythic.','Not dead metal. Iron that breathes and moves.'],
+  'The Iron Ledger':['The first step taken seriously.','A decision made and committed to.','The incline has become your defining feature.','The road has not broken you.','The miles held like a promise.','Faithful to the road like keeping a vow.','No shortcuts. Just the long way up.','You do not fight the gradient. You are it.','The treadmill has become a mountain.','The summit is not a destination. It is a place you keep.'],
+  'The Water Forge':['The first tide. Water arriving at you.','The sea has left its mark.','Something beneath is pulling you back.','The wave lashes and you lash back.','The tide does not stop and neither do you.','A force of nature now.','The sea longs for you on the days you do not show up.','You stride waves now.','No bottom. And neither do you.','After 41,000 laps — the ocean recognises you.'],
+  'The Giving':['The arena has not tested you yet.','Learning to count what matters.','Under the craft. Learning its weight.','Direction found. Moving toward something specific.','First real exchanges of value.','Building with deliberate skill now.','The business moves with force larger than daily effort.','Goods moving. Value exchanged.','Something permanent erected.','The journey of The Giving produces The Giver.']
+};
+
+// ── STATE ─────────────────────────────────────────────
+let S={
+  projects:[],todayLog:null,todaySessions:[],streaks:[],
+  allLogs:[],allSessions:[],milestones:[],
+  // Forge state
+  committedProjects:{}, // pid -> {committed, submitted, skipReason}
+  pendingSessionPid:null,pendingSkipPid:null,pendingCT:null,
+  chartsDrawn:{}
+};
+
+// ── HELPERS ───────────────────────────────────────────
+const today=()=>new Date().toISOString().split('T')[0];
+const daysLeft=()=>Math.max(0,Math.ceil((GEND-new Date())/864e5));
+const dayNum=()=>Math.max(1,Math.ceil((new Date()-GSTART)/864e5));
+const weekNum=()=>Math.ceil(dayNum()/7);
+
+function getLvl(pid,total){
+  const p=PROJECTS.find(x=>x.id===pid);if(!p)return 0;
+  for(let i=p.levels.length-1;i>=0;i--)if(total>=p.levels[i])return i+1;
+  return 0;
+}
+function getCurrentTitle(pid,total){
+  const p=PROJECTS.find(x=>x.id===pid);if(!p)return null;
+  const l=getLvl(pid,total);return l>0?p.titles[l-1]:null;
+}
+function getTargetTitle(pid,total){
+  const p=PROJECTS.find(x=>x.id===pid);if(!p)return'—';
+  const l=getLvl(pid,total);
+  if(l>=p.levels.length)return'Ceiling reached';
+  return p.titles[l];
+}
+function displayTitle(pid,total){
+  const cur=getCurrentTitle(pid,total);
+  if(cur)return cur;
+  return'Working toward '+getTargetTitle(pid,total);
+}
+function getProg(pid,total){
+  const p=PROJECTS.find(x=>x.id===pid);if(!p)return 0;
+  const l=getLvl(pid,total);if(l>=p.levels.length)return 100;
+  const prev=l===0?0:p.levels[l-1];const next=p.levels[l];
+  return Math.round(((total-prev)/(next-prev))*100);
+}
+function getNextAt(pid,total){
+  const p=PROJECTS.find(x=>x.id===pid);if(!p)return null;
+  const l=getLvl(pid,total);return l<p.levels.length?p.levels[l]:null;
+}
+function ctPts(log){
+  if(!log)return 0;
+  return CMDS.reduce((s,c)=>s+(log[c.key]?c.pts:0),0);
+}
+function ctTitle(key,days){
+  const t=CT_TITLES[key];if(!t)return'No streak yet';
+  for(let i=CT_THR.length-1;i>=0;i--)if(days>=CT_THR[i])return t[i];
+  return'No streak yet';
+}
+function ctNext(key,days){
+  for(let i=0;i<CT_THR.length;i++)if(days<CT_THR[i])return{title:CT_TITLES[key][i],at:CT_THR[i],rem:CT_THR[i]-days};
+  return null;
+}
+function todaySessionsFor(pid){return S.todaySessions.filter(s=>s.project===pid);}
+function todayTangibleFor(pid){return todaySessionsFor(pid).reduce((s,x)=>s+(x.tangible_logged||0),0);}
+
+// ── DATA ──────────────────────────────────────────────
+async function loadData(){
+  const[pR,lR,sR,stR]=await Promise.all([
+    db.from('project_summary').select('*'),
+    db.from('daily_log').select('*').eq('date',today()).single(),
+    db.from('sessions').select('*').eq('date',today()),
+    db.from('commandment_streaks').select('*').order('points',{ascending:false})
+  ]);
+  S.projects=pR.data||[];
+  S.todayLog=lR.data||null;
+  S.todaySessions=sR.data||[];
+  S.streaks=stR.data||[];
+  // restore committed state from todayLog if exists
+  if(S.todayLog?.committed_projects){
+    try{S.committedProjects=JSON.parse(S.todayLog.committed_projects);}catch(e){}
+  }
+  document.getElementById('sb-countdown').textContent=daysLeft()+' days';
+  renderActive();
+}
+
+async function loadAll(){
+  if(S.allSessions.length&&S.allLogs.length)return;
+  const[lR,sR,mR]=await Promise.all([
+    db.from('daily_log').select('*').order('date'),
+    db.from('sessions').select('*').order('date'),
+    db.from('milestones').select('*').order('date',{ascending:false})
+  ]);
+  S.allLogs=lR.data||[];S.allSessions=sR.data||[];S.milestones=mR.data||[];
+}
+
+async function ensureLog(){
+  if(S.todayLog)return;
+  const{data}=await db.from('daily_log').insert({date:today()}).select().single();
+  S.todayLog=data;
+}
+
+async function saveCommitted(){
+  await ensureLog();
+  await db.from('daily_log').update({committed_projects:JSON.stringify(S.committedProjects)}).eq('date',today());
+}
+
+// ── NAV ───────────────────────────────────────────────
+function nav(screen){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));
+  document.getElementById('screen-'+screen).classList.add('active');
+  document.querySelectorAll('.sb-item').forEach(i=>{
+    if(i.getAttribute('onclick')===`nav('${screen}')`)i.classList.add('active');
+  });
+  S.chartsDrawn[screen]=false;
+  renderActive();
+}
+
+function renderActive(){
+  const a=document.querySelector('.screen.active');if(!a)return;
+  const id=a.id.replace('screen-','');
+  if(id==='forge')renderForge();
+  else if(id==='armoury')renderArmoury();
+  else if(id.startsWith('proj-'))renderProject(id);
+  else if(id==='temper')renderTemper();
+  else if(id==='willmaster')renderWillmaster();
+  else if(id==='meta')renderMeta();
+  else if(id==='report')renderReport();
+  else if(id==='milestones')renderMilestones();
+}
+
+// ── FORGE ─────────────────────────────────────────────
+function renderForge(){
+  const ct=ctPts(S.todayLog);
+  const nonCt=S.todaySessions.reduce((s,x)=>s+(x.points_earned||0),0);
+  const total=ct+nonCt;
+
+  // Calculate today's penalty from committed+skipped projects
+  let penToday=0;
+  PROJECTS.forEach(proj=>{
+    const cp=S.committedProjects[proj.id];
+    if(cp&&cp.submitted&&!cp.hasSession)penToday-=proj.pts;
+  });
+
+  const d=new Date();
+  const dateStr=d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+  // Build project blocks
+  let projHTML='';
+  ['Soul','Body','Business'].forEach(pillar=>{
+    const pp=PROJECTS.filter(p=>p.pillar===pillar);
+    projHTML+=`<div style="margin-bottom:16px"><div style="font-family:var(--fc);font-size:9px;letter-spacing:0.18em;color:var(--ash);margin-bottom:8px">${pillar.toUpperCase()}</div>`;
+    pp.forEach(proj=>{
+      const cp=S.committedProjects[proj.id]||{committed:false,submitted:false};
+      const sessions=todaySessionsFor(proj.id);
+      const tangibleToday=todayTangibleFor(proj.id);
+      const sum=S.projects.find(p=>p.project===proj.id)||{};
+      const totalTangible=sum.total_tangible||0;
+      const curTitle=displayTitle(proj.id,totalTangible);
+      const nextTitle=getTargetTitle(proj.id,totalTangible);
+      const submitted=cp.submitted;
+
+      // Sessions list
+      let sessListHTML='';
+      if(sessions.length>0){
+        sessListHTML='<div class="fp-sessions">';
+        sessions.forEach(s=>{
+          sessListHTML+=`<div class="fp-session-row">
+            <span style="color:var(--ash)">${s.category||'Session'}</span>
+            ${s.notes?`<span style="color:var(--ash);margin-left:6px">— ${s.notes}</span>`:''}
+            <span class="fp-session-tangible">${s.tangible_logged} ${proj.unit}</span>
+          </div>`;
+        });
+        sessListHTML+=`<div style="font-size:12px;color:var(--ash);padding:4px 0">Total today: <span style="color:var(--gold);font-family:var(--fc)">${tangibleToday} ${proj.unit}</span></div>`;
+        sessListHTML+='</div>';
+      }
+
+      // Footer buttons
+      let footerHTML='<div class="fp-footer" style="gap:8px;flex-wrap:wrap">';
+      if(!submitted){
+        if(cp.committed){
+          footerHTML+=`<button class="btn btn-xs" onclick="openSession('${proj.id}')">+ Add session</button>`;
+          footerHTML+=`<button class="btn btn-xs btn-safe" onclick="submitProject('${proj.id}')">Submit project</button>`;
+        }
+      } else {
+        if(cp.hasSession){
+          footerHTML+=`<span style="font-size:11px;color:var(--safe);font-family:var(--fc)">✓ Submitted</span>`;
+          footerHTML+=`<button class="btn btn-xs" onclick="openSession('${proj.id}')">+ Add another session</button>`;
+        } else {
+          footerHTML+=`<span style="font-size:11px;color:var(--ember);font-family:var(--fc)">✗ Skipped — ${cp.skipReason||''}</span>`;
+        }
+      }
+      footerHTML+='</div>';
+
+      projHTML+=`<div class="fp-block" style="border-color:${submitted?(cp.hasSession?'var(--safe)':'var(--ember)'):'var(--border)'}">
+        <div class="fp-header">
+          <div class="fp-commit-check ${cp.committed?'committed':''}" onclick="toggleCommit('${proj.id}')"></div>
+          <div class="fp-name">${proj.id}</div>
+          <div class="fp-pts">${cp.committed?'+'+proj.pts+' pts':''}</div>
+        </div>
+        <div class="fp-title">${curTitle}${getLvl(proj.id,totalTangible)>0&&nextTitle!=='Ceiling reached'?' → working toward '+nextTitle:''}</div>
+        ${sessListHTML}
+        ${cp.committed?footerHTML:'<div style="font-size:11px;color:var(--ash);padding-left:28px;font-style:italic">Check to commit to this project today</div>'}
+      </div>`;
+    });
+    projHTML+='</div>';
+  });
+
+  // CT section — only show state if explicitly set
+  const ctHTML=CMDS.map(c=>{
+    const val=S.todayLog?.[c.key];
+    const kept=val===true;
+    const broke=val===false;
+    const marked=val===true||val===false;
+    let statusIcon='';
+    if(kept) statusIcon=`<span style="color:var(--safe);font-size:14px;margin-right:4px">✓</span>`;
+    else if(broke) statusIcon=`<span style="color:var(--ember);font-size:14px;margin-right:4px">✗</span>`;
+    return`<div class="ct-item" style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:0.5px solid var(--border)">
+      <div style="width:20px;flex-shrink:0;text-align:center">${statusIcon}</div>
+      <div style="flex:1;font-size:13px;color:${kept?'var(--safe)':broke?'var(--ember)':'var(--parch)'}">${c.label}</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="ct-btn-kept ${kept?'active':''}" onclick="handleCT('${c.key}','${c.label}',true)">Kept</button>
+        <button class="ct-btn-broke ${broke?'active':''}" onclick="handleCT('${c.key}','${c.label}',false)">Broke it</button>
+        <span style="font-family:var(--fc);font-size:10px;color:var(--gold);width:30px;text-align:right">${c.pts}pt</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Check if all CT marked
+  const allCTMarked=S.todayLog?CMDS.every(c=>S.todayLog[c.key]!==null&&S.todayLog[c.key]!==undefined):false;
+  const ctMarkedCount=S.todayLog?CMDS.filter(c=>S.todayLog[c.key]!==null&&S.todayLog[c.key]!==undefined).length:0;
+
+  const reflectionLocked=!allCTMarked;
+  const reflectionHTML=reflectionLocked
+    ?`<div style="background:var(--ember-dim);border:0.5px solid var(--ember);border-radius:8px;padding:12px 14px;font-size:13px;color:var(--ash)">Mark all 10 commandments as kept or broken before the reflection unlocks. ${10-ctMarkedCount} remaining.</div>`
+    :`<div><textarea id="reflection-text" placeholder="What happened today. What the forge produced. What tomorrow needs." rows="4">${S.todayLog?.reflection||''}</textarea><button class="btn btn-block" onclick="closeDay()">Close the day — submit reflection</button></div>`;
+
+  document.getElementById('screen-forge').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+      <div>
+        <div class="pt">Daily Forge</div>
+        <div style="font-size:13px;color:var(--ash)">${dateStr} · Day ${dayNum()} of 795 · Week ${weekNum()} of 114</div>
+      </div>
+      <div style="text-align:right"><div style="font-family:var(--fc);font-size:32px;color:var(--gold);line-height:1">${daysLeft()}</div><div style="font-size:11px;color:var(--ash)">days to reckoning</div></div>
+    </div>
+
+    <div class="g4" style="margin-bottom:20px">
+      <div class="sb"><div class="sb-num" style="color:var(--gold)">${total+penToday}</div><div class="sb-lbl">Total / 80</div></div>
+      <div class="sb"><div class="sb-num">${ct}</div><div class="sb-lbl">CT / 20</div></div>
+      <div class="sb"><div class="sb-num">${nonCt}</div><div class="sb-lbl">Projects / 60</div></div>
+      <div class="sb"><div class="sb-num" style="color:${penToday<0?'var(--ember)':'var(--ash)'}">${penToday}</div><div class="sb-lbl">Penalty Today</div></div>
+    </div>
+
+    <div class="g2" style="align-items:start">
+      <div>
+        <div class="st">Direction — today's forge</div>
+        <div style="font-size:12px;color:var(--ash);margin-bottom:12px;font-style:italic">Check projects you intend to work on today. Submit each project when done.</div>
+        ${projHTML}
+      </div>
+      <div>
+        <div class="st">The Clean Temper</div>
+        <div class="card" style="margin-bottom:16px">
+          ${ctHTML}
+          <div style="font-size:12px;color:var(--ash);text-align:center;margin-top:10px">${ctMarkedCount} of 10 marked · ${ct} of 20 points</div>
+        </div>
+        <div class="st">Nightly reflection</div>
+        <div class="card">${reflectionHTML}</div>
+      </div>
+    </div>
+  `;
+}
+
+// ── COMMIT / SUBMIT PROJECT ───────────────────────────
+async function toggleCommit(pid){
+  if(!S.committedProjects[pid])S.committedProjects[pid]={committed:false,submitted:false,hasSession:false};
+  if(S.committedProjects[pid].submitted)return; // can't uncommit after submission
+  S.committedProjects[pid].committed=!S.committedProjects[pid].committed;
+  await saveCommitted();
+  renderForge();
+}
+
+async function submitProject(pid){
+  const proj=PROJECTS.find(p=>p.id===pid);
+  const sessions=todaySessionsFor(pid);
+  if(sessions.length>0){
+    // Has sessions — submit cleanly
+    S.committedProjects[pid].submitted=true;
+    S.committedProjects[pid].hasSession=true;
+    await saveCommitted();
+    renderForge();
+  } else {
+    // No sessions — trigger skip modal
+    S.pendingSkipPid=pid;
+    document.getElementById('skip-modal-title').textContent=proj.id+' — no sessions logged';
+    document.getElementById('skip-modal-sub').textContent='You committed to this project but logged nothing today. A penalty of −'+proj.pts+' points will apply.';
+    document.getElementById('skip-reason').value='';
+    document.getElementById('skip-modal').classList.add('open');
+  }
+}
+
+async function confirmSkip(){
+  const reason=document.getElementById('skip-reason').value.trim();
+  if(!reason){alert('Please record what happened.');return;}
+  const pid=S.pendingSkipPid;
+  S.committedProjects[pid].submitted=true;
+  S.committedProjects[pid].hasSession=false;
+  S.committedProjects[pid].skipReason=reason;
+  // Log penalty session
+  const proj=PROJECTS.find(p=>p.id===pid);
+  await db.from('sessions').insert({date:today(),project:pid,tangible_logged:0,unit:proj.unit,points_earned:0,penalty:-proj.pts,notes:'Missed — '+reason});
+  await saveCommitted();
+  closeModal('skip-modal');
+  S.pendingSkipPid=null;
+  await loadData();
+}
+
+// ── SESSION LOGGING ───────────────────────────────────
+function openSession(pid){
+  const proj=PROJECTS.find(p=>p.id===pid);
+  S.pendingSessionPid=pid;
+  document.getElementById('session-modal-title').textContent=proj.id;
+  document.getElementById('session-modal-sub').textContent=proj.unit+' · '+proj.pts+' points per session';
+  document.getElementById('session-tangible').placeholder='Amount ('+proj.unit+')';
+  document.getElementById('session-tangible').value='';
+  document.getElementById('session-notes').value='';
+  const catSel=document.getElementById('session-category');
+  catSel.innerHTML='<option value="">Category (optional)</option>';
+  if(proj.cats.length>0){
+    proj.cats.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;catSel.appendChild(o);});
+    document.getElementById('session-cat-wrap').style.display='block';
+  } else {
+    document.getElementById('session-cat-wrap').style.display='none';
+  }
+  document.getElementById('session-lang-wrap').style.display=proj.hasLang?'block':'none';
+  document.getElementById('session-modal').classList.add('open');
+}
+
+async function submitSession(){
+  const proj=PROJECTS.find(p=>p.id===S.pendingSessionPid);
+  const tangible=parseFloat(document.getElementById('session-tangible').value);
+  if(!tangible||tangible<=0){alert('Please enter a valid amount.');return;}
+  const category=document.getElementById('session-category').value;
+  const notes=document.getElementById('session-notes').value;
+  const language=document.getElementById('session-language').value;
+  const oldSum=S.projects.find(p=>p.project===S.pendingSessionPid)||{};
+  const oldTotal=oldSum.total_tangible||0;
+  const oldLvl=getLvl(S.pendingSessionPid,oldTotal);
+  const newTotal=oldTotal+tangible;
+  const newLvl=getLvl(S.pendingSessionPid,newTotal);
+
+  await db.from('sessions').insert({
+    date:today(),project:S.pendingSessionPid,tangible_logged:tangible,
+    unit:proj.unit,points_earned:proj.pts,
+    category:category||null,notes:notes||null,language:language||null
+  });
+  await db.from('project_summary').update({total_tangible:newTotal,last_session:today()}).eq('project',S.pendingSessionPid);
+
+  // Mark committed project as having a session
+  if(S.committedProjects[S.pendingSessionPid]){
+    S.committedProjects[S.pendingSessionPid].hasSession=true;
+    await saveCommitted();
+  }
+
+  closeModal('session-modal');
+  S.allSessions=[];S.allLogs=[];
+  await loadData();
+
+  if(newLvl>oldLvl){
+    showUnlock(proj.titles[newLvl-1],proj.id+' — Level '+newLvl+' of 10',UNLOCK_MSGS[proj.id]?.[newLvl-1]||'The forge marks you.');
+  }
+}
+
+// ── CT ────────────────────────────────────────────────
+async function handleCT(key,label,keeping){
+  if(!keeping){
+    // Broke it — show modal with streak info
+    const c=CMDS.find(x=>x.key===key);
+    const streak=S.streaks.find(s=>s.commandment===c.short)||{};
+    const cur=streak.current_streak||0;
+    const curTitle=ctTitle(key,cur);
+    S.pendingCT={key,label};
+    document.getElementById('ct-modal-title').textContent=label.substring(0,50);
+    document.getElementById('ct-modal-sub').textContent=cur>0?`You were on a ${cur} day streak — ${curTitle}. Breaking this resets to zero.`:'Recording a break for today.';
+    document.getElementById('ct-reason').value='';
+    document.getElementById('ct-modal').classList.add('open');
+  } else {
+    await ensureLog();
+    await db.from('daily_log').update({[key]:true}).eq('date',today());
+    const{data}=await db.from('daily_log').select('*').eq('date',today()).single();
+    S.todayLog=data;
+    renderActive();
+  }
+}
+
+async function confirmCTBreak(){
+  const reason=document.getElementById('ct-reason').value.trim();
+  if(!reason){alert('Please record what happened.');return;}
+  await ensureLog();
+  await db.from('daily_log').update({[S.pendingCT.key]:false}).eq('date',today());
+  const c=CMDS.find(x=>x.key===S.pendingCT.key);
+  const streak=S.streaks.find(s=>s.commandment===c.short)||{};
+  const breakLog=(streak.break_log||'')+'\n'+today()+' — '+reason;
+  await db.from('commandment_streaks').update({
+    current_streak:0,last_break_date:today(),
+    total_breaks:(streak.total_breaks||0)+1,break_log:breakLog.trim()
+  }).eq('commandment',c.short);
+  closeModal('ct-modal');
+  S.pendingCT=null;
+  await loadData();
+}
+
+// ── CLOSE DAY ─────────────────────────────────────────
+async function closeDay(){
+  // Gate 1: All CT marked
+  if(!S.todayLog)return;
+  const unmarkedCT=CMDS.filter(c=>S.todayLog[c.key]===null||S.todayLog[c.key]===undefined);
+  if(unmarkedCT.length>0){
+    alert(`${unmarkedCT.length} commandment${unmarkedCT.length>1?'s':''} still unmarked. Mark all 10 as kept or broken before closing the day.`);
+    return;
+  }
+  // Gate 2: All committed projects submitted
+  const uncommitted=PROJECTS.filter(p=>{
+    const cp=S.committedProjects[p.id];
+    return cp&&cp.committed&&!cp.submitted;
+  });
+  if(uncommitted.length>0){
+    alert(`${uncommitted.length} committed project${uncommitted.length>1?'s':''} not yet submitted: ${uncommitted.map(p=>p.id).join(', ')}. Submit each project before closing the day.`);
+    return;
+  }
+  // Gate 3: Reflection text
+  const reflection=document.getElementById('reflection-text')?.value?.trim();
+  if(!reflection){alert('The forge requires your reflection before the day can close.');return;}
+
+  await db.from('daily_log').update({reflection,c10_reflection:true,day_closed:true}).eq('date',today());
+
+  // Update CT streaks
+  for(const c of CMDS){
+    const kept=S.todayLog?.[c.key]===true;
+    const streak=S.streaks.find(s=>s.commandment===c.short)||{};
+    if(kept){
+      const ns=(streak.current_streak||0)+1;
+      await db.from('commandment_streaks').update({current_streak:ns,longest_streak:Math.max(streak.longest_streak||0,ns)}).eq('commandment',c.short);
+    }
+  }
+
+  S.allLogs=[];S.allSessions=[];
+  await loadData();
+  alert('The day is closed. The forge remembers.');
+}
+
+// ── ARMOURY ───────────────────────────────────────────
+function renderArmoury(){
+  const META=['The Buried Ore','The Unearthed','The Smelted','The First Cast','The Reheated','The Struck','The Drawn','The Quenched','The Tempered','The Finished Form'];
+  const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,s?.total_tangible||0);})):0;
+  const metaTitle=META[Math.max(0,metaLvl-1)]||META[0];
+
+  let cardsHTML='';
+  PROJECTS.forEach(proj=>{
+    const s=S.projects.find(p=>p.project===proj.id)||{};
+    const total=s.total_tangible||0;
+    const l=getLvl(proj.id,total);
+    const dispTitle=displayTitle(proj.id,total);
+    const curTitle=getCurrentTitle(proj.id,total);
+    const nextTitle=getTargetTitle(proj.id,total);
+    const pr=getProg(proj.id,total);
+    const next=getNextAt(proj.id,total);
+
+    cardsHTML+=`<div class="ac" onclick="nav('${proj.key}')">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div>
+          <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.1em;margin-bottom:2px">${proj.pillar}</div>
+          <div style="font-size:14px;color:var(--parch);font-weight:500;margin-bottom:3px">${proj.id}</div>
+          <div style="font-family:var(--fc);font-size:14px;color:var(--gold)">${dispTitle}</div>
+          <div style="font-size:12px;color:var(--ash);margin-top:2px">${total.toLocaleString()} ${proj.unit}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-family:var(--fc);font-size:28px;color:var(--parch);line-height:1">${l}<span style="font-size:11px;color:var(--ash)">/10</span></div>
+        </div>
+      </div>
+      <div class="prog-track"><div class="prog-fill" style="width:${pr}%"></div></div>
+      <div style="font-size:11px;color:var(--ash);font-style:italic;margin-top:4px">${next?(next-total).toLocaleString()+' '+proj.unit+' to '+nextTitle:'Ceiling reached'}</div>
+    </div>`;
+  });
+
+
+  document.getElementById('screen-armoury').innerHTML=`
+    <div class="pt">The Armoury</div>
+    <div class="ps">Complete campaign overview — click any project to open its page</div>
+    <div class="card card-gold" style="margin-bottom:24px">
+      <div class="st" style="margin-bottom:4px">Meta Rank</div>
+      <div style="font-family:var(--fc);font-size:28px;color:var(--gold)">${metaTitle}</div>
+      <div style="font-size:13px;color:var(--ash);margin-top:3px">Meta Level ${metaLvl} of 10</div>
+    </div>
+    <div class="g2">${cardsHTML}</div>
+  `;
+}
+
+// ── PROJECT SCREEN ────────────────────────────────────
+async function renderProject(screenKey){
+  const proj=PROJECTS.find(p=>p.key===screenKey);if(!proj)return;
+  const s=S.projects.find(p=>p.project===proj.id)||{};
+  const total=s.total_tangible||0;
+  const l=getLvl(proj.id,total);
+  const dispTitle=displayTitle(proj.id,total);
+  const pr=getProg(proj.id,total);
+  const next=getNextAt(proj.id,total);
+  const nextTitle=getTargetTitle(proj.id,total);
+
+  await loadAll();
+  const allPS=S.allSessions.filter(x=>x.project===proj.id);
+  const recent=allPS.slice(-20).reverse();
+
+  // Category distribution
+  let catHTML='';
+  if(proj.cats.length>0&&allPS.length>0){
+    const counts={};proj.cats.forEach(c=>counts[c]=0);
+    allPS.forEach(s=>{if(s.category&&counts[s.category]!==undefined)counts[s.category]++;});
+    const tot=allPS.length;
+    catHTML=`<div class="st">Category distribution</div><div class="card" style="margin-bottom:14px">
+      ${proj.cats.map(c=>{
+        const cnt=counts[c]||0;const pct=tot>0?Math.round(cnt/tot*100):0;
+        return`<div class="cat-row"><div class="cat-label">${c}</div><div class="cat-track"><div class="cat-fill" style="width:${pct}%"></div></div><div class="cat-val">${cnt} <span style="color:var(--ash)">(${pct}%)</span></div></div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  // Level journey with correct progress bars
+  const ljHTML=proj.levels.map((threshold,i)=>{
+    const prevThreshold=i===0?0:proj.levels[i-1];
+    const done=total>=threshold;
+    // current = this is the level we are working TOWARD (not yet completed)
+    const cur=!done&&(i===0?total<threshold:total>=proj.levels[i-1]&&total<threshold);
+    let barPct=0;
+    let barColor='var(--safe)';
+    if(done){
+      barPct=100;
+      barColor='var(--safe)';
+    } else if(cur){
+      barPct=Math.round(((total-prevThreshold)/(threshold-prevThreshold))*100);
+      barPct=Math.max(0,Math.min(100,barPct));
+      barColor='var(--gold)';
+    }
+    const cls=cur?'current':done?'done':'future';
+    return`<div class="lj-row ${cls}">
+      <div class="lj-dot" style="background:${cur?'var(--gold)':done?'var(--safe)':'var(--border2)'}"></div>
+      <div class="lj-title" style="color:${cur?'var(--gold)':done?'var(--safe)':'var(--ash)'}">${proj.titles[i]}</div>
+      <div class="lj-bar-track"><div class="lj-bar-fill" style="width:${barPct}%;background:${barColor}"></div></div>
+      <div class="lj-threshold">${threshold.toLocaleString()} ${proj.unit}</div>
+      <div class="lj-tag" style="color:${cur?'var(--gold)':done?'var(--safe)':'var(--border2)'}">${cur?barPct+'%':done?'✓':''}</div>
+    </div>`;
+  }).join('');
+
+  // Sessions table
+  const sessHTML=recent.length>0?`<table class="dt">
+    <thead><tr><th>Date</th><th>Amount</th><th>Category</th>${proj.hasLang?'<th>Language</th>':''}<th>Notes</th></tr></thead>
+    <tbody>${recent.map(s=>`<tr>
+      <td style="color:var(--ash)">${s.date}</td>
+      <td style="font-family:var(--fc);font-size:12px;color:var(--gold)">${s.tangible_logged} ${proj.unit}</td>
+      <td>${s.category||'—'}</td>
+      ${proj.hasLang?`<td>${s.language||'—'}</td>`:''}
+      <td style="color:var(--ash)">${s.notes||'—'}</td>
+    </tr>`).join('')}</tbody>
+  </table>`:'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:12px 0">No sessions logged yet. The forge waits.</div>';
+
+  const totalPtsProj=allPS.reduce(function(s,x){return s+(x.points_earned||0);},0);
+  const totalPenProj=allPS.reduce(function(s,x){return s+(x.penalty||0);},0);
+
+  document.getElementById('screen-'+screenKey).innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+      <div>
+        <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.12em;margin-bottom:4px">${proj.pillar}</div>
+        <div class="pt">${proj.id}</div>
+        <div style="font-family:var(--fc);font-size:18px;color:var(--gold);margin-top:4px">${dispTitle}</div>
+        <div style="font-size:13px;color:var(--ash);margin-top:4px">${total.toLocaleString()} ${proj.unit} logged</div>
+      </div>
+      <div class="lvl-badge"><div class="lvl-num">${l}</div><div class="lvl-lbl">of 10</div></div>
+    </div>
+
+    <div class="g4" style="margin-bottom:20px">
+      <div class="sm"><div class="sm-val">${total.toLocaleString()}</div><div class="sm-lbl">Total ${proj.unit}</div></div>
+      <div class="sm"><div class="sm-val">${allPS.length}</div><div class="sm-lbl">Sessions logged</div></div>
+      <div class="sm"><div class="sm-val" style="color:var(--gold)">${totalPtsProj.toLocaleString()}</div><div class="sm-lbl">Points earned</div></div>
+      <div class="sm"><div class="sm-val" style="color:${totalPenProj<0?'var(--ember)':'var(--ash)'}">${totalPenProj}</div><div class="sm-lbl">Penalties accrued</div></div>
+    </div>
+
+    <div class="g2" style="align-items:start">
+      <div>
+        <div class="st">Sessions over time</div>
+        <div class="card" style="margin-bottom:14px"><canvas id="chart-${screenKey}" height="160"></canvas></div>
+        ${catHTML}
+      </div>
+      <div>
+        <div class="st">Level journey</div>
+        <div class="card" style="margin-bottom:14px">${ljHTML}</div>
+      </div>
+    </div>
+
+    <div class="st">Session history</div>
+    <div class="card" style="margin-bottom:14px">${sessHTML}</div>
+    <button class="btn" onclick="openSession('${proj.id}')">+ Log a session</button>
+  `;
+
+  if(!S.chartsDrawn[screenKey]&&allPS.length>0){
+    S.chartsDrawn[screenKey]=true;
+    setTimeout(()=>{
+      const ctx=document.getElementById('chart-'+screenKey);if(!ctx)return;
+      const chartData=allPS.map(function(s){return s.tangible_logged;});
+      const chartLabels=allPS.map(function(s){return s.date;});
+      new Chart(ctx,{
+        type:'bar',
+        data:{labels:chartLabels,datasets:[{
+          label:proj.unit,
+          data:chartData,
+          backgroundColor:'rgba(42,128,96,0.5)',
+          borderColor:'#2A8060',
+          borderWidth:1
+        }]},
+        options:{
+          responsive:true,
+          maintainAspectRatio:false,
+          plugins:{legend:{display:false}},
+          scales:{
+            x:{ticks:{color:'#A09080',font:{size:9},maxTicksLimit:10},grid:{color:'rgba(74,66,56,0.5)'}},
+            y:{
+              ticks:{color:'#A09080',font:{size:9},callback:function(v){return v+' '+proj.unit;}},
+              grid:{color:'rgba(74,66,56,0.5)'}
+            }
+          }
+        }
+      });
+    },100);
+  }
+}
+
+// ── CLEAN TEMPER ──────────────────────────────────────
+function renderTemper(){
+  const ct=ctPts(S.todayLog);
+  const kept=CMDS.filter(c=>S.todayLog?.[c.key]===true).length;
+
+  const html=`
+    <div class="pt">Clean Temper</div>
+    <div class="ps">Ten commandments · Each streak is independent · Every break is recorded</div>
+    <div class="g4" style="margin-bottom:24px">
+      <div class="sb"><div class="sb-num" style="color:var(--gold)">${ct}<span style="font-size:14px;color:var(--ash)">/20</span></div><div class="sb-lbl">Today's CT Points</div></div>
+      <div class="sb"><div class="sb-num">${kept}<span style="font-size:14px;color:var(--ash)">/10</span></div><div class="sb-lbl">Kept Today</div></div>
+      <div class="sb"><div class="sb-num" style="color:var(--safe)">${S.streaks.reduce((m,s)=>Math.max(m,s.current_streak||0),0)}</div><div class="sb-lbl">Best Current Streak</div></div>
+      <div class="sb"><div class="sb-num">${S.streaks.reduce((m,s)=>Math.max(m,s.longest_streak||0),0)}</div><div class="sb-lbl">All-Time Best</div></div>
+    </div>
+    ${CMDS.map(c=>{
+      const streak=S.streaks.find(s=>s.commandment===c.short)||{};
+      const cur=streak.current_streak||0;
+      const longest=streak.longest_streak||0;
+      const title=ctTitle(c.key,cur);
+      const next=ctNext(c.key,cur);
+      const todayKept=S.todayLog?.[c.key]===true;
+      const todayBroke=S.todayLog?.[c.key]===false;
+      // Generate streak dots — last 30 days based on break log
+      const dots=Array(Math.min(cur,30)).fill(0).map(()=>`<div class="s-dot" style="background:var(--safe)"></div>`).join('');
+      return`<div class="card" style="margin-bottom:10px;border-color:${todayKept?'var(--safe)':todayBroke?'var(--ember)':'var(--border)'}">
+        <div style="display:flex;align-items:flex-start;gap:16px">
+          <div style="flex:1">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+              <div style="font-size:14px;color:var(--parch);font-weight:500;flex:1">${c.label}</div>
+              <div style="font-family:var(--fc);font-size:10px;color:var(--gold);flex-shrink:0;margin-left:12px">${c.pts} pt${c.pts>1?'s':''}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;flex-wrap:wrap">
+              <div style="font-family:var(--fc);font-size:13px;color:var(--gold)">${title}</div>
+              <div style="font-size:12px;color:var(--ash)">${cur} day streak</div>
+              ${next?`<div style="font-size:12px;color:var(--ash)">→ <span style="color:var(--parch)">${next.title}</span> in ${next.rem} days</div>`:''}
+            </div>
+            <div class="s-dots" style="margin-bottom:8px">${dots||'<div style="font-size:11px;color:var(--ash);font-style:italic">No streak yet — begin today</div>'}</div>
+            <div style="font-size:11px;color:var(--ash);margin-bottom:10px">
+              Longest: ${longest} days${longest>0?' — '+ctTitle(c.key,longest):''}
+              ${streak.last_break_date?' · Last break: '+streak.last_break_date:''}
+              ${streak.total_breaks?' · Breaks: '+streak.total_breaks:''}
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="ct-btn-kept ${todayKept?'active':''}" onclick="handleCT('${c.key}','${c.label}',true)">Kept today</button>
+              <button class="ct-btn-broke ${todayBroke?'active':''}" onclick="handleCT('${c.key}','${c.label}',false)">Broke it today</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+  `;
+  document.getElementById('screen-temper').innerHTML=html;
+}
+
+// ── WILLMASTER ────────────────────────────────────────
+function renderWillmaster(){
+  const html=`
+    <div class="pt">The Willmaster</div>
+    <div class="ps">Streak progression through 11 titles per commandment · The longest road in the game</div>
+
+    <div class="g4" style="margin-bottom:24px">
+      <div class="sb"><div class="sb-num" style="color:var(--gold)">${S.streaks.reduce(function(m,s){return Math.max(m,s.current_streak||0);},0)}</div><div class="sb-lbl">Best Current Streak</div></div>
+      <div class="sb"><div class="sb-num">${S.streaks.reduce(function(m,s){return Math.max(m,s.longest_streak||0);},0)}</div><div class="sb-lbl">All-Time Best</div></div>
+      <div class="sb"><div class="sb-num" style="color:var(--safe)">${S.streaks.filter(function(s){return (s.current_streak||0)>=7;}).length}</div><div class="sb-lbl">Active Streaks (7d+)</div></div>
+      <div class="sb"><div class="sb-num" style="color:var(--ember)">${S.streaks.reduce(function(t,s){return t+(s.total_breaks||0);},0)}</div><div class="sb-lbl">Total Breaks</div></div>
+    </div>
+
+    ${CMDS.map(function(c){
+      const streak=S.streaks.find(function(s){return s.commandment===c.short;})||{};
+      const cur=streak.current_streak||0;
+      const longest=streak.longest_streak||0;
+      const curTitle=ctTitle(c.key,cur);
+      const todayKept=S.todayLog?.[c.key]===true;
+      const todayBroke=S.todayLog?.[c.key]===false;
+
+      // Build 11 threshold rows
+      const thresholds=CT_THR; // [7,15,30,60,120,240,365,480,600,720,800]
+      const titles=CT_TITLES[c.key];
+
+      const rowsHTML=thresholds.map(function(t,i){
+        const prevT=i===0?0:thresholds[i-1];
+        const titleDone=cur>=t;
+        const titleCur=!titleDone&&cur>=prevT;
+        let barPct=0;
+        let barColor='var(--safe)';
+        if(titleDone){
+          barPct=100;
+          barColor='var(--safe)';
+        } else if(titleCur){
+          barPct=Math.round(((cur-prevT)/(t-prevT))*100);
+          barPct=Math.max(0,Math.min(100,barPct));
+          barColor='var(--gold)';
+        }
+        return'<div class="lj-row '+(titleCur?'current':titleDone?'done':'future')+'" style="padding:6px 10px">'+
+          '<div class="lj-dot" style="background:'+(titleCur?'var(--gold)':titleDone?'var(--safe)':'var(--border2)')+'"></div>'+
+          '<div class="lj-title" style="color:'+(titleCur?'var(--gold)':titleDone?'var(--safe)':'var(--ash)')+'">'+titles[i]+'</div>'+
+          '<div class="lj-bar-track"><div class="lj-bar-fill" style="width:'+barPct+'%;background:'+barColor+'"></div></div>'+
+          '<div class="lj-threshold">'+t+' days</div>'+
+          '<div class="lj-tag" style="color:'+(titleCur?'var(--gold)':titleDone?'var(--safe)':'var(--border2)')+'">'+
+            (titleCur?barPct+'%':titleDone?'✓':'')+
+          '</div>'+
+        '</div>';
+      }).join('');
+
+      return'<div class="card" style="margin-bottom:12px;border-color:'+(todayKept?'var(--safe)':todayBroke?'var(--ember)':'var(--border)')+'">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">'+
+          '<div>'+
+            '<div style="font-size:14px;color:var(--parch);font-weight:500;margin-bottom:3px">'+c.label+'</div>'+
+            '<div style="display:flex;align-items:center;gap:14px">'+
+              '<div style="font-family:var(--fc);font-size:13px;color:var(--gold)">'+curTitle+'</div>'+
+              '<div style="font-size:12px;color:var(--ash)">'+cur+' day streak</div>'+
+              (longest>0?'<div style="font-size:12px;color:var(--ash)">Longest: '+longest+'</div>':'')+
+            '</div>'+
+          '</div>'+
+          '<div style="font-family:var(--fc);font-size:10px;color:var(--gold)">'+c.pts+' pt'+(c.pts>1?'s':'')+'</div>'+
+        '</div>'+
+        rowsHTML+
+      '</div>';
+    }).join('')}
+  `;
+  document.getElementById('screen-willmaster').innerHTML=html;
+}
+
+// ── META ──────────────────────────────────────────────
+function renderMeta(){
+  const META_T=['The Buried Ore','The Unearthed','The Smelted','The First Cast','The Reheated','The Struck','The Drawn','The Quenched','The Tempered','The Finished Form'];
+  const META_D=['Raw. Buried. Potential only. The forge has not yet touched you.','Unearthed from the ground. The process has begun.','Thrown into heat. Impurities rising to the surface.','The first rough form. An approximation of what could be.','Reheated. Brought back to malleability. Ready to be worked again.','The hammer has landed. Shape is beginning to emerge.','Drawn out. Stretched into precise dimensions.','Plunged into cold. The shape is set suddenly.','Gently reheated. Brittleness removed. Strength and flexibility balanced.','The thing itself. Nothing missing. Nothing excess. Complete.'];
+
+  const pLvls=PROJECTS.map(proj=>{
+    const s=S.projects.find(p=>p.project===proj.id)||{};
+    const total=s.total_tangible||0;
+    return{proj,l:getLvl(proj.id,total),total};
+  });
+  const metaLvl=Math.min(...pLvls.map(p=>p.l));
+  const weakest=pLvls.find(p=>p.l===metaLvl);
+  const metaTitle=metaLvl>0?META_T[metaLvl-1]:META_T[0];
+  const metaDesc=metaLvl>0?META_D[metaLvl-1]:META_D[0];
+
+  const ljHTML=META_T.map((t,i)=>{
+    const done=metaLvl>i+1;const cur=metaLvl===i+1||metaLvl===0&&i===0;
+    return`<div class="lj-row ${cur?'current':done?'done':'future'}">
+      <div class="lj-dot" style="background:${cur?'var(--gold)':done?'var(--safe)':'var(--border2)'}"></div>
+      <div class="lj-title" style="color:${cur?'var(--gold)':done?'var(--safe)':'var(--ash)'}">${t}</div>
+      <div class="lj-bar-track"><div class="lj-bar-fill" style="width:${done?100:cur?50:0}%;background:${cur?'var(--gold)':'var(--safe)'}"></div></div>
+      <div class="lj-tag" style="color:${cur?'var(--gold)':done?'var(--safe)':'var(--border2)'}">${cur?'current':done?'✓':''}</div>
+    </div>`;
+  }).join('');
+
+  const projRows=pLvls.map(({proj,l,total})=>`
+    <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:0.5px solid var(--border)">
+      <div style="font-size:13px;color:var(--parch);width:180px;flex-shrink:0">${proj.id}</div>
+      <div style="flex:1"><div class="prog-track" style="margin:0"><div class="prog-fill" style="width:${getProg(proj.id,total)}%;${l===metaLvl?'background:var(--ember)':''}"></div></div></div>
+      <div style="font-family:var(--fc);font-size:13px;color:${l===metaLvl?'var(--ember)':'var(--gold)'};width:50px;text-align:right">${l}/10</div>
+      <div style="font-family:var(--fc);font-size:11px;color:var(--ash);width:180px;text-align:right">${displayTitle(proj.id,total)}</div>
+    </div>`).join('');
+
+  document.getElementById('screen-meta').innerHTML=`
+    <div class="pt">Meta Rank</div>
+    <div class="ps">Your overall standing — determined by your weakest project</div>
+    <div class="card card-gold" style="margin-bottom:24px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-family:var(--fc);font-size:32px;color:var(--gold);margin-bottom:8px">${metaTitle}</div>
+          <div style="font-size:14px;color:var(--parch);font-style:italic;max-width:500px;line-height:1.6">${metaDesc}</div>
+          ${weakest?`<div style="font-size:12px;color:var(--ember);margin-top:10px">Ceiling set by: ${weakest.proj.id} — Level ${weakest.l}</div>`:''}
+        </div>
+        <div class="lvl-badge"><div class="lvl-num">${metaLvl}</div><div class="lvl-lbl">of 10</div></div>
+      </div>
+    </div>
+    <div class="g2" style="align-items:start">
+      <div>
+        <div class="st">Project contributions</div>
+        <div class="card">${projRows}</div>
+      </div>
+      <div>
+        <div class="st">Meta level journey</div>
+        <div class="card">${ljHTML}</div>
+      </div>
+    </div>
+  `;
+}
+
+// ── REPORT ────────────────────────────────────────────
+async function renderReport(){
+  document.getElementById('screen-report').innerHTML='<div class="loading">Building Anvil Report...</div>';
+  await loadAll();
+
+  const gNCT=S.allSessions.reduce((s,r)=>s+(r.points_earned||0),0);
+  const gCT=S.allLogs.reduce((s,r)=>s+ctPts(r),0);
+  const gTotal=gNCT+gCT;
+  const tPen=S.allSessions.reduce((s,r)=>s+(r.penalty||0),0);
+  const net=gTotal+tPen;
+  const pct=((net/63600)*100).toFixed(1);
+  const dLogged=S.allLogs.length;
+  const avg=dLogged>0?Math.round(net/dLogged):0;
+  const perfDays=S.allLogs.filter(l=>ctPts(l)===20).length;
+
+  const projHTML=PROJECTS.map(proj=>{
+    const s=S.projects.find(p=>p.project===proj.id)||{};
+    const total=s.total_tangible||0;
+    const l=getLvl(proj.id,total);
+    const pr=getProg(proj.id,total);
+    const sc=S.allSessions.filter(x=>x.project===proj.id).length;
+    return`<tr>
+      <td>${proj.id}</td>
+      <td style="font-family:var(--fc);font-size:12px;color:var(--gold)">${displayTitle(proj.id,total)}</td>
+      <td style="text-align:center">${l}/10</td>
+      <td style="text-align:center">${total.toLocaleString()} ${proj.unit}</td>
+      <td style="text-align:center">${sc}</td>
+      <td style="width:120px"><div class="prog-track" style="margin:0"><div class="prog-fill" style="width:${pr}%"></div></div></td>
+    </tr>`;
+  }).join('');
+
+  const ctHTM=CMDS.map(c=>{
+    const streak=S.streaks.find(s=>s.commandment===c.short)||{};
+    const cur=streak.current_streak||0;
+    return`<tr>
+      <td>${c.label}</td>
+      <td style="font-family:var(--fc);font-size:11px;color:var(--gold)">${ctTitle(c.key,cur)}</td>
+      <td style="text-align:center">${cur}</td>
+      <td style="text-align:center">${streak.longest_streak||0}</td>
+      <td style="text-align:center;color:var(--ember)">${streak.total_breaks||0}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('screen-report').innerHTML=`
+    <div class="pt">The Anvil Report</div>
+    <div class="ps">Campaign biography · Every number tells a truth</div>
+    <div class="g4" style="margin-bottom:20px">
+      <div class="sb"><div class="sb-num" style="color:var(--gold)">${net.toLocaleString()}</div><div class="sb-lbl">Net Score</div></div>
+      <div class="sb"><div class="sb-num">${gTotal.toLocaleString()}</div><div class="sb-lbl">Gross Earned</div></div>
+      <div class="sb"><div class="sb-num" style="color:var(--ember)">${tPen}</div><div class="sb-lbl">Total Penalty</div></div>
+      <div class="sb"><div class="sb-num">${pct}%</div><div class="sb-lbl">Of Max (63,600)</div></div>
+    </div>
+    <div class="g4" style="margin-bottom:24px">
+      <div class="sb"><div class="sb-num">${dLogged}</div><div class="sb-lbl">Days Logged</div></div>
+      <div class="sb"><div class="sb-num">${avg}</div><div class="sb-lbl">Avg Pts / Day</div></div>
+      <div class="sb"><div class="sb-num" style="color:var(--safe)">${perfDays}</div><div class="sb-lbl">Perfect CT Days</div></div>
+      <div class="sb"><div class="sb-num">${daysLeft()}</div><div class="sb-lbl">Days Remaining</div></div>
+    </div>
+    <div class="st">Score over time</div>
+    <div class="card" style="margin-bottom:20px"><canvas id="report-chart" height="160"></canvas></div>
+    <div class="st">Project standings</div>
+    <div class="card" style="margin-bottom:20px">
+      <table class="dt"><thead><tr><th>Project</th><th>Current Title</th><th>Level</th><th>Tangible</th><th>Sessions</th><th>Progress</th></tr></thead><tbody>${projHTML}</tbody></table>
+    </div>
+    <div class="st">Clean Temper — commandment streaks</div>
+    <div class="card">
+      <table class="dt"><thead><tr><th>Commandment</th><th>Current Title</th><th>Streak</th><th>Longest</th><th>Breaks</th></tr></thead><tbody>${ctHTM}</tbody></table>
+    </div>
+  `;
+
+  if(S.allLogs.length>0){
+    setTimeout(()=>{
+      const ctx=document.getElementById('report-chart');if(!ctx)return;
+      const labels=S.allLogs.map(l=>l.date);
+      const data=S.allLogs.map(l=>{
+        const ds=S.allSessions.filter(s=>s.date===l.date);
+        return ctPts(l)+ds.reduce((s,x)=>s+(x.points_earned||0),0)+ds.reduce((s,x)=>s+(x.penalty||0),0);
+      });
+      const rLabels=S.allLogs.map(function(l){return l.date;});
+      const rData=S.allLogs.map(function(l){
+        var ds=S.allSessions.filter(function(s){return s.date===l.date;});
+        return ctPts(l)+ds.reduce(function(s,x){return s+(x.points_earned||0);},0)+ds.reduce(function(s,x){return s+(x.penalty||0);},0);
+      });
+      new Chart(ctx,{
+        type:'line',
+        data:{labels:rLabels,datasets:[{data:rData,borderColor:'#D4A84C',backgroundColor:'rgba(212,168,76,0.08)',borderWidth:2,pointRadius:2,tension:0.3}]},
+        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{
+          x:{ticks:{color:'#A09080',font:{size:9},maxTicksLimit:12},grid:{color:'rgba(74,66,56,0.5)'}},
+          y:{ticks:{color:'#A09080',font:{size:9}},grid:{color:'rgba(74,66,56,0.5)'}}
+        }}
+      });
+    },100);
+  }
+}
+
+// ── MILESTONES ────────────────────────────────────────
+async function renderMilestones(){
+  await loadAll();
+  const msHTML=S.milestones.length>0?S.milestones.map(m=>`
+    <div style="display:flex;gap:16px;padding:12px 0;border-bottom:0.5px solid var(--border)">
+      <div style="font-size:12px;color:var(--ash);width:90px;flex-shrink:0">${m.date}</div>
+      <div style="flex:1">
+        <div style="font-size:13px;color:var(--parch);margin-bottom:3px">${m.description}</div>
+        <div style="font-size:11px;color:var(--ash)">${m.project}${m.tangible_at_time!==null?' · '+m.tangible_at_time+' '+(PROJECTS.find(p=>p.id===m.project)?.unit||''):''}${m.level_at_time!==null?' · Level '+m.level_at_time:''}</div>
+      </div>
+    </div>`).join('')
+  :'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:20px 0">No milestones yet. Significant moments belong here.</div>';
+
+  document.getElementById('screen-milestones').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+      <div><div class="pt">Milestones</div><div class="ps">Singular moments that belong to no formula</div></div>
+      <button class="btn btn-sm" onclick="openMilestone()">+ Log milestone</button>
+    </div>
+    <div class="card">${msHTML}</div>
+  `;
+  const sel=document.getElementById('ms-project');
+  sel.innerHTML='<option value="">Select project</option>';
+  PROJECTS.forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.id;sel.appendChild(o);});
+}
+
+function openMilestone(){document.getElementById('ms-modal').classList.add('open');}
+async function submitMilestone(){
+  const pid=document.getElementById('ms-project').value;
+  const desc=document.getElementById('ms-desc').value.trim();
+  if(!pid||!desc){alert('Please select a project and enter a description.');return;}
+  const s=S.projects.find(p=>p.project===pid)||{};
+  const total=s.total_tangible||0;
+  await db.from('milestones').insert({date:today(),project:pid,description:desc,tangible_at_time:total,level_at_time:getLvl(pid,total)});
+  closeModal('ms-modal');
+  S.milestones=[];S.allSessions=[];S.allLogs=[];
+  await loadAll();
+  renderMilestones();
+}
+
+// ── UTILS ─────────────────────────────────────────────
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+function showUnlock(title,sub,msg){document.getElementById('ul-title').textContent=title;document.getElementById('ul-sub').textContent=sub;document.getElementById('ul-msg').textContent=msg;document.getElementById('unlock').classList.add('open');}
+function closeUnlock(){document.getElementById('unlock').classList.remove('open');}
+
+// ── INIT ──────────────────────────────────────────────
+// We need to add committed_projects column to daily_log
+// This runs on first load to ensure column exists
+async function ensureSchema(){
+  // Try to add column — will fail silently if already exists
+  await db.rpc('exec',{sql:"ALTER TABLE daily_log ADD COLUMN IF NOT EXISTS committed_projects text;"}).catch(()=>{});
+}
+
+loadData().then(()=>loadAll());
+</script>
+</body>
+</html>
