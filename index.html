@@ -360,13 +360,42 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
   <div id="screen-share" class="screen"><div class="loading">Building share cards...</div></div>
   <div id="screen-food" class="screen"><div class="loading">Loading food log...</div></div>
   <div id="screen-settings" class="screen"><div class="loading">Loading settings...</div></div>
+  <div id="screen-projmgmt" class="screen"><div class="loading">Loading project management...</div></div>
 </div>
 
-<!-- MODALS -->
+<!-- Start date change warning modal -->
+<div class="modal-overlay" id="start-date-modal">
+  <div class="modal">
+    <div class="modal-title">Change start date?</div>
+    <div class="modal-sub">Sessions exist before <strong id="start-date-new"></strong>. They will be hidden from all calculations but NOT deleted. You can restore them by moving the start date back.</div>
+    <div class="modal-btns">
+      <button class="btn btn-danger btn-sm" onclick="closeModal('start-date-modal')">Cancel</button>
+      <button class="btn btn-safe btn-sm" onclick="confirmStartDate()">Hide older data & save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Clean State modal -->
+<div class="modal-overlay" id="clean-state-modal">
+  <div class="modal">
+    <div class="modal-title">Clean State</div>
+    <div class="modal-sub">All campaign data will be wiped from the database. A backup will be saved to your browser's local storage first.</div>
+    <div style="background:var(--ember-dim);border:0.5px solid var(--ember);border-radius:6px;padding:10px 14px;margin:12px 0;font-size:12px;color:var(--ember)">⚠ This cannot be undone in the database. Backup only persists locally.</div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--parch);cursor:pointer;margin-bottom:16px">
+      <input type="checkbox" id="clean-reset-dates" style="width:16px;height:16px">
+      Also reset campaign start and end dates
+    </label>
+    <div class="modal-btns">
+      <button class="btn btn-sm" onclick="closeModal('clean-state-modal')">Cancel</button>
+      <button class="btn btn-danger btn-sm" onclick="executeCleanState()">Wipe all data</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="session-modal">
   <div class="modal">
     <div class="modal-title" id="sm-title">Log session</div>
     <div class="modal-sub" id="sm-sub"></div>
+    <div id="sm-date-wrap" style="display:none"><label>Date</label><input type="date" id="sm-date"></div>
     <label>Tangibles</label><input type="number" id="sm-tangible" step="any" min="0">
     <div id="sm-cat-wrap"><label>Category</label><select id="sm-category"><option value="">Optional</option></select></div>
     <div id="sm-lang-wrap" style="display:none"><label>Language</label><select id="sm-language"><option value="">Select</option><option>Urdu</option><option>Hindi</option><option>English</option></select></div>
@@ -516,10 +545,10 @@ const PROJECTS=[
      'Recording':   [2,4,7,11,16,23,30,38,48,60],
      'Original Composition':[1,3,5,8,11,15,19,24,30,40]
    }},
-  {id:'The Iron Forge',key:'proj-ironforge',pillar:'Body',pts:10,unit:'sessions',ceiling:585,
+  {id:'The Iron Forge',key:'proj-ironforge',pillar:'Body',pts:10,unit:'days',ceiling:585,
    levels:[20,40,70,110,160,225,290,365,460,585],
    titles:['The Raw','First Iron','Bar Bearer','Forging Under','Form Drawn','The Annealed','Labors Wrought','Final Temper','Titan Marked','Living Iron'],
-   cats:['Chest','Back','Shoulders','Legs','Biceps','Triceps','Forearms','Core'],hasLang:false,
+   cats:['Chest','Back','Shoulders','Legs','Biceps','Triceps','Forearms','Core'],hasLang:false,uniqueDays:true,
    floors:{
      'Chest':    [8,16,28,44,64,90,116,146,184,228],
      'Back':     [8,16,28,44,64,90,116,146,184,228],
@@ -543,6 +572,60 @@ const PROJECTS=[
    titles:['The Untested','The Reckoner','The Apprentice','The Wayfarer','The Dealer',"The Craftsman's Hand",'The Trade Wind','The Merchant','The House Built','The Giver'],
    cats:['Legal','Market Research','Product + Brand Design','Operations','Business Planning'],hasLang:false,floors:null}
 ];
+
+
+// ── DYNAMIC LEVEL / FLOOR CALCULATION ──────────────────────────
+// Logarithmic distribution: 10 thresholds from 0 to ceiling
+function calcLevels(ceiling, n){
+  n = n || 10;
+  var result = [];
+  for(var i = 0; i < n; i++){
+    var t = (i + 1) / n;
+    var logVal = Math.log(1 + t * 9) / Math.log(10);
+    result.push(Math.round(ceiling * logVal));
+  }
+  return result;
+}
+
+// Floor thresholds — each category gets a proportional share of ceiling
+// Share = (default_cat_ceiling / default_project_ceiling)
+// Then apply same log curve up to that category's share
+function calcFloors(projId, newCeiling){
+  var proj = PROJECTS_DEFAULT.find(function(p){return p.id===projId;});
+  if(!proj||!proj.floors)return null;
+  var defaultCeiling = proj.ceiling;
+  var newFloors = {};
+  Object.keys(proj.floors).forEach(function(cat){
+    var defaultFloorMax = proj.floors[cat][9]; // max floor at level 10
+    var share = defaultFloorMax / defaultCeiling;
+    var newCatMax = Math.round(newCeiling * share);
+    newFloors[cat] = calcLevels(newCatMax);
+  });
+  return newFloors;
+}
+
+// Get effective project config — merge hardcoded defaults with DB overrides
+function getEffectiveProject(pid){
+  var base = PROJECTS_DEFAULT.find(function(p){return p.id===pid;});
+  if(!base)return null;
+  var override = S.projectConfig[pid];
+  if(!override)return base;
+  var ceiling = override.ceiling || base.ceiling;
+  var isActive = override.is_active !== undefined ? override.is_active : true;
+  // Recalculate levels and floors if ceiling changed
+  var levels = (ceiling !== base.ceiling) ? calcLevels(ceiling) : base.levels;
+  var floors = (ceiling !== base.ceiling && base.floors) ? calcFloors(pid, ceiling) : base.floors;
+  return Object.assign({}, base, {ceiling, levels, floors, isActive});
+}
+
+// Get all active effective projects
+function getActiveProjects(){
+  return PROJECTS_DEFAULT.map(getEffectiveProject).filter(function(p){return p.isActive !== false;});
+}
+
+
+// Store original defaults for reference
+const PROJECTS_DEFAULT=PROJECTS;
 
 const CMDS=[
   {key:'c1_direction',short:'C1',label:'Thou shalt not begin the day without direction',pts:1},
@@ -592,7 +675,8 @@ let S={
   pendingSessionPid:null,pendingSkipPid:null,pendingCT:null,
   calSelected:null,calDate:new Date(),
   wmDays:30,
-  chartsDrawn:{}
+  chartsDrawn:{},
+  projectConfig:{} // pid -> {ceiling, is_active} overrides from DB
 };
 
 // ── HELPERS ────────────────────────────────────────────
@@ -616,7 +700,8 @@ const daysToStart=()=>{
 };
 const weekNum=()=>Math.ceil(dayNum()/7);
 const totalCampaignDays=()=>Math.ceil((GEND()-GSTART())/864e5);
-const maxPoints=()=>totalCampaignDays()*80;
+const maxPoints=()=>totalCampaignDays()*(20+getActiveProjects().reduce(function(s,p){return s+p.pts;},0));
+const dailyMax=()=>20+getActiveProjects().reduce(function(s,p){return s+p.pts;},0);
 
 // Number formatting — always whole numbers for points/tangibles
 const fmt=(n)=>Number.isInteger(n)?n:Math.round(n*100)/100;
@@ -757,6 +842,11 @@ async function loadData(){
     db.from('declarations').select('*').order('start_date',{ascending:false}).limit(20)
   ]);
   S.projects=pR.data||[];
+  // Build projectConfig lookup by project id
+  S.projectConfig={};
+  (cfR.data||[]).forEach(function(row){S.projectConfig[row.project]=row;});
+  // Run auto-close-yesterday (Option B streak timing)
+  await autoCloseYesterday();
   S.todayLog=lR.data||null;
   S.todaySessions=sR.data||[];
   S.streaks=stR.data||[];
@@ -777,8 +867,9 @@ async function loadAll(){
     db.from('sessions').select('*').order('date'),
     db.from('milestones').select('*').order('date',{ascending:false})
   ]);
-  S.allLogs=lR.data||[];
-  S.allSessions=sR.data||[];
+  const gStart=getGameStart();
+  S.allLogs=(lR.data||[]).filter(function(l){return l.date>=gStart;});
+  S.allSessions=(sR.data||[]).filter(function(s){return s.date>=gStart;});
   S.milestones=mR.data||[];
 }
 
@@ -798,13 +889,14 @@ async function saveCommitted(){
 // Global category counts from all sessions — used for floor-aware level calculation
 function getCatCountsAll(){
   const result={};
-  PROJECTS.forEach(function(proj){
+  PROJECTS_DEFAULT.forEach(function(proj){
     if(!proj.floors)return;
     result[proj.id]={};
     proj.cats.forEach(c=>result[proj.id][c]=0);
     S.allSessions.filter(s=>s.project===proj.id&&s.tangible_logged>0).forEach(function(s){
       if(s.category&&result[proj.id][s.category]!==undefined)
-        result[proj.id][s.category]+=(s.tangible_logged||1);
+        // uniqueDays projects (Iron Forge): count sessions, not tangible
+        result[proj.id][s.category]+= proj.uniqueDays ? 1 : (s.tangible_logged||1);
     });
   });
   return result;
@@ -991,6 +1083,7 @@ function renderActive(){
   else if(id==='share')renderShare();
   else if(id==='food')renderFood();
   else if(id==='settings')renderSettings();
+  else if(id==='projmgmt')renderProjectMgmt();
 }
 
 // ── FORGE ──────────────────────────────────────────────
@@ -1024,7 +1117,7 @@ function renderForge(){
   // Pillar balance — with dividers between pillars
   const bal=pillarBalance();
   const pillarsHTML=Object.keys(bal.pillars).map(function(pillar,i){
-    const earned=bal.pillars[pillar];const max=bal.maxPts[pillar];const pct=Math.round(earned/max*100);
+    const earned=bal.pillars[pillar];const max=bal.maxPts[pillar]||20;const pct=max>0?Math.round(earned/max*100):0;
     const pColor=earned===0?'var(--warn)':earned===max?'var(--safe)':'var(--gold)';
     return`<div style="flex:1;text-align:center;padding:0 16px;${i>0?'border-left:0.5px solid var(--border)':''}">
       <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.15em;color:var(--ash);margin-bottom:8px">${pillar.toUpperCase()}</div>
@@ -1056,11 +1149,12 @@ function renderForge(){
   }
 
 
-  // Projects — with catCounts for floor-aware titles
+  // Projects — active projects only
   const forgeCatCounts=getCatCountsAll();
+  const forgeActiveProjs=getActiveProjects();
   let projHTML='';
   ['Soul','Body','Business'].forEach(function(pillar){
-    const pp=PROJECTS.filter(p=>p.pillar===pillar);
+    const pp=forgeActiveProjs.filter(p=>p.pillar===pillar);
     projHTML+=`<div style="margin-bottom:16px"><div style="font-family:var(--fc);font-size:9px;letter-spacing:0.18em;color:var(--ash);margin-bottom:8px">${pillar.toUpperCase()}</div>`;
     pp.forEach(function(proj){
       const cp=S.committedProjects[proj.id]||{committed:false,submitted:false,hasSession:false};
@@ -1098,7 +1192,7 @@ function renderForge(){
         <div class="fp-header">
           <div class="fp-commit-check ${cp.committed?'committed':''}" onclick="toggleCommit('${proj.id}')">${cp.committed?'✓':''}</div>
           <div class="fp-name">${proj.id}</div>
-          <div style="font-size:11px;color:var(--ash);font-style:italic;margin-right:8px">${dispTitle(proj.id,totalT)}</div>
+          <div style="font-size:11px;color:var(--ash);font-style:italic;margin-right:8px">${dispTitle(proj.id,totalT,projCC)}</div>
           <div class="fp-pts">${cp.committed?'+'+proj.pts+'pts':''}</div>
         </div>
         ${sessListHTML}
@@ -1128,8 +1222,17 @@ function renderForge(){
     </div>`;
   }).join('');
 
-  const reflHTML=!allCTMarked
-    ?`<div style="background:var(--ember-dim);border:0.5px solid var(--ember);border-radius:8px;padding:12px 14px;font-size:13px;color:var(--ash)">Mark all 10 commandments before the reflection unlocks. ${10-ctMarked} remaining.</div>`
+  // Gate: all committed projects must be submitted AND all commandments marked
+  const activeProjs=getActiveProjects();
+  const committedList=activeProjs.filter(p=>S.committedProjects[p.id]&&S.committedProjects[p.id].committed);
+  const allProjsSubmitted=committedList.every(p=>S.committedProjects[p.id]&&S.committedProjects[p.id].submitted);
+  const projsNotSubmitted=committedList.filter(p=>!S.committedProjects[p.id]||!S.committedProjects[p.id].submitted);
+  const gateOpen=allCTMarked&&allProjsSubmitted;
+  let gateMsg='';
+  if(!allCTMarked)gateMsg+=(10-ctMarked)+' commandment'+(10-ctMarked>1?'s':'')+' unmarked. ';
+  if(!allProjsSubmitted)gateMsg+=projsNotSubmitted.map(p=>p.id).join(', ')+' not yet submitted.';
+  const reflHTML=!gateOpen
+    ?`<div style="background:var(--ember-dim);border:0.5px solid var(--ember);border-radius:8px;padding:12px 14px;font-size:13px;color:var(--ash)">${gateMsg.trim()||'Complete all tasks before closing the day.'}</div>`
     :`<div><textarea id="reflection-text" placeholder="What happened today. What the forge produced. What tomorrow needs." rows="4">${S.todayLog?.reflection||''}</textarea><button class="btn btn-block" onclick="closeDay()">Close the day — submit reflection</button></div>`;
 
   document.getElementById('screen-forge').innerHTML=`
@@ -1144,13 +1247,13 @@ function renderForge(){
           <span style="font-family:var(--fc);font-size:11px;color:var(--ash);letter-spacing:0.08em">Week ${weekNum()} of ${Math.ceil(totalCampaignDays()/7)}</span>
         </div>
       </div>
-      <div style="text-align:right"><div style="font-family:var(--fc);font-size:32px;color:var(--gold);line-height:1">${daysLeft()}</div><div style="font-size:11px;color:var(--ash)">days to reckoning</div></div>
+      <div style="text-align:right"><div style="font-family:var(--fc);font-size:32px;color:var(--gold);line-height:1">${daysLeft()}</div><div style="font-family:var(--fc);font-size:9px;letter-spacing:0.18em;color:var(--ash)">DAYS TO RECKONING</div></div>
     </div>
 
     <div class="g4" style="margin-bottom:14px">
-      <div class="sb"><div class="sb-num" style="color:var(--gold)">${fmtPts(total+penToday)}</div><div class="sb-lbl">Total / 80</div></div>
+      <div class="sb"><div class="sb-num" style="color:var(--gold)">${fmtPts(total+penToday)}</div><div class="sb-lbl">Total / ${dailyMax()}</div></div>
       <div class="sb"><div class="sb-num">${fmtPts(ct)}</div><div class="sb-lbl">CT / 20</div></div>
-      <div class="sb"><div class="sb-num">${fmtPts(nonCt)}</div><div class="sb-lbl">Projects / 60</div></div>
+      <div class="sb"><div class="sb-num">${fmtPts(nonCt)}</div><div class="sb-lbl">Projects / ${dailyMax()-20}</div></div>
       <div class="sb"><div class="sb-num" style="color:${penToday<0?'var(--ember)':'var(--ash)'}">${penToday}</div><div class="sb-lbl">Penalty</div></div>
     </div>
 
@@ -1184,13 +1287,68 @@ function renderForge(){
 
 async function endDeclaration(id){
   // End by setting end_date to yesterday
-  const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);
-  const yd=yesterday.toISOString().split('T')[0];
-  await db.from('declarations').update({end_date:yd}).eq('id',id);
+  // If declaration started today, set end to today; otherwise set to yesterday
+  const decl=S.declarations.find(function(d){return d.id===id;});
+  const endTarget=decl&&decl.start_date===today()?today():(function(){const d=new Date();d.setDate(d.getDate()-1);return d.toISOString().split('T')[0];}());
+  await db.from('declarations').update({end_date:endTarget}).eq('id',id);
   const{data}=await db.from('declarations').select('*').order('start_date',{ascending:false}).limit(20);
   S.declarations=data||[];
   toast('Declaration ended','info');
   renderForge();
+}
+
+
+
+// Event delegation for project management buttons
+document.addEventListener('click',function(e){
+  const toggle=e.target.closest('.proj-toggle');
+  if(toggle)toggleProjectActive(toggle.dataset.pid);
+  const save=e.target.closest('.proj-save-ceil');
+  if(save)saveProjectCeiling(save.dataset.pid,save.dataset.psafe);
+  const reset=e.target.closest('.proj-reset-def');
+  if(reset)resetProjectDefaults(reset.dataset.pid);
+});
+// ── AUTO-CLOSE YESTERDAY (CT Option B) ────────────────────────
+// On load, if yesterday had a log with all commandments marked but
+// day_closed=false, auto-close it and increment streaks
+async function autoCloseYesterday(){
+  const yest=new Date();yest.setDate(yest.getDate()-1);
+  const yd=yest.toISOString().split('T')[0];
+  if(yd<getGameStart())return; // before campaign
+  const{data:yl}=await db.from('daily_log').select('*').eq('date',yd).single();
+  if(!yl||yl.day_closed)return; // no log or already closed
+  // Check if all commandments were marked
+  const allMarked=CMDS.every(function(cmd){return yl[cmd.key]!==null&&yl[cmd.key]!==undefined;});
+  if(!allMarked)return; // incomplete — don't auto-close
+  // Auto-close: increment streaks for yesterday
+  await incrementStreaksForDate(yd, yl);
+  await db.from('daily_log').update({day_closed:true}).eq('date',yd);
+  toast("Yesterday's log auto-closed — streaks updated",'info',4000);
+}
+
+// Increment streaks for a given date's log entry
+async function incrementStreaksForDate(date, logEntry){
+  const{data:streaks}=await db.from('commandment_streaks').select('*');
+  for(const cmd of CMDS){
+    const kept=logEntry[cmd.key]===true;
+    const streak=streaks.find(function(s){return s.commandment===cmd.short;})||{};
+    // Skip if already updated for this date
+    if(streak.streak_last_updated===date)continue;
+    if(kept){
+      const ns=(streak.current_streak||0)+1;
+      await db.from('commandment_streaks').update({
+        current_streak:ns,
+        longest_streak:Math.max(streak.longest_streak||0,ns),
+        streak_last_updated:date,
+        pre_break_streak:0 // clear after successful day close
+      }).eq('commandment',cmd.short);
+    } else {
+      // Broken — streak already reset when user marked it, just update date guard
+      await db.from('commandment_streaks').update({
+        streak_last_updated:date
+      }).eq('commandment',cmd.short);
+    }
+  }
 }
 
 // ── COMMIT / SUBMIT ────────────────────────────────────
@@ -1272,6 +1430,8 @@ function openSession(pid){
   if(proj.cats.length>0){proj.cats.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;catSel.appendChild(o);});document.getElementById('sm-cat-wrap').style.display='block';}
   else{document.getElementById('sm-cat-wrap').style.display='none';}
   document.getElementById('sm-lang-wrap').style.display=proj.hasLang?'block':'none';
+  const dw=document.getElementById('sm-date-wrap');
+  if(dw){dw.style.display=S._sessionDate?'block':'none';if(S._sessionDate)document.getElementById('sm-date').value=S._sessionDate;}
   document.getElementById('session-modal').classList.add('open');
 }
 
@@ -1296,15 +1456,16 @@ async function submitSession(){
   const language=document.getElementById('sm-language').value;
 
   // Insert session with 0 points — recalculate below
+  const sessionDate=S._sessionDate||today();
   await db.from('sessions').insert({
-    date:today(),project:S.pendingSessionPid,tangible_logged:tangible,
+    date:sessionDate,project:S.pendingSessionPid,tangible_logged:tangible,
     unit:proj.unit,points_earned:0,category:category||null,notes:notes||null,language:language||null
   });
 
   // Get all today's sessions for this project
   const{data:todaySessions}=await db.from('sessions')
     .select('id,tangible_logged')
-    .eq('date',today()).eq('project',S.pendingSessionPid)
+    .eq('date',sessionDate).eq('project',S.pendingSessionPid)
     .gt('tangible_logged',0)
     .order('created_at',{ascending:true});
   const n=(todaySessions||[]).length;
@@ -1319,12 +1480,20 @@ async function submitSession(){
   const oldTotal=oldSum.total_tangible||0;
   const sessCC=getCatCountsAll();
   const oldLvl=getLvl(S.pendingSessionPid,oldTotal,sessCC[S.pendingSessionPid]||{});
-  const newTotal=oldTotal+tangible;
-  // Rebuild catCounts with new session included
-  const newSessCC=Object.assign({},sessCC[S.pendingSessionPid]||{});
-  if(category&&newSessCC[category]!==undefined)newSessCC[category]=(newSessCC[category]||0)+tangible;
-  const newLvl=getLvl(S.pendingSessionPid,newTotal,newSessCC);
-  await db.from('project_summary').update({total_tangible:newTotal,last_session:today()}).eq('project',S.pendingSessionPid);
+   // Calculate new total — for uniqueDays projects only count first session of the day
+   const effProj2=getEffectiveProject(S.pendingSessionPid)||proj;
+   const todaySessionCount=S.todaySessions.filter(function(s){return s.project===S.pendingSessionPid&&s.tangible_logged>0;}).length;
+   let newTotal;
+   if(effProj2.uniqueDays){
+     // Iron Forge: only increment total if this is the first session today
+     newTotal=todaySessionCount<=1?oldTotal+1:oldTotal;
+   } else {
+     newTotal=oldTotal+tangible;
+   }
+   const newSessCC=Object.assign({},sessCC[S.pendingSessionPid]||{});
+   if(category&&newSessCC[category]!==undefined)newSessCC[category]=(newSessCC[category]||0)+(effProj2.uniqueDays?1:tangible);
+   const newLvl=getLvl(S.pendingSessionPid,newTotal,newSessCC);
+  await db.from('project_summary').update({total_tangible:newTotal,last_session:sessionDate}).eq('project',S.pendingSessionPid);
 
   if(S.committedProjects[S.pendingSessionPid]){
     S.committedProjects[S.pendingSessionPid].hasSession=true;
@@ -1334,6 +1503,193 @@ async function submitSession(){
   if(newLvl>oldLvl)showUnlock(proj.titles[newLvl-1],proj.id+' — Level '+newLvl+' of 10',UNLOCK_MSGS[proj.id]?.[newLvl-1]||'The forge marks you.');
 }
 
+
+
+// ── PROJECT MANAGEMENT ─────────────────────────────────────────
+async function renderProjectMgmt(){
+  await loadAll();
+  const el=document.getElementById('screen-projmgmt');
+  if(!el)return;
+  let html='<div class="pt">Project Management</div>'
+    +'<div class="ps">Configure ceilings · Toggle active status · Thresholds auto-calculate</div>'
+    +'<div style="background:var(--warn-dim);border:0.5px solid var(--warn);border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:12px;color:#F0D080">'
+    +'⚠ Changing a ceiling recalculates all level thresholds and floor requirements.'
+    +'</div>';
+
+  PROJECTS_DEFAULT.forEach(function(defProj){
+    const override=S.projectConfig[defProj.id]||{};
+    const isActive=override.is_active!==false;
+    const effectiveCeiling=override.ceiling||defProj.ceiling;
+    const effProj=getEffectiveProject(defProj.id);
+    const levels=effProj.levels;
+    const floors=effProj.floors;
+    const sum=S.projects.find(function(p){return p.project===defProj.id;})||{};
+    const total=sum.total_tangible||0;
+    const pidSafe=defProj.id.replace(/[^a-zA-Z0-9]/g,'_');
+    const toggleBg=isActive?'var(--safe)':'var(--border)';
+    const togglePos=isActive?'right:2px':'left:2px';
+    const activeColor=isActive?'var(--safe)':'var(--ash)';
+
+    let levelRows='';
+    levels.forEach(function(thresh,i){
+      levelRows+='<div style="display:grid;grid-template-columns:30px 1fr auto;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--border);font-size:12px">'
+        +'<div style="font-family:var(--fc);color:var(--ash)">L'+(i+1)+'</div>'
+        +'<div style="color:var(--parch)">'+defProj.titles[i]+'</div>'
+        +'<div style="font-family:var(--fc);color:var(--gold);text-align:right">'+thresh.toLocaleString()+' '+effProj.unit+'</div>'
+        +'</div>';
+    });
+
+    let floorTable='';
+    if(floors){
+      let hdr='<td style="padding:4px 6px;color:var(--ash)">Category</td>';
+      levels.forEach(function(_,i){hdr+='<td style="padding:4px 6px;text-align:center;font-family:var(--fc);color:var(--ash)">L'+(i+1)+'</td>';});
+      let bdy='';
+      Object.keys(floors).forEach(function(cat){
+        let cells='<td style="padding:4px 6px;color:var(--parch)">'+cat+'</td>';
+        floors[cat].forEach(function(req){cells+='<td style="padding:4px 6px;text-align:center;font-family:var(--fc);color:var(--gold)">'+req+'</td>';});
+        bdy+='<tr>'+cells+'</tr>';
+      });
+      floorTable='<div style="margin-top:12px"><div style="font-family:var(--fc);font-size:9px;letter-spacing:0.15em;color:var(--ash);margin-bottom:8px">CATEGORY FLOORS</div>'
+        +'<div style="overflow-x:auto"><table style="width:100%;font-size:11px;border-collapse:collapse">'
+        +'<thead><tr>'+hdr+'</tr></thead><tbody>'+bdy+'</tbody></table></div></div>';
+    }
+
+    html+='<div class="card" style="margin-bottom:16px;opacity:'+(isActive?'1':'0.7')+'">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">'
+      +'<div>'
+      +'<div style="font-family:var(--fc);font-size:9px;letter-spacing:0.18em;color:var(--ash);margin-bottom:6px">'+defProj.pillar.toUpperCase()+' · '+defProj.pts+' PTS/DAY</div>'
+      +'<div style="font-family:var(--fc);font-size:20px;color:var(--parch)">'+defProj.id+'</div>'
+      +'</div>'
+      +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">'
+      +'<div style="display:flex;align-items:center;gap:8px">'
+      +'<span style="font-size:13px;color:'+activeColor+'">'+(isActive?'Active':'Inactive')+'</span>'
+      +'<div data-pid="'+defProj.id+'" class="proj-toggle" style="width:40px;height:22px;border-radius:11px;background:'+toggleBg+';position:relative;cursor:pointer">'
+      +'<div style="width:18px;height:18px;border-radius:9px;background:white;position:absolute;top:2px;'+togglePos+'"></div>'
+      +'</div></div>'
+      +'<div style="font-size:11px;color:var(--ash)">'+total.toLocaleString()+' / '+effectiveCeiling.toLocaleString()+' '+effProj.unit+'</div>'
+      +'</div></div>'
+      +'<div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:16px">'
+      +'<div style="flex:1">'
+      +'<label style="font-family:var(--fc);font-size:10px;letter-spacing:0.12em;color:var(--ash);display:block;margin-bottom:4px">CEILING ('+effProj.unit+')</label>'
+      +'<input type="number" id="ceil-'+pidSafe+'" value="'+effectiveCeiling+'" min="1" style="width:100%;padding:8px 12px;background:var(--card2);border:0.5px solid var(--border);border-radius:6px;color:var(--parch);font-family:var(--fc);font-size:14px">'
+      +'</div>'
+      +'<button data-pid="'+defProj.id+'" data-psafe="'+pidSafe+'" class="proj-save-ceil btn btn-sm btn-safe" style="flex-shrink:0">Save ceiling</button>'
+      +'<button data-pid="'+defProj.id+'" class="proj-reset-def btn btn-sm" style="flex-shrink:0;opacity:0.7">Reset defaults</button>'
+      +'</div>'
+      +'<details><summary style="font-family:var(--fc);font-size:10px;letter-spacing:0.12em;color:var(--ash);cursor:pointer;margin-bottom:8px">LEVEL THRESHOLDS & FLOORS</summary>'
+      +levelRows+floorTable
+      +'</details></div>';
+  });
+
+  el.innerHTML=html;
+}
+
+async function toggleProjectActive(pid){
+  const override=S.projectConfig[pid]||{};
+  const current=override.is_active!==false;
+  const newActive=!current;
+  // Upsert into project_config
+  const{data:existing}=await db.from('project_config').select('id').eq('project',pid).single();
+  if(existing){
+    await db.from('project_config').update({is_active:newActive}).eq('project',pid);
+  } else {
+    await db.from('project_config').insert({project:pid,is_active:newActive});
+  }
+  S.projectConfig[pid]=Object.assign({},override,{is_active:newActive});
+  toast(pid+' set to '+(newActive?'Active':'Inactive'),'success');
+  renderProjectMgmt();
+}
+
+async function saveProjectCeiling(pid,pidSafe){
+  const input=document.getElementById('ceil-'+pidSafe);
+  if(!input)return;
+  const newCeiling=parseInt(input.value);
+  if(!newCeiling||newCeiling<1){toast('Invalid ceiling value.','error');return;}
+  const override=S.projectConfig[pid]||{};
+  const{data:existing}=await db.from('project_config').select('id').eq('project',pid).single();
+  if(existing){
+    await db.from('project_config').update({ceiling:newCeiling}).eq('project',pid);
+  } else {
+    await db.from('project_config').insert({project:pid,ceiling:newCeiling});
+  }
+  // Also update project_summary ceiling
+  await db.from('project_summary').update({ceiling:newCeiling}).eq('project',pid);
+  S.projectConfig[pid]=Object.assign({},override,{ceiling:newCeiling});
+  toast('Ceiling updated for '+pid+'. Thresholds recalculated.','success');
+  renderProjectMgmt();
+}
+
+async function resetProjectDefaults(pid){
+  const defProj=PROJECTS_DEFAULT.find(function(p){return p.id===pid;});
+  if(!defProj)return;
+  await db.from('project_config').delete().eq('project',pid);
+  await db.from('project_summary').update({ceiling:defProj.ceiling}).eq('project',pid);
+  delete S.projectConfig[pid];
+  toast(pid+' reset to defaults.','success');
+  renderProjectMgmt();
+}
+
+// ── CLEAN STATE ───────────────────────────────────────────────
+function openCleanState(){
+  document.getElementById('clean-state-modal').classList.add('open');
+}
+
+async function executeCleanState(){
+  const resetDates=document.getElementById('clean-reset-dates').checked;
+  // Step 1: Backup all data to localStorage
+  const backup={
+    timestamp:new Date().toISOString(),
+    sessions:S.allSessions,
+    logs:S.allLogs,
+    streaks:S.streaks,
+    projects:S.projects,
+    milestones:S.milestones,
+    declarations:S.declarations,
+    startDate:getGameStart(),
+    endDate:getGameEnd()
+  };
+  localStorage.setItem('qa_backup_'+Date.now(),JSON.stringify(backup));
+
+  // Step 2: Delete all data from Supabase
+  toast('Wiping data — please wait...','info',5000);
+  await Promise.all([
+    db.from('sessions').delete().neq('id','00000000-0000-0000-0000-000000000000'),
+    db.from('daily_log').delete().neq('id','00000000-0000-0000-0000-000000000000'),
+    db.from('milestones').delete().neq('id','00000000-0000-0000-0000-000000000000'),
+    db.from('declarations').delete().neq('id','00000000-0000-0000-0000-000000000000'),
+    db.from('food_log').delete().neq('id','00000000-0000-0000-0000-000000000000'),
+    db.from('project_config').delete().neq('id','00000000-0000-0000-0000-000000000000')
+  ]);
+
+  // Step 3: Reset project_summary to zero
+  for(const proj of PROJECTS_DEFAULT){
+    await db.from('project_summary').update({total_tangible:0,penalty_balance:0,last_session:null}).eq('project',proj.id);
+  }
+
+  // Step 4: Reset commandment streaks to zero
+  await db.from('commandment_streaks').update({
+    current_streak:0,longest_streak:0,total_breaks:0,
+    last_break_date:null,break_log:null,streak_last_updated:null,pre_break_streak:0
+  }).neq('id','00000000-0000-0000-0000-000000000000');
+
+  // Step 5: Optionally reset campaign dates
+  if(resetDates){
+    localStorage.removeItem('qa_start');
+    localStorage.removeItem('qa_end');
+  }
+
+  // Step 6: Reset local state
+  S.allSessions=[];S.allLogs=[];S.milestones=[];S.declarations=[];
+  S.streaks=[];S.projects=[];S.committedProjects={};S.projectConfig={};
+  S.todayLog=null;S.todaySessions=[];
+
+  closeModal('clean-state-modal');
+  toast('Clean state complete. Backup saved to local storage.','success',5000);
+  await loadData();
+  await loadAll();
+  nav('forge');
+}
+
 // ── DELETE SESSION ─────────────────────────────────────
 async function deleteSession(sessionId, pid, tangible){
   const proj=PROJECTS.find(p=>p.id===pid);
@@ -1341,8 +1697,20 @@ async function deleteSession(sessionId, pid, tangible){
   await db.from('sessions').delete().eq('id',sessionId);
   // Update project summary total
   const sum=S.projects.find(p=>p.project===pid)||{};
-  const newTotal=Math.max(0,(sum.total_tangible||0)-tangible);
-  await db.from('project_summary').update({total_tangible:newTotal}).eq('project',pid);
+  const delEffProj=getEffectiveProject(pid);
+  let newTotalDel=Math.max(0,(sum.total_tangible||0)-tangible);
+  if(delEffProj&&delEffProj.uniqueDays){
+    // Only subtract 1 day if this was the LAST session for today
+    const remainingToday=remaining||[];
+    if(remainingToday.length>0){
+      // Other sessions still exist today — day still counts
+      newTotalDel=sum.total_tangible||0;
+    } else {
+      // No more sessions today — subtract 1 day
+      newTotalDel=Math.max(0,(sum.total_tangible||0)-1);
+    }
+  }
+  await db.from('project_summary').update({total_tangible:newTotalDel}).eq('project',pid);
   // Recalculate points for remaining today's sessions
   const{data:remaining}=await db.from('sessions')
     .select('id').eq('date',today()).eq('project',pid).gt('tangible_logged',0)
@@ -1387,7 +1755,7 @@ async function handleCT(key,label,keeping){
       const lines=breakLog.split('\n').filter(l=>!l.startsWith(today()));
       await db.from('commandment_streaks').update({
         current_streak:preBreak,
-        pre_break_streak:0,
+        // Keep pre_break_streak intact until closeDay — enables re-break→restore
         total_breaks:Math.max(0,(streak.total_breaks||1)-1),
         last_break_date:lines.length>0?(lines[lines.length-1].split(' ')[0]||null):null,
         break_log:lines.join('\n').trim()
@@ -1506,7 +1874,7 @@ async function renderArmoury(){
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
             <span style="font-size:12px;color:var(--parch)">${x.proj.id}</span>
             <div style="display:flex;gap:8px;align-items:baseline">
-              <span style="font-size:11px;color:var(--ash)">${x.total.toLocaleString()} ${x.proj.unit}</span>
+              <span style="font-size:11px;color:var(--ash)">${x.total>0?x.total.toLocaleString()+' '+x.proj.unit:'No sessions yet'}</span>
               <span style="font-family:var(--fc);font-size:11px;color:var(--gold)">L${x.l} · ${ceilPct}%</span>
             </div>
           </div>
@@ -1579,16 +1947,22 @@ async function renderProject(screenKey){
 
   await loadAll();
   const allPS=S.allSessions.filter(x=>x.project===proj.id&&x.tangible_logged>0);
+  const totalPagesEarly=Math.max(1,Math.ceil(allPS.length/SESS_PER_PAGE));
+  if(S.sessionPages[proj.id]>=totalPagesEarly)S.sessionPages[proj.id]=totalPagesEarly-1;
   const sessPage=S.sessionPages[proj.id]||0;const SESS_PER_PAGE=10;const sortedPS=[...allPS].reverse();const recent=sortedPS.slice(sessPage*SESS_PER_PAGE,(sessPage+1)*SESS_PER_PAGE);
   const totalPts=allPS.reduce((s,x)=>s+(x.points_earned||0),0);
   const totalPen=S.allSessions.filter(x=>x.project===proj.id).reduce((s,x)=>s+(x.penalty||0),0);
 
   // Category counts for floor checking
-  // Category counts — works for all projects (not just ones with floors)
+  // Category counts — for uniqueDays projects use session count; others use tangible_logged
   const catCounts=(function(){
     const counts={};
     proj.cats.forEach(function(c){counts[c]=0;});
-    allPS.forEach(function(s){if(s.category&&counts[s.category]!==undefined)counts[s.category]+=(s.tangible_logged||1);});
+    allPS.forEach(function(s){
+      if(s.category&&counts[s.category]!==undefined){
+        counts[s.category]+= proj.uniqueDays ? 1 : (s.tangible_logged||1);
+      }
+    });
     return counts;
   })();
   const l=getLvl(proj.id,total,catCounts);
@@ -1646,7 +2020,7 @@ async function renderProject(screenKey){
   }
   if(proj.hasLang&&allPS.length>0){
     const langCounts={};
-    allPS.forEach(function(s){if(s.language)langCounts[s.language]=(langCounts[s.language]||0)+1;});
+    allPS.forEach(function(s){if(s.language)langCounts[s.language]=(langCounts[s.language]||0)+(s.tangible_logged||1);});
     const totalWithLang=Object.values(langCounts).reduce(function(a,b){return a+b;},0);
     if(totalWithLang>0){
       langHTML='<div class="st">Language distribution</div><div class="card" style="margin-bottom:14px">'
@@ -1767,7 +2141,7 @@ async function renderProject(screenKey){
     <div class="g2" style="align-items:start">
       <div>
         <div class="st">${proj.unit} over time</div>
-        <div class="card" style="margin-bottom:14px"><div style="position:relative;height:180px"><canvas id="chart-${screenKey}"></canvas></div></div>
+        <div class="card" style="margin-bottom:14px"><div style="position:relative;height:210px"><canvas id="chart-${screenKey}"></canvas></div></div>
         ${catHTML}
         ${langHTML}
       </div>
@@ -1787,6 +2161,7 @@ async function renderProject(screenKey){
     S.chartsDrawn[screenKey]=true;
     setTimeout(function(){
       const ctx=document.getElementById('chart-'+screenKey);if(!ctx)return;
+      const existingChart=Chart.getChart(ctx);if(existingChart)existingChart.destroy();
       const pUnit=proj.unit;
       const dateMap={};
       allPS.forEach(function(s){dateMap[s.date]=(dateMap[s.date]||0)+s.tangible_logged;});
@@ -1853,11 +2228,11 @@ function renderTemper(){
           <!-- RIGHT: points large, today status, then buttons -->
           <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:10px;min-width:100px">
             <div>
-              <div style="font-family:var(--fc);font-size:32px;color:var(--gold);line-height:1">${c.pts}</div>
-              <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.15em;color:var(--ash)">POINT${c.pts>1?'S':''}</div>
+              <div style="font-family:var(--fc);font-size:32px;color:var(--gold);line-height:1">${todayKept?c.pts:0}</div>
+              <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.15em;color:var(--ash)">of ${c.pts} PT${c.pts>1?'S':''}</div>
             </div>
-            <div style="font-family:var(--fc);font-size:11px;letter-spacing:0.1em;color:${todayKept?'var(--safe)':todayBroke?'var(--ember)':'var(--border2)'};min-height:16px">
-              ${todayKept?'✓ KEPT':todayBroke?'✗ BROKEN':'—'}
+            <div style="font-family:var(--fc);font-size:11px;letter-spacing:0.1em;color:${todayKept?'var(--safe)':todayBroke?'var(--ember)':'var(--warn)'};min-height:16px">
+              ${todayKept?'✓ KEPT':todayBroke?'✗ BROKEN':'○ UNMARKED'}
             </div>
             <div style="display:flex;flex-direction:column;gap:6px;width:100%">
               <button class="ct-btn-kept ${todayKept?'active':''}" onclick="handleCT('${c.key}','${c.label}',true)" style="width:100%">Kept</button>
@@ -1873,7 +2248,8 @@ function renderTemper(){
 
 // ── WILLMASTER ─────────────────────────────────────────
 function setWmDays(n){S.wmDays=n;renderWillmaster();}
-function renderWillmaster(){
+async function renderWillmaster(){
+  await loadAll();
   // Build heatmap — from N days ago to TODAY only (left=oldest, right=most recent)
   // Only past and today — no future boxes
   const heatDays=S.wmDays||30;
@@ -1925,11 +2301,7 @@ function renderWillmaster(){
       // 90-day heatmap — horizontal scrollable strip, left=oldest, right=newest
       const monthLabels=getMonthLabels(heatDates);
       // Build month label row
-      let monthLabelHTML='<div style="display:flex;gap:0;margin-bottom:3px;position:relative;height:14px">';
-      monthLabels.forEach(function(ml){
-        monthLabelHTML+=`<div style="position:absolute;left:${ml.i*12}px;font-family:var(--fc);font-size:8px;color:var(--ash);letter-spacing:0.06em">${ml.label}</div>`;
-      });
-      monthLabelHTML+='</div>';
+      const monthLabelHTML='<div style="display:flex;gap:0;margin-bottom:3px;position:relative;height:14px">'+renderMonthLabels(heatDates,10,2)+'</div>';
       const heatStrip=heatDates.map(function(ds){
         const val=heatData[ds][c.key];
         const bg=val===true?'var(--safe)':val===false?'var(--ember)':'rgba(74,66,56,0.4)';
@@ -2011,7 +2383,7 @@ function renderMeta(){
       <div style="display:flex;align-items:center;gap:12px">
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;color:var(--parch);margin-bottom:2px">${x.proj.id}</div>
-          <div style="font-family:var(--fc);font-size:12px;color:${x.l===metaLvl?'var(--warn)':'var(--gold)'}">${dispTitle(x.proj.id,x.total)}</div>
+          <div style="font-family:var(--fc);font-size:12px;color:${x.l===metaLvl?'var(--warn)':'var(--gold)'}">${dispTitle(x.proj.id,x.total,metaCC[x.proj.id]||{})}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-family:var(--fc);font-size:13px;color:${x.l===metaLvl?'var(--warn)':'var(--gold)'}">${x.l}/10</div>
@@ -2057,10 +2429,11 @@ async function renderReport(){
   const avg=dLogged>0?Math.round(net/dLogged):0;
   const perfDays=S.allLogs.filter(l=>ctPts(l)===20).length;
 
+  const repCC=getCatCountsAll();
   const projHTML=PROJECTS.map(function(proj){
     const s=S.projects.find(p=>p.project===proj.id)||{};
     const total=s.total_tangible||0;
-    const l=getLvl(proj.id,total);const pr=getProg(proj.id,total);
+    const l=getLvl(proj.id,total,repCC[proj.id]||{});const pr=getProg(proj.id,total,repCC[proj.id]||{});
     const sc=S.allSessions.filter(x=>x.project===proj.id&&x.tangible_logged>0).length;
     const ceilPct=Math.round(total/proj.ceiling*100);
     return`<tr>
@@ -2206,6 +2579,7 @@ async function renderReport(){
     const ctDataset={label:'CT',data:allDates.map(d=>{const l=S.allLogs.find(x=>x.date===d);return l?ctPts(l):0;}),backgroundColor:ctColor,borderColor:'#A08050',borderWidth:1,fill:true,tension:0.3,pointRadius:0};
 
     const ctx=document.getElementById('report-chart');
+    if(ctx){const ec=Chart.getChart(ctx);if(ec)ec.destroy();}
     if(ctx)new Chart(ctx,{type:'line',data:{labels:allDates,datasets:[...projDatasets,ctDataset]},options:{responsive:true,maintainAspectRatio:false,animation:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:true,labels:{color:'#A09080',font:{size:9},boxWidth:10}}},scales:{x:{stacked:true,ticks:{color:'#A09080',font:{size:9},maxTicksLimit:12},grid:{color:'rgba(74,66,56,0.4)'}},y:{stacked:true,ticks:{color:'#A09080',font:{size:9}},grid:{color:'rgba(74,66,56,0.4)'}}}}});
 
     // Per-project individual charts
@@ -2356,9 +2730,8 @@ function buildCampaignCard(){
       ${PROJECTS.map(function(proj){
         const s=S.projects.find(p=>p.project===proj.id)||{};
         const total=s.total_tangible||0;
-        const l=getLvl(proj.id,total);
-        const pr=getProg(proj.id,total);
-        const curT=getCurTitle(proj.id,total,shareCC[proj.id]||{})||getTargetTitle(proj.id,total,shareCC[proj.id]||{});
+        const l=getLvl(proj.id,total,shareCC[proj.id]||{});
+        const pr=getProg(proj.id,total,shareCC[proj.id]||{});
         return`<div class="sc-prog-row">
           <div class="sc-prog-label">
             <div class="sc-prog-name">${proj.id.toUpperCase()}</div>
@@ -2384,9 +2757,9 @@ function buildUnlockCard(pid){
   const proj=PROJECTS.find(p=>p.id===pid);
   const s=S.projects.find(p=>p.project===pid)||{};
   const total=s.total_tangible||0;
-  const l=getLvl(pid,total);
-  const title=getCurTitle(pid,total)||getTargetTitle(pid,total);
-  const msg=UNLOCK_MSGS[pid]?.[Math.max(0,l-1)]||'The forge marks you.';
+  const unlockCC=getCatCountsAll();
+  const l=getLvl(pid,total,unlockCC[pid]||{});
+  const title=getCurTitle(pid,total,unlockCC[pid]||{})||getTargetTitle(pid,total,unlockCC[pid]||{});
   return`<div class="sc">
     <div class="sc-eyebrow">The Quiet Anvil · Level Unlocked</div>
     <div style="font-size:9px;letter-spacing:0.15em;color:#8a6a1a;margin-bottom:16px">${pid.toUpperCase()}</div>
@@ -2554,6 +2927,9 @@ let foodView='month';
 let foodCalDate=new Date();
 
 async function renderFood(){
+  // Reset selected day when re-entering food screen from nav
+  if(!S._foodNavStay)foodSelectedDay=null;
+  S._foodNavStay=false;
   document.getElementById('screen-food').innerHTML='<div class="loading">Loading food log...</div>';
   const{data:foodLogs}=await db.from('food_log').select('*').order('date',{ascending:false});
   const logs=foodLogs||[];
@@ -2705,11 +3081,48 @@ async function renderFood(){
     </div>
     <div class="card">${heatHTML}</div>
     ${foodDayDetail}
+    <div class="st" style="margin-top:20px">All entries</div>
+    <div class="card">
+      ${(()=>{
+        const allByDay={};
+        logs.forEach(function(l){if(!allByDay[l.date])allByDay[l.date]=[];allByDay[l.date].push(l);});
+        const days=Object.keys(allByDay).sort(function(a,b){return b.localeCompare(a);});
+        const totalPages=Math.max(1,Math.ceil(days.length/FOOD_PER_PAGE));
+        const clampedPage=Math.min(foodPage,totalPages-1);
+        const pageDays=days.slice(clampedPage*FOOD_PER_PAGE,(clampedPage+1)*FOOD_PER_PAGE);
+        let rows=pageDays.map(function(date){
+          const dayMeals=allByDay[date];
+          const h=dayMeals.filter(m=>m.healthy).length;
+          const u=dayMeals.filter(m=>!m.healthy).length;
+          return'<div style="padding:10px 0;border-bottom:0.5px solid var(--border)">'
+            +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+            +'<div style="font-family:var(--fc);font-size:12px;color:var(--gold)">'+new Date(date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})+'</div>'
+            +'<div style="font-size:11px;color:var(--ash)">'+h+' healthy'+(u?' · <span style="color:var(--ember)">'+u+' unhealthy</span>':'')+'</div>'
+            +'</div>'
+            +dayMeals.map(function(m){
+              return'<div style="display:flex;gap:10px;padding:3px 0;font-size:12px">'
+                +'<span style="font-family:var(--fc);color:var(--ash);width:70px;flex-shrink:0">'+m.meal_type+'</span>'
+                +'<span style="flex:1;color:var(--parch)">'+m.description+'</span>'
+                +'<span style="font-size:11px;color:'+(m.healthy?'var(--safe)':'var(--ember)')+';">'+(m.healthy?'✓':'✗')+'</span>'
+                +'</div>';
+            }).join('')
+            +'</div>';
+        }).join('');
+        if(!rows)rows='<div style="font-size:13px;color:var(--ash);font-style:italic">No entries yet.</div>';
+        const pageNav=totalPages>1?'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:12px">'
+          +'<button class="btn btn-xs" onclick="foodPageChange('+(clampedPage-1)+')" '+(clampedPage===0?'disabled style="opacity:0.3"':'')+'>← Prev</button>'
+          +'<span style="color:var(--ash)">Page '+(clampedPage+1)+' of '+totalPages+'</span>'
+          +'<button class="btn btn-xs" onclick="foodPageChange('+(clampedPage+1)+')" '+(clampedPage>=totalPages-1?'disabled style="opacity:0.3"':'')+'>Next →</button>'
+          +'</div>':'';
+        return rows+pageNav;
+      })()}
+    </div>
   `;
 }
 
 
 function setFoodView(v){foodView=v;renderFood();}
+function foodPageChange(p){S._foodNavStay=true;foodPage=Math.max(0,p);renderFood();}
 function foodCalPrev(){
   if(foodView==='year')foodCalDate.setFullYear(foodCalDate.getFullYear()-1);
   else foodCalDate.setMonth(foodCalDate.getMonth()-1);
@@ -2741,6 +3154,7 @@ let foodSelectedDay=null;
 
 function foodDayClick(dateStr){
   foodSelectedDay=foodSelectedDay===dateStr?null:dateStr;
+  S._foodNavStay=true;
   renderFood();
 }
 
@@ -2913,7 +3327,7 @@ async function renderCalendar(){
         ${data&&!isFuture?`
           <div style="font-family:var(--fc);font-size:18px;color:${scoreColor(t)};line-height:1;margin-bottom:6px">${fmtPts(t)}<span style="font-size:9px;color:var(--ash);margin-left:2px">pts</span></div>
           ${sessHTML}
-          <div style="display:flex;gap:2px;flex-wrap:wrap;margin-top:6px">${ctHTML}</div>
+          <div style="display:flex;gap:1px;flex-wrap:nowrap;overflow:hidden;margin-top:6px">${ctHTML}</div>
         `:'<div style="font-size:11px;color:var(--border2);font-style:italic">—</div>'}
       </div>`;
     }
@@ -2975,7 +3389,7 @@ async function renderCalendar(){
   if(S.calSelected&&dayData[S.calSelected]){
     const data=dayData[S.calSelected];
     const d=new Date(S.calSelected);
-    const dateFormatted=d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    const dateFormatted=d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).replace(',','');
 
     // Aggregate sessions by project for clean display
     const projMap={};
@@ -3019,7 +3433,7 @@ async function renderCalendar(){
       <span style="font-family:var(--fc);font-size:10px;color:${data.ct[c.key]===true?'var(--gold)':'var(--ash)'}">${data.ct[c.key]===true?'+'+c.pts:'—'}</span>
     </div>`).join(''):'<div style="font-size:12px;color:var(--ash);font-style:italic">No CT data</div>';
 
-    detailHTML=`<div class="card" style="margin-top:16px">
+    detailHTML=`<div class="card cal-detail-panel" style="margin-top:16px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
         <div>
           <div style="font-family:var(--fc);font-size:10px;color:var(--ash);letter-spacing:0.12em;margin-bottom:4px">Day ${Math.max(1,Math.ceil((new Date(S.calSelected)-GSTART())/864e5))} of ${totalCampaignDays()}</div>
@@ -3035,6 +3449,18 @@ async function renderCalendar(){
       <div class="st">Clean Temper — ${data.ctKept||0} kept · ${data.ctBroke||0} broken</div>
       <div style="margin-bottom:${data.ct?.reflection?'14px':'0'}">${ctRows}</div>
       ${data.ct?.reflection?`<div class="st">Reflection</div><div style="font-size:14px;color:var(--parch);font-style:italic;line-height:1.7;margin-top:6px">${data.ct.reflection}</div>`:''}
+      ${(()=>{
+        const dayDecls=S.declarations.filter(function(d){return d.start_date<=S.calSelected&&d.end_date>=S.calSelected;});
+        if(!dayDecls.length)return'';
+        return'<div class="st" style="margin-top:12px">Active declarations</div>'
+          +dayDecls.map(function(d){
+            let projs='All projects';try{const pp=JSON.parse(d.projects);if(pp&&pp.length)projs=pp.join(', ');}catch(e){}
+            return'<div style="display:flex;gap:10px;padding:6px 0;border-bottom:0.5px solid var(--border);font-size:12px">'
+              +'<span style="font-family:var(--fc);color:var(--warn);flex-shrink:0">'+d.type+'</span>'
+              +'<span style="color:var(--ash);flex:1">'+projs+'</span>'
+              +'</div>';
+          }).join('');
+      })()}
     </div>`;
   }
 
