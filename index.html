@@ -934,8 +934,8 @@ function renderForge(){
   const ct=ctPts(S.todayLog);
   const nonCt=S.todaySessions.reduce((s,x)=>s+(x.points_earned||0),0);
   const total=ct+nonCt;
-  let penToday=0;
-  PROJECTS.forEach(proj=>{const cp=S.committedProjects[proj.id];if(cp&&cp.submitted&&!cp.hasSession)penToday-=proj.pts;});
+  // Penalty = sum of actual penalty values in today's sessions
+  const penToday=S.todaySessions.reduce(function(s,x){return s+(x.penalty||0);},0);
   const d=new Date();
   const dateStr=d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).replace(',','');
 
@@ -958,24 +958,26 @@ function renderForge(){
     </div>`;
   }).join('');
 
-  // ALL active declarations — support multiple
+  // ALL active declarations — support multiple simultaneously
   let declBanner='';
   const activeDecls=S.declarations.filter(function(d){return d.start_date<=today()&&d.end_date>=today();});
   if(activeDecls.length>0){
     const bannersHTML=activeDecls.map(function(decl){
       let declProjs='all projects';
       try{const pp=JSON.parse(decl.projects);if(pp&&pp.length)declProjs=pp.join(', ');}catch(e){}
-      return`<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:0.5px solid rgba(208,136,32,0.2)">
-        <div style="width:7px;height:7px;border-radius:50%;background:var(--warn);flex-shrink:0;margin-top:4px;animation:pulse 2s infinite"></div>
-        <div>
-          <div style="font-family:var(--fc);font-size:11px;color:var(--warn);letter-spacing:0.1em;margin-bottom:2px">${decl.type.toUpperCase()} · Until ${ordinalDate(decl.end_date)}</div>
-          <div style="font-size:12px;color:#F0D080">No penalty: <span style="color:var(--parch)">${declProjs}</span></div>
-          ${decl.notes?`<div style="font-size:11px;color:var(--ash);margin-top:2px;font-style:italic">${decl.notes}</div>`:''}
-        </div>
-      </div>`;
+      return'<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:0.5px solid rgba(208,136,32,0.2)">'
+        +'<div style="width:7px;height:7px;border-radius:50%;background:var(--warn);flex-shrink:0;margin-top:5px;animation:pulse 2s infinite"></div>'
+        +'<div style="flex:1">'
+        +'<div style="font-family:var(--fc);font-size:11px;color:var(--warn);letter-spacing:0.1em;margin-bottom:2px">'+decl.type.toUpperCase()+' \u00b7 Until '+ordinalDate(decl.end_date)+'</div>'
+        +'<div style="font-size:12px;color:#F0D080;margin-bottom:2px">No penalty: <span style="color:var(--parch)">'+declProjs+'</span></div>'
+        +(decl.notes?'<div style="font-size:11px;color:var(--ash);font-style:italic">'+decl.notes+'</div>':'')
+        +'</div>'
+        +'<button onclick="endDeclaration(\''+decl.id+'\')" style="background:none;border:0.5px solid var(--border);border-radius:4px;padding:3px 8px;font-family:var(--fc);font-size:9px;color:var(--ash);cursor:pointer;flex-shrink:0;letter-spacing:0.08em">End</button>'
+        +'</div>';
     }).join('');
-    declBanner=`<div style="background:var(--warn-dim);border:0.5px solid var(--warn);border-radius:8px;padding:4px 16px;margin-bottom:14px">${bannersHTML}</div>`;
+    declBanner='<div style="background:var(--warn-dim);border:0.5px solid var(--warn);border-radius:8px;padding:4px 16px;margin-bottom:14px">'+bannersHTML+'</div>';
   }
+
 
   // Projects
   let projHTML='';
@@ -1099,6 +1101,17 @@ function renderForge(){
       </div>
     </div>
   `;
+}
+
+async function endDeclaration(id){
+  // End by setting end_date to yesterday
+  const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);
+  const yd=yesterday.toISOString().split('T')[0];
+  await db.from('declarations').update({end_date:yd}).eq('id',id);
+  const{data}=await db.from('declarations').select('*').order('start_date',{ascending:false}).limit(20);
+  S.declarations=data||[];
+  toast('Declaration ended','info');
+  renderForge();
 }
 
 // ── COMMIT / SUBMIT ────────────────────────────────────
@@ -1634,12 +1647,14 @@ async function renderProject(screenKey){
     <div class="g2" style="align-items:start">
       <div>
         <div class="st">${proj.unit} over time</div>
-        <div class="card" style="margin-bottom:14px"><canvas id="chart-${screenKey}" height="160"></canvas></div>
+        <div class="card" style="margin-bottom:14px"><div style="position:relative;height:180px"><canvas id="chart-${screenKey}"></canvas></div></div>
         ${catHTML}
+        ${langHTML}
       </div>
       <div>
         <div class="st">Level journey</div>
         <div class="card" style="margin-bottom:14px">${ljHTML}</div>
+        ${catFloorHTML}
       </div>
     </div>
 
@@ -1652,14 +1667,29 @@ async function renderProject(screenKey){
     S.chartsDrawn[screenKey]=true;
     setTimeout(function(){
       const ctx=document.getElementById('chart-'+screenKey);if(!ctx)return;
-      // Aggregate tangibles by date — one bar per date
+      const pUnit=proj.unit;
       const dateMap={};
       allPS.forEach(function(s){dateMap[s.date]=(dateMap[s.date]||0)+s.tangible_logged;});
       const sortedDates=Object.keys(dateMap).sort();
-      const chartData=sortedDates.map(d=>dateMap[d]);
-      const chartLabels=sortedDates;
-      new Chart(ctx,{type:'line',data:{labels:chartLabels,datasets:[{label:proj.unit,data:chartData,borderColor:'#2A8060',backgroundColor:'rgba(42,128,96,0.15)',borderWidth:2,pointRadius:3,pointBackgroundColor:'#2A8060',fill:true,tension:0.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#A09080',font:{size:9},maxTicksLimit:10,maxRotation:45,minRotation:45},grid:{color:'rgba(74,66,56,0.5)'}},y:{beginAtZero:true,ticks:{color:'#A09080',font:{size:9},stepSize:1,callback:function(v){return Number.isInteger(v)?v+' '+pUnit:'';}},grid:{color:'rgba(74,66,56,0.5)'}}}}});
-    },100);
+      const chartData=sortedDates.map(function(d){return dateMap[d];});
+      const yTickCb=(function(u){return function(v){return Number.isInteger(v)?v+' '+u:null;};})(pUnit);
+      new Chart(ctx,{
+        type:'line',
+        data:{labels:sortedDates,datasets:[{
+          label:pUnit,data:chartData,
+          borderColor:'#2A8060',backgroundColor:'rgba(42,128,96,0.15)',
+          borderWidth:2,pointRadius:4,pointBackgroundColor:'#2A8060',fill:true,tension:0.3
+        }]},
+        options:{
+          responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{display:false}},
+          scales:{
+            x:{ticks:{color:'#A09080',font:{size:9},maxTicksLimit:10,maxRotation:45,minRotation:45},grid:{color:'rgba(74,66,56,0.5)'}},
+            y:{beginAtZero:true,ticks:{color:'#A09080',font:{size:9},precision:0,stepSize:1,callback:yTickCb},grid:{color:'rgba(74,66,56,0.5)'}}
+          }
+        }
+      });
+    },150);
   }
 }
 
@@ -1949,8 +1979,14 @@ async function renderReport(){
   const activeDecls=S.declarations.filter(d=>d.end_date>=today());
   const declHTML=activeDecls.length>0?activeDecls.map(d=>{
     let projs='All';try{projs=JSON.parse(d.projects).join(', ');}catch(e){}
-    return`<div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px;display:flex;gap:12px;flex-wrap:wrap"><span style="font-family:var(--fc);color:var(--warn);width:80px;flex-shrink:0">${d.type}</span><span style="color:var(--ash)">${d.start_date} → ${d.end_date}</span><span style="flex:1;color:var(--parch)">${projs}</span></div>`;
-  }).join(''):'<div style="font-size:12px;color:var(--ash);font-style:italic">No active declarations</div>';
+    const isActive=d.start_date<=today()&&d.end_date>=today();
+    return`<div style="padding:8px 0;border-bottom:0.5px solid var(--border);display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <span style="font-family:var(--fc);font-size:11px;color:var(--warn);width:90px;flex-shrink:0">${d.type}</span>
+      <span style="font-size:12px;color:var(--ash)">${ordinalDate(d.start_date)} → ${ordinalDate(d.end_date)}</span>
+      <span style="flex:1;font-size:12px;color:var(--parch)">${projs}</span>
+      ${isActive?'<span style="font-family:var(--fc);font-size:9px;color:var(--warn);padding:2px 6px;border:0.5px solid var(--warn);border-radius:3px">ACTIVE</span>':''}
+    </div>`;
+  }).join(''):'<div style="font-size:12px;color:var(--ash);font-style:italic">No declarations</div>';
 
   // Build per-project canvas IDs
   const projCanvases=PROJECTS.map(p=>`
