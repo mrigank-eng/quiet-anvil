@@ -265,6 +265,14 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
   .lj-row{flex-wrap:wrap}
   .lj-bar-track{min-width:60px}
 }
+
+/* TOAST */
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:2000;font-family:var(--fc);font-size:12px;letter-spacing:0.1em;padding:12px 24px;border-radius:8px;border:0.5px solid;animation:toastIn 0.3s ease;pointer-events:none;max-width:90vw;text-align:center}
+.toast-success{background:var(--safe-dim);border-color:var(--safe);color:var(--safe)}
+.toast-warn{background:var(--warn-dim);border-color:var(--warn);color:#F0D080}
+.toast-error{background:var(--ember-dim);border-color:var(--ember);color:var(--ember)}
+.toast-info{background:var(--gold-dim);border-color:var(--gold2);color:var(--gold)}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 </style>
 </head>
 <body>
@@ -359,7 +367,7 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
   <div class="modal">
     <div class="modal-title" id="sm-title">Log session</div>
     <div class="modal-sub" id="sm-sub"></div>
-    <label>Amount</label><input type="number" id="sm-tangible" step="any" min="0">
+    <label>Tangibles</label><input type="number" id="sm-tangible" step="any" min="0">
     <div id="sm-cat-wrap"><label>Category</label><select id="sm-category"><option value="">Optional</option></select></div>
     <div id="sm-lang-wrap" style="display:none"><label>Language</label><select id="sm-language"><option value="">Select</option><option>Urdu</option><option>Hindi</option><option>English</option></select></div>
     <label>Notes</label><input type="text" id="sm-notes" placeholder="What you worked on...">
@@ -758,6 +766,16 @@ async function saveCommitted(){
   await db.from('daily_log').update({committed_projects:JSON.stringify(S.committedProjects)}).eq('date',today());
 }
 
+
+// ── TOAST ──────────────────────────────────────────────
+function toast(msg, type='info', duration=2800){
+  const el=document.createElement('div');
+  el.className='toast toast-'+type;
+  el.textContent=msg;
+  document.body.appendChild(el);
+  setTimeout(()=>{el.style.transition='opacity 0.4s';el.style.opacity='0';setTimeout(()=>el.remove(),400);},duration);
+}
+
 // ── PIN ────────────────────────────────────────────────
 const DEFAULT_PIN='1111';
 let pinBuf='';let pinMode='unlock';let pinNewBuf='';
@@ -787,7 +805,7 @@ function pinSubmit(){
       setPin(pinBuf);pinBuf='';pinNewBuf='';pinMode='unlock';
       document.getElementById('pin-screen').classList.remove('active');
       document.getElementById('pin-label').textContent='Enter your PIN';
-      renderSettings();alert('PIN updated.');
+      renderSettings();toast('PIN updated successfully.','success');
     } else {
       upDots(4,true);document.getElementById('pin-error').textContent='PINs do not match';
       setTimeout(()=>{pinBuf='';pinNewBuf='';pinMode='set-new';upDots(0,false);document.getElementById('pin-error').textContent='';document.getElementById('pin-label').textContent='Enter new PIN';},1200);
@@ -889,7 +907,7 @@ function renderForge(){
       if(sessions.length>0){
         sessListHTML='<div class="fp-sessions">';
         sessions.filter(s=>s.tangible_logged>0).forEach(function(s){
-          sessListHTML+=`<div class="fp-session-row"><span style="color:var(--ash)">${s.category||'Session'}</span>${s.notes?`<span style="color:var(--ash);margin-left:6px">— ${s.notes}</span>`:''}<span style="font-family:var(--fc);font-size:11px;color:var(--gold);margin-left:auto">${s.tangible_logged} ${proj.unit}</span></div>`;
+          sessListHTML+=`<div class="fp-session-row" style="display:grid;grid-template-columns:120px 1fr auto;align-items:center"><span style="color:var(--ash);font-family:var(--fc);font-size:11px">${s.category||'Session'}</span><span style="color:var(--ash);font-size:12px">${s.notes||'—'}</span><span style="font-family:var(--fc);font-size:11px;color:var(--gold)">${s.tangible_logged} ${proj.unit}</span></div>`;
         });
         sessListHTML+=`<div style="font-size:12px;color:var(--ash);padding:4px 0">Today: <span style="color:var(--gold);font-family:var(--fc)">${tangToday} ${proj.unit}</span></div></div>`;
       }
@@ -1013,13 +1031,16 @@ async function submitProject(pid){
 
 async function confirmSkip(){
   const reason=document.getElementById('skip-reason').value.trim();
-  if(!reason){alert('Please record what happened.');return;}
+  if(!reason){toast('Please record what happened.','error');return;}
   const pid=S.pendingSkipPid;
   const proj=PROJECTS.find(p=>p.id===pid);
+  const declared=isProjectDeclared(pid);
+  const pen=declared?0:-proj.pts;
   S.committedProjects[pid].submitted=true;S.committedProjects[pid].hasSession=false;S.committedProjects[pid].skipReason=reason;
-  await db.from('sessions').insert({date:today(),project:pid,tangible_logged:0,unit:proj.unit,points_earned:0,penalty:-proj.pts,notes:'Missed — '+reason});
+  await db.from('sessions').insert({date:today(),project:pid,tangible_logged:0,unit:proj.unit,points_earned:0,penalty:pen,notes:'Missed'+(declared?' (declaration active)':'')+' — '+reason});
   await saveCommitted();closeModal('skip-modal');S.pendingSkipPid=null;
   S.allSessions=[];await loadData();
+  if(declared)toast(proj.id+' — no penalty (declaration active)','info');
 }
 
 // ── SESSION ────────────────────────────────────────────
@@ -1028,7 +1049,7 @@ function openSession(pid){
   S.pendingSessionPid=pid;
   document.getElementById('sm-title').textContent=proj.id;
   document.getElementById('sm-sub').textContent=proj.unit+' · '+proj.pts+' points per session';
-  document.getElementById('sm-tangible').placeholder='Amount ('+proj.unit+')';
+  document.getElementById('sm-tangible').placeholder='Tangibles ('+proj.unit+')';
   document.getElementById('sm-tangible').value='';
   document.getElementById('sm-notes').value='';
   const catSel=document.getElementById('sm-category');
@@ -1042,20 +1063,42 @@ function openSession(pid){
 async function submitSession(){
   const proj=PROJECTS.find(p=>p.id===S.pendingSessionPid);
   const tangible=parseFloat(document.getElementById('sm-tangible').value);
-  if(!tangible||tangible<=0){alert('Please enter a valid amount.');return;}
+  if(!tangible||tangible<=0){toast('Please enter an amount.','error');return;}
   const category=document.getElementById('sm-category').value;
   const notes=document.getElementById('sm-notes').value;
   const language=document.getElementById('sm-language').value;
+
+  // Insert session first with 0 points — will recalculate below
+  await db.from('sessions').insert({
+    date:today(),project:S.pendingSessionPid,tangible_logged:tangible,
+    unit:proj.unit,points_earned:0,category:category||null,notes:notes||null,language:language||null
+  });
+
+  // Recalculate points equally split across all today's sessions for this project
+  // Cap total at project's daily point ceiling
+  const{data:todaySessions}=await db.from('sessions')
+    .select('id,tangible_logged')
+    .eq('date',today()).eq('project',S.pendingSessionPid)
+    .gt('tangible_logged',0);
+  const n=(todaySessions||[]).length;
+  const ptsEach=n>0?Math.round((proj.pts/n)*100)/100:proj.pts;
+  // Update all sessions for this project today with equal split
+  for(const s of (todaySessions||[])){
+    await db.from('sessions').update({points_earned:ptsEach}).eq('id',s.id);
+  }
+
+  // Update project summary total
   const oldSum=S.projects.find(p=>p.project===S.pendingSessionPid)||{};
   const oldTotal=oldSum.total_tangible||0;
   const oldLvl=getLvl(S.pendingSessionPid,oldTotal);
   const newTotal=oldTotal+tangible;
   const newLvl=getLvl(S.pendingSessionPid,newTotal);
-
-  await db.from('sessions').insert({date:today(),project:S.pendingSessionPid,tangible_logged:tangible,unit:proj.unit,points_earned:proj.pts,category:category||null,notes:notes||null,language:language||null});
   await db.from('project_summary').update({total_tangible:newTotal,last_session:today()}).eq('project',S.pendingSessionPid);
 
-  if(S.committedProjects[S.pendingSessionPid]){S.committedProjects[S.pendingSessionPid].hasSession=true;await saveCommitted();}
+  if(S.committedProjects[S.pendingSessionPid]){
+    S.committedProjects[S.pendingSessionPid].hasSession=true;
+    await saveCommitted();
+  }
   closeModal('session-modal');S.allSessions=[];await loadData();
   if(newLvl>oldLvl)showUnlock(proj.titles[newLvl-1],proj.id+' — Level '+newLvl+' of 10',UNLOCK_MSGS[proj.id]?.[newLvl-1]||'The forge marks you.');
 }
@@ -1081,7 +1124,7 @@ async function handleCT(key,label,keeping){
 
 async function confirmCTBreak(){
   const reason=document.getElementById('ct-reason').value.trim();
-  if(!reason){alert('Please record what happened.');return;}
+  if(!reason){toast('Please record what happened.','error');return;}
   await ensureLog();
   await db.from('daily_log').update({[S.pendingCT.key]:false}).eq('date',today());
   const c=CMDS.find(x=>x.key===S.pendingCT.key);
@@ -1095,11 +1138,11 @@ async function confirmCTBreak(){
 async function closeDay(){
   if(!S.todayLog)return;
   const unmarked=CMDS.filter(c=>S.todayLog[c.key]!==true&&S.todayLog[c.key]!==false);
-  if(unmarked.length>0){alert(`${unmarked.length} commandment${unmarked.length>1?'s':''} still unmarked. Mark all 10 first.`);return;}
+  if(unmarked.length>0){toast(`${unmarked.length} commandment${unmarked.length>1?'s':''} still unmarked`,'error');return;}
   const uncommitted=PROJECTS.filter(p=>{const cp=S.committedProjects[p.id];return cp&&cp.committed&&!cp.submitted;});
-  if(uncommitted.length>0){alert(`${uncommitted.length} committed project${uncommitted.length>1?'s':''} not submitted: ${uncommitted.map(p=>p.id).join(', ')}`);return;}
+  if(uncommitted.length>0){toast('Submit all committed projects first','error');return;}
   const reflection=document.getElementById('reflection-text')?.value?.trim();
-  if(!reflection){alert('The forge requires your reflection.');return;}
+  if(!reflection){toast('Write your reflection first.','error');return;}
   await db.from('daily_log').update({reflection,c10_reflection:true,day_closed:true}).eq('date',today());
   for(const c of CMDS){
     const kept=S.todayLog?.[c.key]===true;
@@ -1112,7 +1155,7 @@ async function closeDay(){
       await db.from('commandment_streaks').update({streak_last_updated:today()}).eq('commandment',c.short);
     }
   }
-  S.allLogs=[];await loadData();alert('The day is closed. The forge remembers.');
+  S.allLogs=[];await loadData();toast('Day closed. The forge remembers.','success',3500);
 }
 
 // ── DECLARATIONS ───────────────────────────────────────
@@ -1131,7 +1174,7 @@ async function submitDeclaration(){
   const end=document.getElementById('decl-end').value;
   const notes=document.getElementById('decl-notes').value;
   const checked=Array.from(document.querySelectorAll('#decl-projects input:checked')).map(x=>x.value);
-  if(!start||!end||checked.length===0){alert('Please fill in dates and select at least one project.');return;}
+  if(!start||!end||checked.length===0){toast('Fill in dates and select at least one project.','error');return;}
   await db.from('declarations').insert({type,start_date:start,end_date:end,projects:JSON.stringify(checked),notes:notes||null});
   closeModal('decl-modal');S.declarations=[];await loadData();
 }
@@ -1346,7 +1389,7 @@ async function renderProject(screenKey){
 
     <div class="card" style="margin-bottom:14px">
       <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span style="color:var(--ash)">Progress toward ceiling</span><span style="color:var(--gold);font-family:var(--fc)">${Math.round(total/proj.ceiling*100)}%</span></div>
-      <div class="prog-track" style="height:8px"><div class="prog-fill" style="width:${pr}%"></div></div>
+      <div class="prog-track" style="height:8px"><div class="prog-fill" style="width:${Math.min(100,Math.round(total/proj.ceiling*100))}%"></div></div>
       <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:4px"><span style="color:var(--ash)">${total.toLocaleString()} of ${proj.ceiling.toLocaleString()} ${proj.unit}</span><span style="color:var(--ash)">${next?(next-total).toLocaleString()+' to '+nextT:'Ceiling reached'}</span></div>
     </div>
 
@@ -1371,8 +1414,12 @@ async function renderProject(screenKey){
     S.chartsDrawn[screenKey]=true;
     setTimeout(function(){
       const ctx=document.getElementById('chart-'+screenKey);if(!ctx)return;
-      const chartData=allPS.map(function(s){return s.tangible_logged;});
-      const chartLabels=allPS.map(function(s){return s.date;});
+      // Aggregate tangibles by date — one bar per date
+      const dateMap={};
+      allPS.forEach(function(s){dateMap[s.date]=(dateMap[s.date]||0)+s.tangible_logged;});
+      const sortedDates=Object.keys(dateMap).sort();
+      const chartData=sortedDates.map(d=>dateMap[d]);
+      const chartLabels=sortedDates;
       new Chart(ctx,{type:'bar',data:{labels:chartLabels,datasets:[{label:proj.unit,data:chartData,backgroundColor:'rgba(42,128,96,0.5)',borderColor:'#2A8060',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#A09080',font:{size:9},maxTicksLimit:10},grid:{color:'rgba(74,66,56,0.5)'}},y:{ticks:{color:'#A09080',font:{size:9},callback:function(v){return v+' '+proj.unit;}},grid:{color:'rgba(74,66,56,0.5)'}}}}});
     },100);
   }
@@ -1424,26 +1471,32 @@ function renderTemper(){
 
 // ── WILLMASTER ─────────────────────────────────────────
 function renderWillmaster(){
-  // Build 30-day heatmap data from allLogs
-  const heatDays=30;
+  // Build 90-day heatmap — oldest left, newest right
+  const heatDays=90;
   const heatData={};
   const now=new Date();
   for(let i=heatDays-1;i>=0;i--){
     const d=new Date(now);d.setDate(d.getDate()-i);
-    const ds=d.toISOString().split('T')[0];
-    heatData[ds]={};
-    CMDS.forEach(c=>heatData[ds][c.key]=null);
+    heatData[d.toISOString().split('T')[0]]={};
+    CMDS.forEach(c=>heatData[d.toISOString().split('T')[0]][c.key]=null);
   }
-  S.allLogs.forEach(function(l){
-    if(heatData[l.date]){
-      CMDS.forEach(c=>{heatData[l.date][c.key]=l[c.key];});
-    }
-  });
-  const heatDates=Object.keys(heatData).sort();
+  // Also include full allLogs history for streaks over 90 days
+  S.allLogs.forEach(function(l){if(heatData[l.date])CMDS.forEach(c=>{heatData[l.date][c.key]=l[c.key];});});
+  const heatDates=Object.keys(heatData).sort(); // oldest first = left to right
+
+  // Month labels for heatmap
+  function getMonthLabels(dates){
+    const labels=[];let lastMonth=-1;
+    dates.forEach(function(ds,i){
+      const m=new Date(ds).getMonth();
+      if(m!==lastMonth){labels.push({i,label:new Date(ds).toLocaleDateString('en-GB',{month:'short'})});lastMonth=m;}
+    });
+    return labels;
+  }
 
   document.getElementById('screen-willmaster').innerHTML=`
     <div class="pt">The Willmaster</div>
-    <div class="ps">Streak progression · 11 titles per commandment · 30-day heatmap</div>
+    <div class="ps">Streak progression · 11 titles per commandment · 90-day heatmap</div>
     <div class="g4" style="margin-bottom:24px">
       <div class="sb"><div class="sb-num" style="color:var(--gold)">${S.streaks.reduce((m,s)=>Math.max(m,s.current_streak||0),0)}</div><div class="sb-lbl">Best Streak</div></div>
       <div class="sb"><div class="sb-num">${S.streaks.reduce((m,s)=>Math.max(m,s.longest_streak||0),0)}</div><div class="sb-lbl">All-Time Best</div></div>
@@ -1456,13 +1509,31 @@ function renderWillmaster(){
       const curTitle=ctTitleFn(c.key,cur);const next=ctNextFn(c.key,cur);
       const todayKept=S.todayLog?.[c.key]===true;const todayBroke=S.todayLog?.[c.key]===false;
 
-      // 30-day heatmap
-      const heatHTML=heatDates.map(function(ds){
+      // 90-day heatmap — horizontal scrollable strip, left=oldest, right=newest
+      const monthLabels=getMonthLabels(heatDates);
+      // Build month label row
+      let monthLabelHTML='<div style="display:flex;gap:0;margin-bottom:3px;position:relative;height:14px">';
+      monthLabels.forEach(function(ml){
+        monthLabelHTML+=`<div style="position:absolute;left:${ml.i*12}px;font-family:var(--fc);font-size:8px;color:var(--ash);letter-spacing:0.06em">${ml.label}</div>`;
+      });
+      monthLabelHTML+='</div>';
+      const heatStrip=heatDates.map(function(ds){
         const val=heatData[ds][c.key];
-        const bg=val===true?'var(--safe)':val===false?'var(--ember)':'var(--border)';
-        const d=new Date(ds);
-        return`<div title="${ds}" style="width:10px;height:10px;border-radius:2px;background:${bg};flex-shrink:0"></div>`;
+        const bg=val===true?'var(--safe)':val===false?'var(--ember)':'rgba(74,66,56,0.4)';
+        const dayLabel=new Date(ds).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+        return`<div title="${dayLabel}: ${val===true?'Kept':val===false?'Broke':'Not recorded'}" style="width:10px;height:10px;border-radius:2px;background:${bg};flex-shrink:0;cursor:default"></div>`;
       }).join('');
+
+      const heatHTML=`<div style="overflow-x:auto;padding-bottom:4px">
+        <div style="min-width:${heatDays*12}px">
+          ${monthLabelHTML}
+          <div style="display:flex;gap:2px">${heatStrip}</div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px">
+            <span style="font-size:9px;color:var(--ash)">90 days ago</span>
+            <span style="font-size:9px;color:var(--ash)">Today</span>
+          </div>
+        </div>
+      </div>`;
 
       // Level progress bars
       const rowsHTML=CT_THR.map(function(t,i){
@@ -1470,30 +1541,33 @@ function renderWillmaster(){
         const done=cur>=t;const isCur=!done&&cur>=prevT;
         const barPct=done?100:isCur?Math.max(0,Math.min(100,Math.round(((cur-prevT)/(t-prevT))*100))):0;
         const barColor=done?'var(--safe)':isCur?'var(--gold)':'var(--border)';
-        return`<div class="lj-row ${isCur?'current':done?'done':'future'}" style="padding:4px 8px;margin-bottom:3px">
+        return`<div class="lj-row ${isCur?'current':done?'done':'future'}" style="padding:4px 8px;margin-bottom:2px">
           <div class="lj-dot" style="background:${isCur?'var(--gold)':done?'var(--safe)':'var(--border2)'}"></div>
           <div class="lj-title" style="color:${isCur?'var(--gold)':done?'var(--safe)':'var(--ash)'};font-size:11px">${CT_TITLES[c.key][i]}</div>
           <div class="lj-bar-track"><div class="lj-bar-fill" style="width:${barPct}%;background:${barColor}"></div></div>
-          <div class="lj-threshold" style="font-size:10px">${t}d</div>
+          <div class="lj-threshold" style="font-size:10px;color:var(--ash)">${t}d</div>
           <div class="lj-tag" style="color:${isCur?'var(--gold)':done?'var(--safe)':'var(--border2)'};">${isCur?barPct+'%':done?'✓':''}</div>
         </div>`;
       }).join('');
 
       return`<div class="card" style="margin-bottom:12px;border-color:${todayKept?'var(--safe)':todayBroke?'var(--ember)':'var(--border)'}">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-          <div style="flex:1">
-            <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:4px">
-              <div style="font-size:14px;color:var(--parch);font-weight:500">${c.label}</div>
-              <div style="font-family:var(--fc);font-size:10px;color:var(--gold)">${c.pts}pt${c.pts>1?'s':''}</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:8px">
-              <div style="font-family:var(--fc);font-size:13px;color:var(--gold)">${curTitle}</div>
-              <div style="font-size:12px;color:var(--ash)">${cur} day streak</div>
-              ${next?`<div style="font-size:12px;color:var(--ash)">→ <span style="color:var(--parch)">${next.title}</span> in ${next.rem} days</div>`:''}
-              ${longest>0?`<div style="font-size:12px;color:var(--ash)">Best: ${longest}</div>`:''}
-            </div>
-            <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.1em;margin-bottom:4px">LAST 30 DAYS</div>
-            <div style="display:flex;gap:2px;flex-wrap:wrap">${heatHTML}</div>
+        <div style="margin-bottom:10px">
+          <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px">
+            <div style="font-size:14px;color:var(--parch);font-weight:500;flex:1">${c.label}</div>
+            <div style="font-family:var(--fc);font-size:10px;color:var(--gold);flex-shrink:0">${c.pts}pt${c.pts>1?'s':''}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:10px">
+            <div style="font-family:var(--fc);font-size:13px;color:var(--gold)">${curTitle}</div>
+            <div style="font-size:12px;color:var(--ash)">${cur} day streak</div>
+            ${next?`<div style="font-size:12px;color:var(--ash)">→ <span style="color:var(--parch)">${next.title}</span> in ${next.rem}d</div>`:''}
+            ${longest>0?`<div style="font-size:12px;color:var(--ash)">Best: ${longest}d</div>`:''}
+          </div>
+          <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.1em;margin-bottom:6px">LAST 90 DAYS${cur>90?' · Streak extends beyond window':''}</div>
+          ${heatHTML}
+          <div style="display:flex;gap:10px;margin-top:6px;font-size:10px;align-items:center">
+            <span style="display:flex;align-items:center;gap:3px"><div style="width:8px;height:8px;border-radius:2px;background:var(--safe)"></div>Kept</span>
+            <span style="display:flex;align-items:center;gap:3px"><div style="width:8px;height:8px;border-radius:2px;background:var(--ember)"></div>Broke</span>
+            <span style="display:flex;align-items:center;gap:3px"><div style="width:8px;height:8px;border-radius:2px;background:rgba(74,66,56,0.4)"></div>Not recorded</span>
           </div>
         </div>
         ${rowsHTML}
@@ -1518,12 +1592,30 @@ function renderMeta(){
       <div class="lj-tag" style="color:${cur?'var(--gold)':done?'var(--safe)':'var(--border2)'}">${cur?'current':done?'✓':''}</div>
     </div>`;
   }).join('');
-  const projRows=pLvls.map(function(x){return`<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:0.5px solid var(--border)">
-    <div style="font-size:13px;color:var(--parch);width:180px;flex-shrink:0">${x.proj.id}</div>
-    <div style="flex:1"><div class="prog-track" style="margin:0"><div class="prog-fill" style="width:${getProg(x.proj.id,x.total)}%;${x.l===metaLvl?'background:var(--ember)':''}"></div></div></div>
-    <div style="font-family:var(--fc);font-size:13px;color:${x.l===metaLvl?'var(--ember)':'var(--gold)'};width:50px;text-align:right">${x.l}/10</div>
-    <div style="font-family:var(--fc);font-size:11px;color:var(--ash);width:180px;text-align:right">${dispTitle(x.proj.id,x.total)}</div>
-  </div>`;}).join('');
+  const projRows=pLvls.map(function(x){
+    const daysSince=x.total>0&&S.allSessions.length?(()=>{
+      const last=S.allSessions.filter(s=>s.project===x.proj.id).slice(-1)[0];
+      if(!last)return null;
+      const diff=Math.floor((new Date()-new Date(last.date))/864e5);
+      return diff===0?'Today':diff===1?'Yesterday':diff+'d ago';
+    })():null;
+    return`<div style="padding:10px 0;border-bottom:0.5px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;color:var(--parch);margin-bottom:2px">${x.proj.id}</div>
+          <div style="font-family:var(--fc);font-size:12px;color:${x.l===metaLvl?'var(--ember)':'var(--gold)'}">${dispTitle(x.proj.id,x.total)}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-family:var(--fc);font-size:13px;color:${x.l===metaLvl?'var(--ember)':'var(--gold)'}">${x.l}/10</div>
+          <div style="font-size:11px;color:var(--ash)">${x.total.toLocaleString()} ${x.proj.unit}</div>
+          ${daysSince?`<div style="font-size:10px;color:var(--border2);margin-top:1px">${daysSince}</div>`:''}
+        </div>
+      </div>
+      <div style="margin-top:6px">
+        <div class="prog-track" style="margin:0;height:3px"><div class="prog-fill" style="width:${getProg(x.proj.id,x.total)}%;${x.l===metaLvl?'background:var(--ember)':''}"></div></div>
+      </div>
+    </div>`;
+  }).join('');
   document.getElementById('screen-meta').innerHTML=`
     <div class="pt">Meta Rank</div><div class="ps">Overall standing — determined by your weakest project</div>
     <div class="card card-gold" style="margin-bottom:24px">
@@ -1562,77 +1654,193 @@ async function renderReport(){
     const total=s.total_tangible||0;
     const l=getLvl(proj.id,total);const pr=getProg(proj.id,total);
     const sc=S.allSessions.filter(x=>x.project===proj.id&&x.tangible_logged>0).length;
-    return`<tr><td>${proj.id}</td><td style="font-family:var(--fc);font-size:12px;color:var(--gold)">${dispTitle(proj.id,total)}</td>
-      <td style="text-align:center">${l}/10</td><td style="text-align:center">${total.toLocaleString()} ${proj.unit}</td><td style="text-align:center">${sc}</td>
-      <td style="width:100px"><div class="prog-track" style="margin:0"><div class="prog-fill" style="width:${pr}%"></div></div></td></tr>`;
+    const ceilPct=Math.round(total/proj.ceiling*100);
+    return`<tr>
+      <td style="font-size:13px">${proj.id}</td>
+      <td style="font-family:var(--fc);font-size:11px;color:var(--gold)">${dispTitle(proj.id,total)}</td>
+      <td style="text-align:center;font-family:var(--fc);font-size:12px">${l}/10</td>
+      <td style="text-align:center;font-size:12px">${total.toLocaleString()} ${proj.unit}</td>
+      <td style="text-align:center;font-size:12px">${sc}</td>
+      <td style="text-align:center;font-size:12px">${ceilPct}%</td>
+      <td style="width:80px"><div class="prog-track" style="margin:0"><div class="prog-fill" style="width:${Math.min(100,ceilPct)}%"></div></div></td>
+    </tr>`;
   }).join('');
 
   const ctHTML=CMDS.map(function(c){
     const streak=S.streaks.find(s=>s.commandment===c.short)||{};
     const cur=streak.current_streak||0;
-    return`<tr><td style="font-size:12px">${c.label}</td><td style="font-family:var(--fc);font-size:11px;color:var(--gold)">${ctTitleFn(c.key,cur)}</td>
-      <td style="text-align:center">${cur}</td><td style="text-align:center">${streak.longest_streak||0}</td>
-      <td style="text-align:center;color:var(--ember)">${streak.total_breaks||0}</td></tr>`;
+    return`<tr>
+      <td style="font-size:12px">${c.label}</td>
+      <td style="font-family:var(--fc);font-size:11px;color:var(--gold)">${ctTitleFn(c.key,cur)}</td>
+      <td style="text-align:center;font-family:var(--fc);font-size:12px">${cur}</td>
+      <td style="text-align:center;font-size:12px">${streak.longest_streak||0}</td>
+      <td style="text-align:center;font-size:12px;color:var(--ember)">${streak.total_breaks||0}</td>
+    </tr>`;
   }).join('');
 
-  // Weekly digest — last 4 weeks
   const weeklyRows=[];
   for(let w=weekNum();w>=Math.max(1,weekNum()-3);w--){
-    const wLogs=S.allLogs.filter(function(l){return Math.ceil((new Date(l.date)-GSTART())/864e5/7)===w;});
-    const wSess=S.allSessions.filter(function(s){return Math.ceil((new Date(s.date)-GSTART())/864e5/7)===w;});
+    const wLogs=S.allLogs.filter(l=>Math.ceil((new Date(l.date)-GSTART())/864e5/7)===w);
+    const wSess=S.allSessions.filter(s=>Math.ceil((new Date(s.date)-GSTART())/864e5/7)===w);
     const wPts=wSess.reduce((s,r)=>s+(r.points_earned||0),0)+wLogs.reduce((s,r)=>s+ctPts(r),0)+wSess.reduce((s,r)=>s+(r.penalty||0),0);
-    const wBest=wLogs.length?Math.max(...wLogs.map(function(l){const ds=wSess.filter(s=>s.date===l.date);return ctPts(l)+ds.reduce((a,x)=>a+(x.points_earned||0),0)+ds.reduce((a,x)=>a+(x.penalty||0),0);})):0;
+    const wBest=wLogs.length?Math.max(...wLogs.map(l=>{const ds=wSess.filter(s=>s.date===l.date);return ctPts(l)+ds.reduce((a,x)=>a+(x.points_earned||0),0)+ds.reduce((a,x)=>a+(x.penalty||0),0);})):0;
     weeklyRows.push({w,days:wLogs.length,pts:wPts,best:wBest});
   }
-  const weeklyHTML=weeklyRows.map(function(r){return`<tr><td style="font-family:var(--fc);font-size:11px">Week ${r.w}</td><td style="text-align:center">${r.days}</td><td style="text-align:center;font-family:var(--fc);color:var(--gold)">${r.pts}</td><td style="text-align:center">${r.best}</td></tr>`;}).join('');
+  const weeklyHTML=weeklyRows.map(r=>`<tr><td style="font-family:var(--fc);font-size:11px">Week ${r.w}</td><td style="text-align:center;font-size:12px">${r.days}</td><td style="text-align:center;font-family:var(--fc);color:var(--gold)">${r.pts}</td><td style="text-align:center;font-size:12px">${r.best}</td></tr>`).join('');
 
-  // Active declarations
-  const activeDecls=S.declarations.filter(function(d){return d.end_date>=today();});
-  const declHTML=activeDecls.length>0?activeDecls.map(function(d){
+  const activeDecls=S.declarations.filter(d=>d.end_date>=today());
+  const declHTML=activeDecls.length>0?activeDecls.map(d=>{
     let projs='All';try{projs=JSON.parse(d.projects).join(', ');}catch(e){}
-    return`<div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px;display:flex;gap:12px"><span style="font-family:var(--fc);color:var(--warn);width:80px">${d.type}</span><span style="color:var(--ash)">${d.start_date} → ${d.end_date}</span><span style="flex:1;color:var(--parch)">${projs}</span></div>`;
+    return`<div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px;display:flex;gap:12px;flex-wrap:wrap"><span style="font-family:var(--fc);color:var(--warn);width:80px;flex-shrink:0">${d.type}</span><span style="color:var(--ash)">${d.start_date} → ${d.end_date}</span><span style="flex:1;color:var(--parch)">${projs}</span></div>`;
   }).join(''):'<div style="font-size:12px;color:var(--ash);font-style:italic">No active declarations</div>';
+
+  // Build per-project canvas IDs
+  const projCanvases=PROJECTS.map(p=>`
+    <div style="margin-bottom:28px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+        <div style="font-family:var(--fc);font-size:12px;color:var(--gold);letter-spacing:0.08em">${p.id.toUpperCase()}</div>
+        <div style="font-size:11px;color:var(--ash)">${p.pillar}</div>
+      </div>
+      <div class="g2" style="align-items:start">
+        <div>
+          <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.12em;margin-bottom:6px">DAILY ${p.unit.toUpperCase()}</div>
+          <canvas id="proj-daily-${p.key}" height="120"></canvas>
+        </div>
+        <div>
+          <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.12em;margin-bottom:6px">CUMULATIVE ${p.unit.toUpperCase()}</div>
+          <canvas id="proj-cum-${p.key}" height="120"></canvas>
+        </div>
+      </div>
+    </div>
+  `).join('');
 
   document.getElementById('screen-report').innerHTML=`
     <div class="pt">The Anvil Report</div><div class="ps">Campaign biography · Every number tells a truth</div>
     <div class="g4" style="margin-bottom:20px">
       <div class="sb"><div class="sb-num" style="color:var(--gold)">${net.toLocaleString()}</div><div class="sb-lbl">Net Score</div></div>
       <div class="sb"><div class="sb-num">${gTotal.toLocaleString()}</div><div class="sb-lbl">Gross Earned</div></div>
-      <div class="sb"><div class="sb-num" style="color:var(--ember)">${tPen}</div><div class="sb-lbl">Total Penalty</div></div>
+      <div class="sb"><div class="sb-num" style="color:var(--ember)">${tPen}</div><div class="sb-lbl">Penalties</div></div>
       <div class="sb"><div class="sb-num">${pct}%</div><div class="sb-lbl">Of Max</div></div>
     </div>
     <div class="g4" style="margin-bottom:24px">
       <div class="sb"><div class="sb-num">${dLogged}</div><div class="sb-lbl">Days Logged</div></div>
       <div class="sb"><div class="sb-num">${avg}</div><div class="sb-lbl">Avg / Day</div></div>
-      <div class="sb"><div class="sb-num" style="color:var(--safe)">${perfDays}</div><div class="sb-lbl">Perfect CT Days</div></div>
+      <div class="sb"><div class="sb-num" style="color:var(--safe)">${perfDays}</div><div class="sb-lbl">Perfect CT</div></div>
       <div class="sb"><div class="sb-num">${daysLeft()}</div><div class="sb-lbl">Days Left</div></div>
     </div>
-    <div class="st">Score over time</div>
-    <div class="card" style="margin-bottom:20px"><canvas id="report-chart" height="160"></canvas></div>
+
+    <div class="st">Composite score over time</div>
+    <div class="card" style="margin-bottom:20px">
+      <div style="font-size:11px;color:var(--ash);margin-bottom:8px">Total points per day · All projects + CT in distinct colours</div>
+      <canvas id="report-chart" height="180"></canvas>
+    </div>
+
     <div class="g2" style="align-items:start;margin-bottom:20px">
       <div>
         <div class="st">Weekly digest — last 4 weeks</div>
-        <div class="card"><table class="dt"><thead><tr><th>Week</th><th>Days</th><th>Total pts</th><th>Best day</th></tr></thead><tbody>${weeklyHTML}</tbody></table></div>
+        <div class="card"><table class="dt"><thead><tr><th style="text-align:left">Week</th><th style="text-align:center">Days</th><th style="text-align:center">Total</th><th style="text-align:center">Best day</th></tr></thead><tbody>${weeklyHTML}</tbody></table></div>
       </div>
       <div>
-        <div class="st">Active declarations</div>
+        <div class="st">Declarations</div>
         <div class="card">${declHTML}</div>
       </div>
     </div>
+
     <div class="st">Project standings</div>
-    <div class="card" style="margin-bottom:20px"><table class="dt"><thead><tr><th>Project</th><th>Title</th><th>Level</th><th>Tangible</th><th>Sessions</th><th>Progress</th></tr></thead><tbody>${projHTML}</tbody></table></div>
+    <div class="card" style="margin-bottom:20px;overflow-x:auto">
+      <table class="dt"><thead><tr>
+        <th style="text-align:left">Project</th>
+        <th style="text-align:left">Title</th>
+        <th style="text-align:center">Level</th>
+        <th style="text-align:center">Total</th>
+        <th style="text-align:center">Sessions</th>
+        <th style="text-align:center">Ceiling</th>
+        <th style="text-align:left;width:80px">Progress</th>
+      </tr></thead><tbody>${projHTML}</tbody></table>
+    </div>
+
+    <div class="st">Per-project graphs</div>
+    <div class="card" style="margin-bottom:20px">${projCanvases}</div>
+
     <div class="st">Clean Temper — commandment streaks</div>
-    <div class="card"><table class="dt"><thead><tr><th>Commandment</th><th>Title</th><th>Streak</th><th>Longest</th><th>Breaks</th></tr></thead><tbody>${ctHTML}</tbody></table></div>
+    <div class="card" style="overflow-x:auto">
+      <table class="dt"><thead><tr>
+        <th style="text-align:left">Commandment</th>
+        <th style="text-align:left">Title</th>
+        <th style="text-align:center">Streak</th>
+        <th style="text-align:center">Longest</th>
+        <th style="text-align:center">Breaks</th>
+      </tr></thead><tbody>${ctHTML}</tbody></table>
+    </div>
   `;
 
-  if(S.allLogs.length>0){
-    setTimeout(function(){
-      const ctx=document.getElementById('report-chart');if(!ctx)return;
-      const labels=S.allLogs.map(l=>l.date);
-      const data=S.allLogs.map(function(l){const ds=S.allSessions.filter(s=>s.date===l.date);return ctPts(l)+ds.reduce((s,x)=>s+(x.points_earned||0),0)+ds.reduce((s,x)=>s+(x.penalty||0),0);});
-      new Chart(ctx,{type:'line',data:{labels,datasets:[{data,borderColor:'#D4A84C',backgroundColor:'rgba(212,168,76,0.08)',borderWidth:2,pointRadius:2,tension:0.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#A09080',font:{size:9},maxTicksLimit:12},grid:{color:'rgba(74,66,56,0.5)'}},y:{ticks:{color:'#A09080',font:{size:9}},grid:{color:'rgba(74,66,56,0.5)'}}}}});
-    },100);
-  }
+  setTimeout(function(){
+    if(!S.allLogs.length)return;
+
+    // Composite chart — total per day with per-project breakdown
+    const allDates=[...new Set(S.allLogs.map(l=>l.date))].sort();
+    const projColors=['#D4A84C','#2A8060','#D04030','#D08820','#6B4FA0','#4A90A0'];
+    const ctColor='rgba(160,130,80,0.6)';
+
+    const projDatasets=PROJECTS.map(function(proj,i){
+      const data=allDates.map(function(date){
+        const sessions=S.allSessions.filter(s=>s.date===date&&s.project===proj.id);
+        return sessions.reduce((s,x)=>s+(x.points_earned||0),0);
+      });
+      return{label:proj.id.replace('The ',''),data,backgroundColor:projColors[i]+'44',borderColor:projColors[i],borderWidth:1.5,fill:true,tension:0.3,pointRadius:0};
+    });
+    const ctDataset={label:'CT',data:allDates.map(d=>{const l=S.allLogs.find(x=>x.date===d);return l?ctPts(l):0;}),backgroundColor:ctColor,borderColor:'#A08050',borderWidth:1,fill:true,tension:0.3,pointRadius:0};
+
+    const ctx=document.getElementById('report-chart');
+    if(ctx)new Chart(ctx,{type:'line',data:{labels:allDates,datasets:[...projDatasets,ctDataset]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:true,labels:{color:'#A09080',font:{size:9},boxWidth:10}}},scales:{x:{stacked:true,ticks:{color:'#A09080',font:{size:9},maxTicksLimit:12},grid:{color:'rgba(74,66,56,0.4)'}},y:{stacked:true,ticks:{color:'#A09080',font:{size:9}},grid:{color:'rgba(74,66,56,0.4)'}}}}});
+
+    // Per-project individual charts
+    PROJECTS.forEach(function(proj,i){
+      const projSess=S.allSessions.filter(s=>s.project===proj.id&&s.tangible_logged>0);
+      if(!projSess.length)return;
+
+      // Aggregate by date
+      const dateMap={};
+      projSess.forEach(s=>{dateMap[s.date]=(dateMap[s.date]||0)+s.tangible_logged;});
+      const dates=Object.keys(dateMap).sort();
+      const dailyVals=dates.map(d=>dateMap[d]);
+
+      // Cumulative
+      let cum=0;const cumVals=dailyVals.map(v=>{cum+=v;return cum;});
+
+      // Milestone annotations (vertical lines)
+      const projMilestones=S.milestones.filter(m=>m.project===proj.id);
+
+      // Level change annotations
+      const levelAnnotations={};
+      let runningTotal=0;
+      dates.forEach(function(date,idx){
+        const prev=runningTotal;runningTotal+=dailyVals[idx];
+        const prevLvl=getLvl(proj.id,prev);const newLvl=getLvl(proj.id,runningTotal);
+        if(newLvl>prevLvl){levelAnnotations[idx]={lvl:newLvl,title:proj.titles[newLvl-1]};}
+      });
+
+      const color=projColors[i];
+      const pointBg=dates.map(function(d,idx){
+        if(projMilestones.some(m=>m.date===d))return'#FFD700';
+        if(levelAnnotations[idx])return color;
+        return color+'88';
+      });
+      const pointR=dates.map(function(d,idx){
+        if(projMilestones.some(m=>m.date===d))return 6;
+        if(levelAnnotations[idx])return 5;
+        return 0;
+      });
+
+      // Daily chart
+      const dCtx=document.getElementById('proj-daily-'+proj.key);
+      if(dCtx)new Chart(dCtx,{type:'bar',data:{labels:dates,datasets:[{data:dailyVals,backgroundColor:color+'55',borderColor:color,borderWidth:1,pointBackgroundColor:pointBg,pointRadius:pointR}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{afterBody:function(items){const idx=items[0].dataIndex;const date=dates[idx];const ms=projMilestones.find(m=>m.date===date);const lvlAnn=levelAnnotations[idx];const lines=[];if(ms)lines.push('★ '+ms.description.substring(0,40));if(lvlAnn)lines.push('↑ Level '+lvlAnn.lvl+': '+lvlAnn.title);return lines;}}}},scales:{x:{ticks:{color:'#A09080',font:{size:8},maxTicksLimit:8},grid:{color:'rgba(74,66,56,0.3)'}},y:{ticks:{color:'#A09080',font:{size:8},callback:v=>v+' '+proj.unit},grid:{color:'rgba(74,66,56,0.3)'}}}}});
+
+      // Cumulative chart
+      const cCtx=document.getElementById('proj-cum-'+proj.key);
+      if(cCtx)new Chart(cCtx,{type:'line',data:{labels:dates,datasets:[{data:cumVals,borderColor:color,backgroundColor:color+'18',borderWidth:2,fill:true,tension:0.4,pointBackgroundColor:pointBg,pointRadius:pointR}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{afterBody:function(items){const idx=items[0].dataIndex;const date=dates[idx];const ms=projMilestones.find(m=>m.date===date);const lvlAnn=levelAnnotations[idx];const lines=[];if(ms)lines.push('★ '+ms.description.substring(0,40));if(lvlAnn)lines.push('↑ Level '+lvlAnn.lvl+': '+lvlAnn.title);return lines;}}}},scales:{x:{ticks:{color:'#A09080',font:{size:8},maxTicksLimit:8},grid:{color:'rgba(74,66,56,0.3)'}},y:{ticks:{color:'#A09080',font:{size:8},callback:v=>v+' '+proj.unit},grid:{color:'rgba(74,66,56,0.3)'}}}}});
+    });
+  },150);
 }
 
 // ── MILESTONES ─────────────────────────────────────────
@@ -1640,7 +1848,7 @@ function openMilestone(){document.getElementById('ms-modal').classList.add('open
 async function submitMilestone(){
   const pid=document.getElementById('ms-project').value;
   const desc=document.getElementById('ms-desc').value.trim();
-  if(!pid||!desc){alert('Please select a project and enter a description.');return;}
+  if(!pid||!desc){toast('Select a project and enter a description.','error');return;}
   const s=S.projects.find(p=>p.project===pid)||{};
   const total=s.total_tangible||0;
   await db.from('milestones').insert({date:today(),project:pid,description:desc,tangible_at_time:total,level_at_time:getLvl(pid,total)});
@@ -1824,19 +2032,19 @@ function renderSettings(){
 
 function saveStartDate(){
   const val=document.getElementById('start-date-input').value;
-  if(!val){alert('Please enter a valid date.');return;}
+  if(!val){toast('Please enter a valid date.','error');return;}
   localStorage.setItem('qa_start',val);
   document.getElementById('sb-countdown').textContent=daysLeft()+' days';
-  alert('Start date saved. All campaign numbers updated.');
+  toast('Start date saved.','success');
   renderSettings();
 }
 
 function saveEndDate(){
   const val=document.getElementById('end-date-input').value;
-  if(!val){alert('Please enter a valid date.');return;}
+  if(!val){toast('Please enter a valid date.','error');return;}
   localStorage.setItem('qa_end',val);
   document.getElementById('sb-countdown').textContent=daysLeft()+' days';
-  alert('End date saved. All campaign numbers updated.');
+  toast('End date saved.','success');
   renderSettings();
 }
 
@@ -1882,7 +2090,7 @@ function showMissedDayPrompt(){
 async function submitMissedDay(){
   const dateStr=missedDays[missedDayIndex];
   const reflection=document.getElementById('missed-reflection').value.trim();
-  if(!reflection){alert('Please write a reflection for this day.');return;}
+  if(!reflection){toast('Write a reflection before saving.','error');return;}
   const ctVals={};
   CMDS.forEach(function(c){
     const el=document.getElementById('missed-ct-'+c.key);
@@ -2030,16 +2238,40 @@ async function renderFood(){
     heatHTML=yHTML;
   }
 
+  // Selected day detail panel
+  let foodDayDetail='';
+  if(foodSelectedDay){
+    const dayMeals=logs.filter(l=>l.date===foodSelectedDay);
+    const hCount=dayMeals.filter(l=>l.healthy).length;
+    const uCount=dayMeals.filter(l=>!l.healthy).length;
+    const mealRows=dayMeals.length>0?dayMeals.map(function(l){
+      return`<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:0.5px solid var(--border)">
+        <div style="font-family:var(--fc);font-size:10px;color:var(--gold);width:70px;flex-shrink:0;padding-top:2px">${l.meal_type}</div>
+        <div style="flex:1;font-size:13px;color:var(--parch)">${l.description}</div>
+        <div style="font-size:11px;padding:3px 8px;border-radius:4px;flex-shrink:0;background:${l.healthy?'var(--safe-dim)':'var(--ember-dim)'};color:${l.healthy?'var(--safe)':'var(--ember)'}">${l.healthy?'Healthy':'Unhealthy'}</div>
+      </div>`;
+    }).join('')
+    :'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:8px 0">No meals logged this day.</div>';
+    foodDayDetail=`<div class="card" style="margin-top:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-family:var(--fc);font-size:14px;color:var(--gold)">${foodSelectedDay}</div>
+        <div style="display:flex;gap:12px;font-size:12px">
+          <span style="color:var(--safe)">${hCount} healthy</span>
+          ${uCount>0?`<span style="color:var(--ember)">${uCount} unhealthy</span>`:''}
+        </div>
+      </div>
+      ${mealRows}
+    </div>`;
+  }
+
   document.getElementById('screen-food').innerHTML=`
     <div class="pt">Food Log</div>
     <div class="ps">Personal record · Healthy or unhealthy · No game impact</div>
-
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <div class="st" style="margin-bottom:0">Today's meals</div>
       <button class="btn btn-sm" onclick="openFoodModal()">+ Log meal</button>
     </div>
     <div class="card" style="margin-bottom:24px">${todayHTML}</div>
-
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
       <button class="cal-nav-btn ${foodView==='week'?'active':''}" onclick="setFoodView('week')">Week</button>
       <button class="cal-nav-btn ${foodView==='month'?'active':''}" onclick="setFoodView('month')">Month</button>
@@ -2051,8 +2283,10 @@ async function renderFood(){
       </div>
     </div>
     <div class="card">${heatHTML}</div>
+    ${foodDayDetail}
   `;
 }
+
 
 function setFoodView(v){foodView=v;renderFood();}
 function foodCalPrev(){
@@ -2076,14 +2310,17 @@ async function submitFoodLog(){
   const mealType=document.getElementById('food-meal-type').value;
   const desc=document.getElementById('food-desc').value.trim();
   const healthy=document.getElementById('food-healthy').checked;
-  if(!desc){alert('Please describe what you ate.');return;}
+  if(!desc){toast('Please describe your meal.','error');return;}
   await db.from('food_log').insert({date:today(),meal_type:mealType,description:desc,healthy});
   closeModal('food-modal');
   renderFood();
 }
 
+let foodSelectedDay=null;
+
 function foodDayClick(dateStr){
-  // Could expand to show day detail — for now just a visual
+  foodSelectedDay=foodSelectedDay===dateStr?null:dateStr;
+  renderFood();
 }
 
 // ── MILESTONES WITH FILTER ─────────────────────────────
@@ -2170,12 +2407,39 @@ async function renderCalendar(){
         ['Soul','Body','Business'].forEach(pillar=>{pillarDots+=`<div style="width:6px;height:6px;border-radius:50%;background:${pPts[pillar]>0?'var(--safe)':'var(--border)'}"></div>`;});
         pillarDots+=`<div style="width:6px;height:6px;border-radius:50%;background:${data.ctKept===10?'var(--gold)':data.ctKept>0?'var(--safe)':'var(--border)'}"></div>`;
       }
-      grid+=`<div style="background:${isSel?'var(--gold-dim)':data&&!isFuture?'var(--card)':'var(--card2)'};border:0.5px solid ${isSel?'var(--gold)':'var(--border)'};border-radius:8px;padding:7px 5px;min-height:68px;cursor:${!isFuture&&data?'pointer':'default'};opacity:${isFuture?0.3:1};transition:border-color 0.2s" onclick="${!isFuture&&data?'calSelect(\''+ds+'\')':''}">
-        <div style="font-family:var(--fc);font-size:10px;color:var(--ash);margin-bottom:3px">${d}</div>
+      // CT dots — 10 small squares for each commandment
+      let ctDots='';
+      if(data&&data.ct){
+        ctDots='<div style="display:flex;gap:1px;flex-wrap:wrap;margin-bottom:2px">';
+        CMDS.forEach(function(c){
+          const v=data.ct[c.key];
+          ctDots+=`<div style="width:5px;height:5px;border-radius:1px;background:${v===true?'var(--safe)':v===false?'var(--ember)':'var(--border)'}"></div>`;
+        });
+        ctDots+='</div>';
+      }
+      // Project sessions — abbreviated
+      let projLines='';
+      if(data&&(data.sessions||[]).filter(s=>s.tangible_logged>0).length>0){
+        const byProj={};
+        data.sessions.filter(s=>s.tangible_logged>0).forEach(function(s){
+          byProj[s.project]=(byProj[s.project]||0)+s.tangible_logged;
+        });
+        projLines='<div style="margin-top:2px">';
+        Object.keys(byProj).slice(0,2).forEach(function(pid){
+          const proj=PROJECTS.find(p=>p.id===pid);
+          const abbr=pid.replace('The ','').substring(0,6);
+          projLines+=`<div style="font-size:8px;color:var(--ash);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${abbr}: <span style="color:var(--gold)">${byProj[pid]}${proj?proj.unit:''}</span></div>`;
+        });
+        if(Object.keys(byProj).length>2)projLines+=`<div style="font-size:8px;color:var(--border2)">+${Object.keys(byProj).length-2} more</div>`;
+        projLines+='</div>';
+      }
+      grid+=`<div style="background:${isSel?'var(--gold-dim)':data&&!isFuture?'var(--card)':'var(--card2)'};border:0.5px solid ${isSel?'var(--gold)':'var(--border)'};border-radius:8px;padding:7px 5px;min-height:80px;cursor:${!isFuture&&data?'pointer':'default'};opacity:${isFuture?0.3:1};transition:border-color 0.2s" onclick="${!isFuture&&data?'calSelect(\''+ds+'\')':''}">
+        <div style="font-family:var(--fc);font-size:10px;color:var(--ash);margin-bottom:2px">${d}</div>
         ${data&&!isFuture?`
-          <div style="font-family:var(--fc);font-size:14px;color:${scoreColor(t)};line-height:1;margin-bottom:4px">${t}</div>
-          <div style="display:flex;gap:2px;margin-bottom:3px">${pillarDots}</div>
-          <div style="height:2px;background:var(--border);border-radius:1px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${scoreColor(t)}"></div></div>
+          <div style="font-family:var(--fc);font-size:13px;color:${scoreColor(t)};line-height:1;margin-bottom:3px">${t}</div>
+          ${ctDots}
+          ${projLines}
+          <div style="height:2px;background:var(--border);border-radius:1px;overflow:hidden;margin-top:2px"><div style="height:100%;width:${pct}%;background:${scoreColor(t)}"></div></div>
         `:''}
       </div>`;
     }
