@@ -810,6 +810,83 @@ function getCatCountsAll(){
   return result;
 }
 
+
+// ── FLOOR PENDING DISPLAY ─────────────────────────────────────────
+// Returns an object describing what's needed to reach the next level
+// Implements the 4-rule logic
+function getNextLevelPending(pid, total, catCounts){
+  const proj=PROJECTS.find(x=>x.id===pid);
+  if(!proj)return null;
+  const currentLvl=getLvl(pid,total,catCounts);
+  if(currentLvl>=proj.levels.length)return{type:'ceiling'};
+  const nextIdx=currentLvl; // 0-based index of next level to unlock
+  const threshold=proj.levels[nextIdx];
+  const nextTitle=proj.titles[nextIdx];
+
+  const totalGap=Math.max(0,threshold-total);
+  const totalMet=total>=threshold;
+
+  if(!proj.floors){
+    // No floors — purely total based
+    if(totalMet)return{type:'unlocked',title:nextTitle};
+    return{type:'total',gap:totalGap,title:nextTitle,unit:proj.unit};
+  }
+
+  // Compute floor gaps
+  const floorGaps={};
+  let anyFloorUnmet=false;
+  let sumFloorGaps=0;
+  Object.keys(proj.floors).forEach(function(cat){
+    const req=proj.floors[cat][nextIdx];
+    const have=catCounts[cat]||0;
+    const gap=Math.max(0,req-have);
+    if(gap>0){
+      floorGaps[cat]=gap;
+      anyFloorUnmet=true;
+      sumFloorGaps+=gap;
+    }
+  });
+
+  if(!anyFloorUnmet&&totalMet){
+    // Both met — level should be unlocked (getLvl would return nextIdx+1)
+    return{type:'unlocked',title:nextTitle};
+  }
+
+  if(!anyFloorUnmet&&!totalMet){
+    // Rule 1: No floors bottleneck, total is the only gap
+    return{type:'total',gap:totalGap,title:nextTitle,unit:proj.unit};
+  }
+
+  if(anyFloorUnmet&&totalMet){
+    // Rule 3: Total met, floors are the only bottleneck
+    return{type:'floors',gaps:floorGaps,sum:sumFloorGaps,title:nextTitle,unit:proj.unit};
+  }
+
+  // Rule 4: Both total and floors are gaps — show both
+  return{type:'both',totalGap,floorGaps,floorSum:sumFloorGaps,title:nextTitle,unit:proj.unit};
+}
+
+function renderNextLevelPending(pending){
+  if(!pending||pending.type==='ceiling')return'Ceiling reached';
+  if(pending.type==='unlocked')return'Level unlocked — '+pending.title;
+  if(pending.type==='total'){
+    return pending.gap.toLocaleString()+' '+pending.unit+' to '+pending.title;
+  }
+  if(pending.type==='floors'){
+    const lines=Object.keys(pending.gaps).map(function(cat){
+      return cat+': '+pending.gaps[cat]+' more';
+    });
+    return pending.sum+' '+pending.unit+' across lagging categories to unlock '+pending.title+'<br><span style="font-size:10px;color:var(--ash)">'+lines.join(' · ')+'</span>';
+  }
+  if(pending.type==='both'){
+    const lines=Object.keys(pending.floorGaps).map(function(cat){
+      return cat+': '+pending.floorGaps[cat]+' more';
+    });
+    return pending.totalGap+' '+pending.unit+' to threshold &nbsp;+&nbsp; '+pending.floorSum+' '+pending.unit+' across lagging floors<br><span style="font-size:10px;color:var(--ash)">Floors: '+lines.join(' · ')+'</span>';
+  }
+  return'';
+}
+
 // ── TOAST ──────────────────────────────────────────────
 function toast(msg, type='info', duration=2800){
   const el=document.createElement('div');
@@ -946,14 +1023,14 @@ function renderForge(){
 
   // Pillar balance — with dividers between pillars
   const bal=pillarBalance();
-  const pillarColors={Soul:'var(--gold)',Body:'var(--safe)',Business:'var(--warn)'};
   const pillarsHTML=Object.keys(bal.pillars).map(function(pillar,i){
     const earned=bal.pillars[pillar];const max=bal.maxPts[pillar];const pct=Math.round(earned/max*100);
+    const pColor=earned===0?'var(--warn)':earned===max?'var(--safe)':'var(--gold)';
     return`<div style="flex:1;text-align:center;padding:0 16px;${i>0?'border-left:0.5px solid var(--border)':''}">
       <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.15em;color:var(--ash);margin-bottom:8px">${pillar.toUpperCase()}</div>
-      <div style="font-family:var(--fc);font-size:22px;color:${pillarColors[pillar]};line-height:1;margin-bottom:6px">${earned}<span style="font-size:11px;color:var(--ash)">/${max}</span></div>
+      <div style="font-family:var(--fc);font-size:22px;color:${pColor};line-height:1;margin-bottom:6px">${earned}<span style="font-size:11px;color:var(--ash)">/${max}</span></div>
       <div style="height:4px;background:var(--card2);border-radius:2px;overflow:hidden">
-        <div style="height:100%;width:${pct}%;background:${pillarColors[pillar]};border-radius:2px"></div>
+        <div style="height:100%;width:${pct}%;background:${pColor};border-radius:2px"></div>
       </div>
     </div>`;
   }).join('');
@@ -1091,12 +1168,12 @@ function renderForge(){
 
     <div class="g2" style="align-items:start">
       <div>
-        <div class="st" style="justify-content:center;text-align:center">Direction — Today's Forge</div>
+        <div class="st" style="justify-content:center;text-align:center;margin-top:24px">Direction — Today's Forge</div>
         ${projHTML}
         <button class="btn btn-sm btn-warn" onclick="openDeclModal()" style="margin-top:8px">+ Declare expedition / injury</button>
       </div>
       <div>
-        <div class="st" style="justify-content:center;text-align:center">The Clean Temper</div>
+        <div class="st" style="justify-content:center;text-align:center;margin-top:24px">The Clean Temper</div>
         <div class="card" style="margin-bottom:14px">${ctHTML}<div style="font-size:12px;color:var(--ash);text-align:center;margin-top:8px">${ctMarked} of 10 marked · ${ct} of 20 points</div></div>
         <div class="st" style="justify-content:center;text-align:center">Nightly Reflection</div>
         <div class="card">${reflHTML}</div>
@@ -1149,11 +1226,13 @@ async function submitProject(pid){
 
 // Allow adding session to a previously skipped project — resets penalty
 async function addSessionToSkipped(pid){
-  // Remove the penalty session logged for this project today
-  const{data:penSess}=await db.from('sessions')
-    .select('id').eq('date',today()).eq('project',pid).eq('tangible_logged',0);
-  for(const s of (penSess||[])){
-    await db.from('sessions').delete().eq('id',s.id);
+  // Only revert penalty if NO active declaration covers this project
+  if(!isProjectDeclared(pid)){
+    const{data:penSess}=await db.from('sessions')
+      .select('id,penalty').eq('date',today()).eq('project',pid).eq('tangible_logged',0);
+    for(const s of (penSess||[])){
+      if((s.penalty||0)<0) await db.from('sessions').delete().eq('id',s.id);
+    }
   }
   // Reset committed state so user can submit fresh
   S.committedProjects[pid].submitted=false;
@@ -1294,9 +1373,30 @@ async function handleCT(key,label,keeping){
     document.getElementById('ct-modal').classList.add('open');
   } else {
     await ensureLog();
+    // Check if broken today — if so, restore streak
+    const wasBrokenToday=S.todayLog?.[key]===false;
+    if(wasBrokenToday){
+      const streak=S.streaks.find(s=>s.commandment===CMDS.find(x=>x.key===key)?.short)||{};
+      const preBreak=streak.pre_break_streak||0;
+      // Remove today's break from break_log
+      const breakLog=(streak.break_log||'');
+      const lines=breakLog.split('\n').filter(l=>!l.startsWith(today()));
+      await db.from('commandment_streaks').update({
+        current_streak:preBreak,
+        pre_break_streak:0,
+        total_breaks:Math.max(0,(streak.total_breaks||1)-1),
+        last_break_date:lines.length>0?(lines[lines.length-1].split(' ')[0]||null):null,
+        break_log:lines.join('\n').trim()
+      }).eq('commandment',streak.commandment);
+      toast('Break undone — streak restored to '+preBreak+' days','success');
+    }
     await db.from('daily_log').update({[key]:true}).eq('date',today());
-    const{data}=await db.from('daily_log').select('*').eq('date',today()).single();
-    S.todayLog=data;renderActive();
+    const{data:newLog}=await db.from('daily_log').select('*').eq('date',today()).single();
+    S.todayLog=newLog;
+    // Refresh streaks
+    const{data:newStreaks}=await db.from('commandment_streaks').select('*').order('points',{ascending:false});
+    S.streaks=newStreaks||[];
+    renderActive();
   }
 }
 
@@ -1308,7 +1408,13 @@ async function confirmCTBreak(){
   const c=CMDS.find(x=>x.key===S.pendingCT.key);
   const streak=S.streaks.find(s=>s.commandment===c.short)||{};
   const breakLog=(streak.break_log||'')+'\n'+today()+' — '+reason;
-  await db.from('commandment_streaks').update({current_streak:0,last_break_date:today(),total_breaks:(streak.total_breaks||0)+1,break_log:breakLog.trim()}).eq('commandment',c.short);
+  await db.from('commandment_streaks').update({
+    current_streak:0,
+    pre_break_streak:(streak.current_streak||0),
+    last_break_date:today(),
+    total_breaks:(streak.total_breaks||0)+1,
+    break_log:breakLog.trim()
+  }).eq('commandment',c.short);
   closeModal('ct-modal');S.pendingCT=null;await loadData();
 }
 
@@ -1433,10 +1539,7 @@ async function renderArmoury(){
         </div>
       </div>
       <div class="prog-track"><div class="prog-fill" style="width:${pr}%"></div></div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
-        <div style="font-size:11px;color:var(--ash);font-style:italic">${next?(next-total).toLocaleString()+' '+proj.unit+' to '+nextT:'Ceiling reached'}</div>
-        <div style="font-family:var(--fc);font-size:10px;color:var(--ash)">${pr}% to next</div>
-      </div>
+      <div style="font-size:11px;color:var(--ash);font-style:italic;margin-top:4px">${renderNextLevelPending(getNextLevelPending(proj.id,total,cc))}</div>
     </div>`;
   });
 
@@ -1499,10 +1602,11 @@ async function renderProject(screenKey){
   if(proj.cats.length>0&&allPS.length>0){
     const nextLvlIdx=l;
     const hasFloors=proj.floors&&nextLvlIdx<proj.levels.length;
+    const totalTangibleForCat=allPS.reduce(function(s,x){return s+(x.tangible_logged||0);},0);
     catHTML=`<div class="st">Category distribution</div><div class="card" style="margin-bottom:14px">${
       proj.cats.map(function(cat){
         const cnt=catCounts[cat]||0;
-        const distPct=allPS.length>0?Math.round(cnt/allPS.length*100):0;
+        const distPct=totalTangibleForCat>0?Math.round(cnt/totalTangibleForCat*100):0;
         return '<div style="display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:0.5px solid var(--border)">'
           +'<div style="font-size:13px;color:var(--parch);width:160px;flex-shrink:0">'+cat+'</div>'
           +'<div style="flex:1;height:5px;background:var(--card2);border-radius:3px;overflow:hidden">'
@@ -1639,7 +1743,7 @@ async function renderProject(screenKey){
         </div>
         <div style="text-align:right">
           <div style="font-family:var(--fc);font-size:36px;color:var(--gold);line-height:1">${Math.round(total/proj.ceiling*100)}<span style="font-size:16px;color:var(--ash)">%</span></div>
-          <div style="font-size:12px;color:var(--ash);margin-top:4px">${next?(next-total).toLocaleString()+' '+proj.unit+' to '+nextT:'Ceiling reached'}</div>
+          <div style="font-size:12px;color:var(--ash);margin-top:4px;max-width:280px;text-align:right">${renderNextLevelPending(getNextLevelPending(proj.id,total,catCounts))}</div>
         </div>
       </div>
       <div style="height:8px;background:var(--card2);border-radius:4px;overflow:hidden">
