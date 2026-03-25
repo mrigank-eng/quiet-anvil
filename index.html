@@ -602,6 +602,17 @@ const weekNum=()=>Math.ceil(dayNum()/7);
 const totalCampaignDays=()=>Math.ceil((GEND()-GSTART())/864e5);
 const maxPoints=()=>totalCampaignDays()*80;
 
+// Number formatting — always whole numbers for points/tangibles
+const fmt=(n)=>Number.isInteger(n)?n:Math.round(n*100)/100;
+const fmtPts=(n)=>Math.round(n);  // points always integers
+const fmtT=(n,unit)=>{
+  // tangibles: show 2dp for hrs/km, whole for sessions/laps/entries
+  if(unit==='sessions'||unit==='laps'||unit==='entries')return Math.round(n);
+  return Math.round(n*100)/100;
+};
+
+
+
 function getCatCounts(pid,sessions){
   const proj=PROJECTS.find(x=>x.id===pid);
   if(!proj||!proj.floors)return{};
@@ -907,9 +918,9 @@ function renderForge(){
       if(sessions.length>0){
         sessListHTML='<div class="fp-sessions">';
         sessions.filter(s=>s.tangible_logged>0).forEach(function(s){
-          sessListHTML+=`<div class="fp-session-row" style="display:grid;grid-template-columns:120px 1fr auto;align-items:center"><span style="color:var(--ash);font-family:var(--fc);font-size:11px">${s.category||'Session'}</span><span style="color:var(--ash);font-size:12px">${s.notes||'—'}</span><span style="font-family:var(--fc);font-size:11px;color:var(--gold)">${s.tangible_logged} ${proj.unit}</span></div>`;
+          sessListHTML+=`<div class="fp-session-row" style="display:grid;grid-template-columns:110px 1fr auto auto;align-items:center;gap:8px"><span style="color:var(--ash);font-family:var(--fc);font-size:11px">${s.category||'Session'}</span><span style="color:var(--ash);font-size:12px">${s.notes||'—'}</span><span style="font-family:var(--fc);font-size:11px;color:var(--gold)">${fmtT(s.tangible_logged,proj.unit)} ${proj.unit}</span><button onclick="deleteSession('${s.id}','${proj.id}',${s.tangible_logged})" style="background:none;border:none;cursor:pointer;color:var(--ember);font-size:12px;padding:2px 4px;opacity:0.6;line-height:1" title="Delete session">✕</button></div>`;
         });
-        sessListHTML+=`<div style="font-size:12px;color:var(--ash);padding:4px 0">Today: <span style="color:var(--gold);font-family:var(--fc)">${tangToday} ${proj.unit}</span></div></div>`;
+        sessListHTML+=`<div style="font-size:12px;color:var(--ash);padding:4px 0">Today: <span style="color:var(--gold);font-family:var(--fc)">${fmtT(tangToday,proj.unit)} ${proj.unit}</span></div></div>`;
       }
       let footHTML='<div style="display:flex;align-items:center;gap:8px;padding-left:28px;flex-wrap:wrap">';
       if(!cp.submitted){
@@ -971,9 +982,9 @@ function renderForge(){
     </div>
 
     <div class="g4" style="margin-bottom:14px">
-      <div class="sb"><div class="sb-num" style="color:var(--gold)">${total+penToday}</div><div class="sb-lbl">Total / 80</div></div>
-      <div class="sb"><div class="sb-num">${ct}</div><div class="sb-lbl">CT / 20</div></div>
-      <div class="sb"><div class="sb-num">${nonCt}</div><div class="sb-lbl">Projects / 60</div></div>
+      <div class="sb"><div class="sb-num" style="color:var(--gold)">${fmtPts(total+penToday)}</div><div class="sb-lbl">Total / 80</div></div>
+      <div class="sb"><div class="sb-num">${fmtPts(ct)}</div><div class="sb-lbl">CT / 20</div></div>
+      <div class="sb"><div class="sb-num">${fmtPts(nonCt)}</div><div class="sb-lbl">Projects / 60</div></div>
       <div class="sb"><div class="sb-num" style="color:${penToday<0?'var(--ember)':'var(--ash)'}">${penToday}</div><div class="sb-lbl">Penalty</div></div>
     </div>
 
@@ -1060,6 +1071,18 @@ function openSession(pid){
   document.getElementById('session-modal').classList.add('open');
 }
 
+// Integer points distribution — largest remainder method
+// e.g. 10pts / 3 sessions = [4, 3, 3] never [3.333, 3.333, 3.333]
+
+// Integer points distribution — largest remainder method
+// e.g. 10pts / 3 sessions = [4, 3, 3] never [3.333...]
+function distributePoints(total, n){
+  if(n<=0)return[];
+  const base=Math.floor(total/n);
+  const remainder=total-(base*n);
+  return Array.from({length:n},(_,i)=>base+(i<remainder?1:0));
+}
+
 async function submitSession(){
   const proj=PROJECTS.find(p=>p.id===S.pendingSessionPid);
   const tangible=parseFloat(document.getElementById('sm-tangible').value);
@@ -1068,23 +1091,23 @@ async function submitSession(){
   const notes=document.getElementById('sm-notes').value;
   const language=document.getElementById('sm-language').value;
 
-  // Insert session first with 0 points — will recalculate below
+  // Insert session with 0 points — recalculate below
   await db.from('sessions').insert({
     date:today(),project:S.pendingSessionPid,tangible_logged:tangible,
     unit:proj.unit,points_earned:0,category:category||null,notes:notes||null,language:language||null
   });
 
-  // Recalculate points equally split across all today's sessions for this project
-  // Cap total at project's daily point ceiling
+  // Get all today's sessions for this project
   const{data:todaySessions}=await db.from('sessions')
     .select('id,tangible_logged')
     .eq('date',today()).eq('project',S.pendingSessionPid)
-    .gt('tangible_logged',0);
+    .gt('tangible_logged',0)
+    .order('created_at',{ascending:true});
   const n=(todaySessions||[]).length;
-  const ptsEach=n>0?Math.round((proj.pts/n)*100)/100:proj.pts;
-  // Update all sessions for this project today with equal split
-  for(const s of (todaySessions||[])){
-    await db.from('sessions').update({points_earned:ptsEach}).eq('id',s.id);
+  // Use integer distribution — no floating point
+  const pts=distributePoints(proj.pts, n);
+  for(let i=0;i<(todaySessions||[]).length;i++){
+    await db.from('sessions').update({points_earned:pts[i]}).eq('id',todaySessions[i].id);
   }
 
   // Update project summary total
@@ -1101,6 +1124,36 @@ async function submitSession(){
   }
   closeModal('session-modal');S.allSessions=[];await loadData();
   if(newLvl>oldLvl)showUnlock(proj.titles[newLvl-1],proj.id+' — Level '+newLvl+' of 10',UNLOCK_MSGS[proj.id]?.[newLvl-1]||'The forge marks you.');
+}
+
+// ── DELETE SESSION ─────────────────────────────────────
+async function deleteSession(sessionId, pid, tangible){
+  const proj=PROJECTS.find(p=>p.id===pid);
+  // Remove from DB
+  await db.from('sessions').delete().eq('id',sessionId);
+  // Update project summary total
+  const sum=S.projects.find(p=>p.project===pid)||{};
+  const newTotal=Math.max(0,(sum.total_tangible||0)-tangible);
+  await db.from('project_summary').update({total_tangible:newTotal}).eq('project',pid);
+  // Recalculate points for remaining today's sessions
+  const{data:remaining}=await db.from('sessions')
+    .select('id').eq('date',today()).eq('project',pid).gt('tangible_logged',0)
+    .order('created_at',{ascending:true});
+  const n=(remaining||[]).length;
+  if(n>0){
+    const pts=distributePoints(proj.pts,n);
+    for(let i=0;i<remaining.length;i++){
+      await db.from('sessions').update({points_earned:pts[i]}).eq('id',remaining[i].id);
+    }
+  }
+  // If no sessions left, mark project as not submitted
+  if(n===0&&S.committedProjects[pid]){
+    S.committedProjects[pid].hasSession=false;
+    S.committedProjects[pid].submitted=false;
+    await saveCommitted();
+  }
+  toast('Session removed','info');
+  S.allSessions=[];await loadData();
 }
 
 // ── CT ─────────────────────────────────────────────────
@@ -1197,7 +1250,7 @@ function renderArmoury(){
     const pd=pillarData[pillar];
     const avgLvl=pd.projects.length?Math.round(pd.projects.reduce((s,p)=>s+p.l,0)/pd.projects.length):0;
     const lowestLvl=pd.projects.length?Math.min(...pd.projects.map(p=>p.l)):0;
-    const color=lowestLvl>=7?'var(--gold)':lowestLvl>=4?'var(--safe)':lowestLvl>=2?'var(--warn)':'var(--ember)';
+    const color=lowestLvl>=7?'var(--gold)':lowestLvl>=4?'var(--safe)':lowestLvl>=2?'var(--warn)':'var(--ash)';
     return`<div class="card" style="text-align:center">
       <div style="font-family:var(--fc);font-size:10px;letter-spacing:0.15em;color:var(--ash);margin-bottom:6px">${pillar.toUpperCase()}</div>
       <div style="font-family:var(--fc);font-size:24px;color:${color};margin-bottom:4px">${lowestLvl}<span style="font-size:11px;color:var(--ash)">/10</span></div>
@@ -1280,52 +1333,62 @@ async function renderProject(screenKey){
   // Personal best
   const pb=personalBest(proj.id);
 
-  // Category distribution with floor indicators — clean UX
+  // Category distribution with floor indicators — two separate clean blocks
   let catHTML='';
   if(proj.cats.length>0&&allPS.length>0){
     const nextLvlIdx=l;
     const hasFloors=proj.floors&&nextLvlIdx<proj.levels.length;
 
-    // Floor summary line
-    let floorSummaryLine='';
+    // Block 1 — Category distribution (how time is spent)
+    const distBlock=`<div class="st">Category distribution</div>
+    <div class="card" style="margin-bottom:14px">
+      ${proj.cats.map(function(cat){
+        const cnt=catCounts[cat]||0;
+        const distPct=allPS.length>0?Math.round(cnt/allPS.length*100):0;
+        return`<div style="display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:0.5px solid var(--border)">
+          <div style="font-size:13px;color:var(--parch);width:140px;flex-shrink:0">${cat}</div>
+          <div style="flex:1;height:5px;background:var(--card2);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${distPct}%;background:var(--safe);border-radius:3px"></div>
+          </div>
+          <div style="font-family:var(--fc);font-size:12px;color:var(--gold);width:30px;text-align:right">${cnt}</div>
+          <div style="font-size:11px;color:var(--ash);width:36px;text-align:right">${distPct}%</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+
+    // Block 2 — Level floors (only shown when floors exist)
+    let floorBlock='';
     if(hasFloors){
-      const unmetFloors=Object.keys(proj.floors).filter(cat=>(catCounts[cat]||0)<proj.floors[cat][nextLvlIdx]);
-      const metCount=Object.keys(proj.floors).length-unmetFloors.length;
-      const totalFloors=Object.keys(proj.floors).length;
-      floorSummaryLine=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 12px;background:${unmetFloors.length===0?'var(--safe-dim)':'var(--warn-dim)'};border-radius:6px;border:0.5px solid ${unmetFloors.length===0?'var(--safe)':'var(--warn)'}">
-        <span style="font-size:12px;color:${unmetFloors.length===0?'var(--safe)':'var(--warn)'};font-family:var(--fc);font-size:11px">${unmetFloors.length===0?'✓ All floors met for Level '+(nextLvlIdx+1):'⚠ '+unmetFloors.length+' floor'+(unmetFloors.length>1?'s':'')+' unmet for Level '+(nextLvlIdx+1)}</span>
-        <span style="font-size:11px;color:var(--ash);margin-left:auto">${metCount}/${totalFloors} met</span>
+      const unmet=Object.keys(proj.floors).filter(cat=>(catCounts[cat]||0)<proj.floors[cat][nextLvlIdx]);
+      const allFloorsMet=unmet.length===0;
+      floorBlock=`<div class="st">Level ${nextLvlIdx+1} floors — ${allFloorsMet?'<span style="color:var(--safe)">All met ✓</span>':'<span style="color:var(--warn)">'+(Object.keys(proj.floors).length-unmet.length)+' / '+Object.keys(proj.floors).length+' met</span>'}</div>
+      <div class="card" style="margin-bottom:14px">
+        <div style="font-size:12px;color:var(--ash);font-style:italic;margin-bottom:10px">To unlock ${proj.titles[nextLvlIdx]} you need these minimums:</div>
+        ${Object.keys(proj.floors).map(function(cat){
+          const cnt=catCounts[cat]||0;
+          const req=proj.floors[cat][nextLvlIdx];
+          const met=cnt>=req;
+          const fpct=Math.min(100,Math.round(cnt/req*100));
+          return`<div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <div style="font-size:13px;color:${met?'var(--safe)':'var(--parch)'}">${cat}</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="font-size:12px;color:var(--ash)">${cnt} / ${req} ${proj.unit}</div>
+                <div style="font-size:11px;font-family:var(--fc);padding:2px 8px;border-radius:4px;background:${met?'var(--safe-dim)':'var(--warn-dim)'};color:${met?'var(--safe)':'var(--warn)'}">${met?'✓ Met':'Need '+(req-cnt)+' more'}</div>
+              </div>
+            </div>
+            <div style="height:5px;background:var(--card2);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${fpct}%;background:${met?'var(--safe)':'var(--warn)'};border-radius:3px;transition:width 0.4s"></div>
+            </div>
+          </div>`;
+        }).join('')}
       </div>`;
     }
 
-    catHTML=`<div class="st">Category distribution${hasFloors?' — floors for Level '+(nextLvlIdx+1):''}</div><div class="card" style="margin-bottom:14px">${floorSummaryLine}`;
-    proj.cats.forEach(function(cat){
-      const cnt=catCounts[cat]||0;
-      const distPct=allPS.length>0?Math.round(cnt/allPS.length*100):0;
-      let floorPill='';
-      if(hasFloors&&proj.floors[cat]){
-        const req=proj.floors[cat][nextLvlIdx];
-        const met=cnt>=req;
-        const fpct=Math.min(100,Math.round(cnt/req*100));
-        floorPill=`<div style="display:flex;align-items:center;gap:6px;margin-top:5px;padding-top:5px;border-top:0.5px solid var(--border)">
-          <div style="font-size:10px;color:var(--ash);width:80px;flex-shrink:0">L${nextLvlIdx+1} floor</div>
-          <div style="flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${fpct}%;background:${met?'var(--safe)':'var(--warn)'}"></div></div>
-          <div style="font-size:10px;font-family:var(--fc);color:${met?'var(--safe)':'var(--warn)'};width:70px;text-align:right">${met?'✓ '+cnt+'/'+req:cnt+'/'+req}</div>
-        </div>`;
-      }
-      catHTML+=`<div style="margin-bottom:${floorPill?'12px':'8px'}">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div class="cat-label">${cat}</div>
-          <div class="cat-track"><div class="cat-fill" style="width:${distPct}%"></div></div>
-          <div class="cat-val">${cnt} <span style="color:var(--ash);font-size:10px">(${distPct}%)</span></div>
-        </div>
-        ${floorPill}
-      </div>`;
-    });
-    catHTML+='</div>';
+    catHTML=distBlock+floorBlock;
   }
 
-  // Floor warning banner
+  // Floor warning banner (only when tangible is enough but floors not met)
   let floorStatusHTML='';
   if(proj.floors&&l<proj.levels.length){
     const allMet=Object.keys(proj.floors).every(cat=>(catCounts[cat]||0)>=proj.floors[cat][l]);
@@ -1333,7 +1396,7 @@ async function renderProject(screenKey){
       const unmet=Object.keys(proj.floors).filter(cat=>(catCounts[cat]||0)<proj.floors[cat][l]);
       floorStatusHTML=`<div class="pen-banner" style="background:var(--warn-dim);border-color:var(--warn);margin-bottom:14px">
         <div style="width:8px;height:8px;border-radius:50%;background:var(--warn);flex-shrink:0"></div>
-        <div><div style="font-size:13px;color:#F0D080;margin-bottom:2px">Tangible threshold met but floors not cleared for ${proj.titles[l]}</div><div style="font-size:11px;color:var(--ash)">Still needed: ${unmet.join(', ')}</div></div>
+        <div><div style="font-size:13px;color:#F0D080;margin-bottom:2px">Tangible threshold met — floors still needed for ${proj.titles[l]}</div><div style="font-size:11px;color:var(--ash)">Categories not yet at floor: ${unmet.join(' · ')}</div></div>
       </div>`;
     }
   }
@@ -1603,16 +1666,16 @@ function renderMeta(){
       <div style="display:flex;align-items:center;gap:12px">
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;color:var(--parch);margin-bottom:2px">${x.proj.id}</div>
-          <div style="font-family:var(--fc);font-size:12px;color:${x.l===metaLvl?'var(--ember)':'var(--gold)'}">${dispTitle(x.proj.id,x.total)}</div>
+          <div style="font-family:var(--fc);font-size:12px;color:${x.l===metaLvl?'var(--warn)':'var(--gold)'}">${dispTitle(x.proj.id,x.total)}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
-          <div style="font-family:var(--fc);font-size:13px;color:${x.l===metaLvl?'var(--ember)':'var(--gold)'}">${x.l}/10</div>
+          <div style="font-family:var(--fc);font-size:13px;color:${x.l===metaLvl?'var(--warn)':'var(--gold)'}">${x.l}/10</div>
           <div style="font-size:11px;color:var(--ash)">${x.total.toLocaleString()} ${x.proj.unit}</div>
           ${daysSince?`<div style="font-size:10px;color:var(--border2);margin-top:1px">${daysSince}</div>`:''}
         </div>
       </div>
       <div style="margin-top:6px">
-        <div class="prog-track" style="margin:0;height:3px"><div class="prog-fill" style="width:${getProg(x.proj.id,x.total)}%;${x.l===metaLvl?'background:var(--ember)':''}"></div></div>
+        <div class="prog-track" style="margin:0;height:3px"><div class="prog-fill" style="width:${getProg(x.proj.id,x.total)}%;background:${x.l===metaLvl?'var(--gold)':'var(--safe)'}"></div></div>
       </div>
     </div>`;
   }).join('');
@@ -2477,9 +2540,13 @@ async function renderCalendar(){
     }
     weekHTML+='</div>';
     contentHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <button class="cal-nav-btn" onclick="calPrev()">← Prev week</button>
-      <div style="font-family:var(--fc);font-size:13px;color:var(--parch)">${sowStr} — ${eowStr}</div>
-      <button class="cal-nav-btn" onclick="calNext()">Next week →</button>
+      <button class="cal-nav-btn" onclick="calPrev()">← Prev</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="font-family:var(--fc);font-size:13px;color:var(--parch)">${sowStr} — ${eowStr}</div>
+        <button class="cal-nav-btn" onclick="calGoToday()" style="font-size:9px;padding:4px 10px">This week</button>
+        <input type="week" onchange="calJumpWeek(this.value)" style="background:var(--card2);border:0.5px solid var(--border);border-radius:6px;color:var(--ash);font-size:11px;padding:4px 8px;width:auto;margin:0;cursor:pointer" title="Jump to week">
+      </div>
+      <button class="cal-nav-btn" onclick="calNext()">Next →</button>
     </div>${weekHTML}`;
 
   } else {
@@ -2566,6 +2633,15 @@ async function renderCalendar(){
 }
 
 function setCalView(v){calView=v;S.calSelected=null;renderCalendar();}
+function calGoToday(){S.calDate=new Date();S.calSelected=null;renderCalendar();}
+function calJumpWeek(val){
+  if(!val)return;
+  // val is "YYYY-Www" format
+  const[year,week]=val.split('-W');
+  const d=new Date(parseInt(year),0,1);
+  d.setDate(d.getDate()+(parseInt(week)-1)*7);
+  S.calDate=d;S.calSelected=null;renderCalendar();
+}
 function calPrev(){
   if(calView==='month')S.calDate.setMonth(S.calDate.getMonth()-1);
   else if(calView==='week')S.calDate.setDate(S.calDate.getDate()-7);
