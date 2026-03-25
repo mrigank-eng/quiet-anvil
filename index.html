@@ -2,29 +2,36 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>The Quiet Anvil</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
---bg:#2A2420;--sidebar:#1E1A16;--card:#332D28;--card2:#3D3530;--border:#4A4238;--border2:#5A5248;
---ash:#A09080;--parch:#F0E4CC;--gold:#D4A84C;--gold2:#A07828;--gold-dim:rgba(212,168,76,0.12);
---ember:#D04030;--ember-dim:rgba(208,64,48,0.12);--safe:#2A8060;--safe-dim:rgba(42,128,96,0.12);
---warn:#D08820;--ff:'EB Garamond',serif;--fc:'Cinzel',serif;--sw:220px;
+  --bg:#2A2420;--sidebar:#1E1A16;--card:#332D28;--card2:#3D3530;
+  --border:#4A4238;--border2:#5A5248;
+  --ash:#A09080;--parch:#F0E4CC;
+  --gold:#D4A84C;--gold2:#A07828;--gold-dim:rgba(212,168,76,0.12);
+  --ember:#D04030;--ember-dim:rgba(208,64,48,0.12);
+  --safe:#2A8060;--safe-dim:rgba(42,128,96,0.12);
+  --warn:#D08820;--warn-dim:rgba(208,136,32,0.12);
+  --ff:'EB Garamond',serif;--fc:'Cinzel',serif;
+  --sw:220px;
 }
+
 body{background:var(--bg);color:var(--parch);font-family:var(--ff);font-size:15px;line-height:1.6;min-height:100vh;display:flex}
 
-/* SIDEBAR */
-.sidebar{width:var(--sw);background:var(--sidebar);border-right:0.5px solid var(--border);display:flex;flex-direction:column;min-height:100vh;flex-shrink:0;position:fixed;top:0;left:0;bottom:0;overflow-y:auto}
-.sb-logo{padding:20px 16px 16px;border-bottom:0.5px solid var(--border)}
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sw);background:var(--sidebar);border-right:0.5px solid var(--border);display:flex;flex-direction:column;min-height:100vh;flex-shrink:0;position:fixed;top:0;left:0;bottom:0;overflow-y:auto;z-index:50;transition:transform 0.3s}
+.sb-logo{padding:18px 16px 14px;border-bottom:0.5px solid var(--border)}
 .sb-logo-title{font-family:var(--fc);font-size:13px;color:var(--gold);letter-spacing:0.15em;line-height:1.2}
 .sb-logo-sub{font-size:11px;color:var(--ash);margin-top:3px;font-style:italic}
-.sb-sec{padding:10px 0}
+.sb-sec{padding:8px 0}
 .sb-sec-label{font-family:var(--fc);font-size:8px;letter-spacing:0.2em;color:var(--ash);padding:0 16px;margin-bottom:4px}
-.sb-item{display:flex;align-items:center;gap:8px;padding:7px 16px;cursor:pointer;color:var(--ash);font-size:13px;border-left:2px solid transparent;transition:all 0.15s}
+.sb-item{display:flex;align-items:center;gap:8px;padding:7px 16px;cursor:pointer;color:var(--ash);font-size:13px;border-left:2px solid transparent;transition:all 0.15s;user-select:none}
 .sb-item:hover{color:var(--parch);background:rgba(255,255,255,0.04)}
 .sb-item.active{color:var(--gold);border-left-color:var(--gold);background:var(--gold-dim)}
 .sb-icon{font-size:14px;width:16px;text-align:center;flex-shrink:0}
@@ -33,91 +40,90 @@ body{background:var(--bg);color:var(--parch);font-family:var(--ff);font-size:15p
 .sb-footer-label{font-size:10px;color:var(--ash);margin-bottom:2px}
 .sb-footer-val{font-family:var(--fc);font-size:11px;color:var(--gold)}
 
-/* MAIN */
-.main{margin-left:var(--sw);flex:1;min-height:100vh;padding:28px 32px;max-width:1100px}
+/* ── MOBILE HEADER ── */
+.mobile-header{display:none;background:var(--sidebar);border-bottom:0.5px solid var(--border);padding:0 16px;height:48px;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:60}
+.mobile-logo{font-family:var(--fc);font-size:12px;color:var(--gold);letter-spacing:0.12em}
+.hamburger{background:none;border:none;cursor:pointer;display:flex;flex-direction:column;gap:4px;padding:4px}
+.hamburger span{width:20px;height:1.5px;background:var(--parch);display:block;transition:all 0.2s}
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:49}
+.sidebar-overlay.open{display:block}
 
-/* SCREEN */
+/* ── MAIN ── */
+.main{margin-left:var(--sw);flex:1;min-height:100vh;padding:28px 32px;max-width:1200px}
 .screen{display:none}.screen.active{display:block}
 
-/* CARDS */
+/* ── CARDS ── */
 .card{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:16px 20px;margin-bottom:14px}
 .card-gold{border-color:var(--gold2)}.card-ember{border-color:var(--ember)}.card-safe{border-color:var(--safe)}
 
-/* GRIDS */
+/* ── GRIDS ── */
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
 .g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px}
 
-/* SCORE BOXES */
+/* ── SCORE BOXES ── */
 .sb{background:var(--card2);border-radius:8px;padding:14px;text-align:center}
 .sb-num{font-family:var(--fc);font-size:28px;line-height:1;margin-bottom:3px}
 .sb-lbl{font-size:11px;color:var(--ash);letter-spacing:0.06em}
 
-/* SECTION TITLE */
+/* ── SECTION TITLE ── */
 .st{font-family:var(--fc);font-size:10px;letter-spacing:0.18em;color:var(--gold);margin-bottom:12px;display:flex;align-items:center;gap:10px}
 .st::after{content:'';flex:1;height:0.5px;background:var(--border)}
 
-/* PAGE TITLE */
+/* ── PAGE TITLE ── */
 .pt{font-family:var(--fc);font-size:22px;color:var(--gold);margin-bottom:4px;letter-spacing:0.05em}
 .ps{font-size:13px;color:var(--ash);font-style:italic;margin-bottom:24px}
 
-/* PROGRESS */
+/* ── PROGRESS ── */
 .prog-track{height:5px;background:var(--card2);border-radius:3px;overflow:hidden;margin:6px 0}
 .prog-fill{height:100%;border-radius:3px;background:var(--safe);transition:width 0.6s}
-.prog-fill-gold{background:var(--gold)}
 
-/* PENALTY BANNER */
+/* ── PENALTY BANNER ── */
 .pen-banner{background:var(--ember-dim);border:0.5px solid var(--ember);border-radius:8px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px}
 .pen-dot{width:8px;height:8px;border-radius:50%;background:var(--ember);flex-shrink:0;animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
 
-/* LEVEL BADGE */
-.lvl-badge{background:var(--card2);border:0.5px solid var(--gold2);border-radius:8px;padding:10px 14px;text-align:center}
+/* ── LEVEL BADGE ── */
+.lvl-badge{background:var(--card2);border:0.5px solid var(--gold2);border-radius:8px;padding:10px 14px;text-align:center;flex-shrink:0}
 .lvl-num{font-family:var(--fc);font-size:36px;color:var(--gold);line-height:1}
 .lvl-lbl{font-size:10px;color:var(--ash);letter-spacing:0.08em}
 
-/* FORMS */
+/* ── FORMS ── */
 input,select,textarea{background:var(--card2);border:0.5px solid var(--border);border-radius:6px;color:var(--parch);font-family:var(--ff);font-size:14px;padding:9px 12px;width:100%;outline:none;margin-bottom:10px;transition:border-color 0.2s}
 input:focus,select:focus,textarea:focus{border-color:var(--gold2)}
 textarea{resize:none;min-height:70px}
 select option{background:var(--card2)}
 label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-family:var(--fc);letter-spacing:0.06em}
 
-/* BUTTONS */
+/* ── BUTTONS ── */
 .btn{padding:9px 18px;background:transparent;border:0.5px solid var(--gold2);border-radius:8px;font-family:var(--fc);font-size:11px;color:var(--gold);letter-spacing:0.1em;cursor:pointer;transition:all 0.2s}
 .btn:hover{background:var(--gold-dim)}
 .btn-block{width:100%;display:block;text-align:center}
 .btn-safe{border-color:var(--safe);color:var(--safe)}.btn-safe:hover{background:var(--safe-dim)}
 .btn-danger{border-color:var(--ember);color:var(--ember)}.btn-danger:hover{background:var(--ember-dim)}
+.btn-warn{border-color:var(--warn);color:var(--warn)}.btn-warn:hover{background:var(--warn-dim)}
 .btn-sm{padding:5px 12px;font-size:10px}
 .btn-xs{padding:4px 8px;font-size:9px}
 
-/* CHECKBOX */
-.chk{width:18px;height:18px;border:1.5px solid var(--border2);border-radius:4px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s}
-.chk:hover{border-color:var(--gold)}
-.chk.on{background:var(--safe);border-color:var(--safe)}
-.chk.on::after{content:'';width:9px;height:6px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translateY(-1px)}
-.chk.broken{background:var(--ember);border-color:var(--ember)}
-
-/* CT BUTTONS */
+/* ── CT BUTTONS ── */
 .ct-btn-kept{padding:5px 14px;background:transparent;border:0.5px solid var(--safe);border-radius:6px;font-family:var(--fc);font-size:10px;color:var(--safe);cursor:pointer;transition:all 0.2s}
-.ct-btn-kept:hover,.ct-btn-kept.active{background:var(--safe-dim)}
+.ct-btn-kept.active,.ct-btn-kept:hover{background:var(--safe-dim)}
 .ct-btn-broke{padding:5px 14px;background:transparent;border:0.5px solid var(--ember);border-radius:6px;font-family:var(--fc);font-size:10px;color:var(--ember);cursor:pointer;transition:all 0.2s}
-.ct-btn-broke:hover,.ct-btn-broke.active{background:var(--ember-dim)}
+.ct-btn-broke.active,.ct-btn-broke:hover{background:var(--ember-dim)}
 
-/* STREAK DOTS */
+/* ── STREAK DOTS ── */
 .s-dots{display:flex;gap:3px;flex-wrap:wrap;margin:6px 0}
 .s-dot{width:10px;height:10px;border-radius:2px}
 
-/* MODAL */
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(20,16,12,0.88);z-index:500;align-items:center;justify-content:center}
+/* ── MODAL ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(20,16,12,0.88);z-index:500;align-items:center;justify-content:center;padding:16px}
 .modal-overlay.open{display:flex}
 .modal{background:var(--card);border:0.5px solid var(--gold2);border-radius:12px;padding:24px;width:100%;max-width:440px}
 .modal-title{font-family:var(--fc);font-size:14px;color:var(--gold);letter-spacing:0.1em;margin-bottom:6px}
 .modal-sub{font-size:13px;color:var(--ash);font-style:italic;margin-bottom:16px}
 .modal-btns{display:flex;gap:10px;margin-top:8px}
 
-/* UNLOCK */
+/* ── UNLOCK ── */
 .unlock{display:none;position:fixed;inset:0;background:var(--sidebar);z-index:600;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px}
 .unlock.open{display:flex}
 .unlock-eye{font-family:var(--fc);font-size:10px;color:var(--ash);letter-spacing:0.25em;margin-bottom:20px}
@@ -126,67 +132,171 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
 .unlock-msg{font-size:15px;color:var(--parch);font-style:italic;max-width:380px;margin-bottom:32px;line-height:1.7}
 @keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
 
-/* TABLE */
+/* ── PIN ── */
+.pin-screen{display:none;position:fixed;inset:0;background:var(--sidebar);z-index:1000;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.pin-screen.active{display:flex}
+.pin-logo{font-family:var(--fc);font-size:20px;color:var(--gold);letter-spacing:0.2em;margin-bottom:6px}
+.pin-sub{font-size:13px;color:var(--ash);font-style:italic;margin-bottom:40px}
+.pin-dots{display:flex;gap:14px;margin-bottom:32px}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--border2);transition:all 0.2s}
+.pin-dot.filled{background:var(--gold);border-color:var(--gold)}
+.pin-dot.error{background:var(--ember);border-color:var(--ember)}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:240px}
+.pin-btn{background:var(--card);border:0.5px solid var(--border);border-radius:8px;padding:16px;font-family:var(--fc);font-size:20px;color:var(--parch);cursor:pointer;transition:all 0.2s}
+.pin-btn:hover{background:var(--card2);border-color:var(--gold2)}
+.pin-btn.clear{font-size:12px;color:var(--ash)}
+.pin-error{font-size:12px;color:var(--ember);margin-top:14px;height:16px}
+
+/* ── TABLE ── */
 .dt{width:100%;border-collapse:collapse;font-size:13px}
 .dt th{font-family:var(--fc);font-size:9px;letter-spacing:0.12em;color:var(--ash);padding:8px 10px;border-bottom:0.5px solid var(--border);text-align:left}
 .dt td{padding:8px 10px;border-bottom:0.5px solid var(--border);color:var(--parch)}
 .dt tr:last-child td{border-bottom:none}
 .dt tr:hover td{background:rgba(255,255,255,0.02)}
 
-/* STAT MINI */
+/* ── STAT MINI ── */
 .sm{text-align:center;padding:12px 8px;background:var(--card2);border-radius:8px}
 .sm-val{font-family:var(--fc);font-size:22px;color:var(--parch);line-height:1}
 .sm-lbl{font-size:10px;color:var(--ash);margin-top:3px}
 
-/* LOADING */
-.loading{padding:60px;text-align:center;font-family:var(--fc);font-size:11px;color:var(--ash);letter-spacing:0.12em}
-
-/* PROJECT CARD IN ARMOURY */
-.ac{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:14px 16px;cursor:pointer;transition:border-color 0.2s;margin-bottom:10px}
-.ac:hover{border-color:var(--gold2)}
-
-/* LEVEL JOURNEY ROW */
-.lj-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;margin-bottom:6px}
+/* ── LEVEL JOURNEY ── */
+.lj-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;margin-bottom:5px}
 .lj-row.done{background:var(--safe-dim)}
 .lj-row.current{background:var(--gold-dim);border:0.5px solid rgba(212,168,76,0.25)}
 .lj-row.future{opacity:0.4}
 .lj-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
-.lj-title{font-family:var(--fc);font-size:12px;width:180px;flex-shrink:0}
+.lj-title{font-family:var(--fc);font-size:12px;width:160px;flex-shrink:0}
 .lj-bar-track{flex:1;height:6px;background:var(--card2);border-radius:3px;overflow:hidden}
 .lj-bar-fill{height:100%;border-radius:3px;transition:width 0.6s}
 .lj-threshold{font-size:11px;color:var(--ash);width:80px;text-align:right;flex-shrink:0}
-.lj-tag{font-size:10px;font-family:var(--fc);width:50px;text-align:right;flex-shrink:0}
+.lj-tag{font-size:10px;font-family:var(--fc);width:44px;text-align:right;flex-shrink:0}
 
-/* CAT BAR */
+/* ── CAT BAR ── */
 .cat-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .cat-label{font-size:12px;color:var(--ash);width:160px;flex-shrink:0}
 .cat-track{flex:1;height:5px;background:var(--card2);border-radius:3px;overflow:hidden}
 .cat-fill{height:100%;border-radius:3px;background:var(--safe)}
 .cat-val{font-size:12px;color:var(--parch);width:60px;text-align:right}
 
-/* FORGE PROJECT BLOCK */
-.fp-block{background:var(--card2);border:0.5px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px}
-.fp-header{display:flex;align-items:center;gap:10px;margin-bottom:8px}
-.fp-commit-check{width:18px;height:18px;border:1.5px solid var(--border2);border-radius:4px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s}
+/* ── FORGE PROJECT BLOCK ── */
+.fp-block{background:var(--card2);border:0.5px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;transition:border-color 0.2s}
+.fp-header{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.fp-commit-check{width:18px;height:18px;border:1.5px solid var(--border2);border-radius:4px;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s;font-size:11px}
 .fp-commit-check:hover{border-color:var(--gold)}
-.fp-commit-check.committed{background:var(--gold-dim);border-color:var(--gold2)}
-.fp-commit-check.committed::after{content:'✓';color:var(--gold);font-size:11px}
+.fp-commit-check.committed{background:var(--gold-dim);border-color:var(--gold2);color:var(--gold)}
 .fp-name{font-size:14px;color:var(--parch);font-weight:500;flex:1}
 .fp-pts{font-family:var(--fc);font-size:11px;color:var(--gold)}
-.fp-title{font-size:12px;color:var(--ash);font-style:italic;margin-bottom:8px;padding-left:28px}
 .fp-sessions{padding-left:28px;margin-bottom:8px}
 .fp-session-row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ash);padding:3px 0;border-bottom:0.5px solid var(--border)}
 .fp-session-row:last-child{border-bottom:none}
-.fp-session-tangible{font-family:var(--fc);font-size:11px;color:var(--gold);margin-left:auto}
-.fp-footer{display:flex;align-items:center;gap:8px;padding-left:28px}
-.fp-total{font-size:12px;color:var(--ash)}
-.fp-total span{color:var(--gold);font-family:var(--fc)}
+
+/* ── ARMOURY CARD ── */
+.ac{background:var(--card);border:0.5px solid var(--border);border-radius:10px;padding:14px 16px;cursor:pointer;transition:border-color 0.2s;margin-bottom:10px}
+.ac:hover{border-color:var(--gold2)}
+
+/* ── CALENDAR ── */
+.cal-nav-btn{background:transparent;border:0.5px solid var(--border);border-radius:6px;padding:6px 14px;font-family:var(--fc);font-size:10px;color:var(--ash);cursor:pointer;transition:all 0.2s}
+.cal-nav-btn:hover{border-color:var(--gold2);color:var(--gold)}
+.cal-nav-btn.active{border-color:var(--gold);color:var(--gold);background:var(--gold-dim)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.cal-day-hdr{font-family:var(--fc);font-size:9px;letter-spacing:0.08em;color:var(--ash);text-align:center;padding:6px 0}
+.cal-day{border-radius:8px;padding:8px 6px;min-height:72px;cursor:pointer;transition:all 0.2s;border:0.5px solid transparent;background:var(--card)}
+.cal-day:hover{border-color:var(--gold2)}
+.cal-day.empty{background:transparent;cursor:default;border-color:transparent}
+.cal-day.future{opacity:0.25;cursor:default}
+.cal-day.selected{border-color:var(--gold);background:var(--gold-dim)}
+.cal-day-num{font-family:var(--fc);font-size:10px;color:var(--ash);margin-bottom:4px}
+.cal-score{font-family:var(--fc);font-size:14px;line-height:1;margin-bottom:4px}
+.cal-pillars{display:flex;gap:3px;margin-bottom:3px}
+.cal-pillar-dot{width:7px;height:7px;border-radius:50%}
+.cal-prog{height:2px;background:var(--border);border-radius:1px;overflow:hidden;margin-top:2px}
+.cal-prog-fill{height:100%;border-radius:1px}
+.heatmap-wrap{overflow-x:auto;padding-bottom:4px}
+
+/* ── TEMPERATURE ── */
+.temp-indicator{border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.temp-hot{background:rgba(212,168,76,0.15);border:0.5px solid var(--gold)}
+.temp-warm{background:rgba(208,136,32,0.15);border:0.5px solid var(--warn)}
+.temp-cool{background:rgba(208,64,48,0.15);border:0.5px solid var(--ember)}
+
+/* ── SHARE CARDS ── */
+.share-card-outer{background:#111008;border-radius:12px;padding:20px;margin-bottom:16px;display:flex;justify-content:center;align-items:center}
+.sc{width:380px;min-height:380px;background:#111008;border:1px solid #8a6a1a;border-radius:16px;padding:28px;font-family:'Cinzel',serif;position:relative;overflow:hidden}
+.sc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#D4A84C,transparent)}
+.sc-eyebrow{font-size:8px;letter-spacing:0.3em;color:#8a6a1a;margin-bottom:20px;text-transform:uppercase}
+.sc-hero{font-size:42px;color:#D4A84C;line-height:1;margin-bottom:6px;letter-spacing:0.02em}
+.sc-hero-sub{font-size:11px;letter-spacing:0.15em;color:#8a6a1a;margin-bottom:24px}
+.sc-divider{height:1px;background:linear-gradient(90deg,transparent,#8a6a1a,transparent);margin:18px 0}
+.sc-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.sc-label{font-size:9px;letter-spacing:0.12em;color:#8a6a1a}
+.sc-val{font-size:12px;color:#F0E4CC}
+.sc-val-gold{font-size:12px;color:#D4A84C}
+.sc-mark{position:absolute;bottom:20px;right:24px;font-size:8px;letter-spacing:0.2em;color:#4a3a1a}
+.sc-prog-row{margin-bottom:8px}
+.sc-prog-label{display:flex;justify-content:space-between;margin-bottom:3px}
+.sc-prog-name{font-size:9px;letter-spacing:0.08em;color:#8a6a1a}
+.sc-prog-val{font-size:9px;color:#D4A84C}
+.sc-prog-track{height:3px;background:#2a2010;border-radius:2px;overflow:hidden}
+.sc-prog-fill{height:100%;border-radius:2px;background:#D4A84C}
+.sc-ct-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:4px;margin-top:4px}
+.sc-ct-dot{height:8px;border-radius:2px}
+
+/* ── LOADING ── */
+.loading{padding:60px;text-align:center;font-family:var(--fc);font-size:11px;color:var(--ash);letter-spacing:0.12em}
+
+/* ── MOBILE RESPONSIVE ── */
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0)}
+  .mobile-header{display:flex}
+  .main{margin-left:0;padding:16px;padding-top:16px}
+  .g2,.g3,.g4{grid-template-columns:1fr 1fr}
+  .g4{grid-template-columns:1fr 1fr}
+  .lj-title{width:120px}
+  .lj-threshold{width:60px}
+  .sc{width:100%;min-width:0}
+  .share-card-outer{padding:12px}
+  .cal-day{min-height:56px;padding:5px 3px}
+  .cal-score{font-size:12px}
+}
+@media(max-width:480px){
+  .g3{grid-template-columns:1fr 1fr}
+  .g4{grid-template-columns:1fr 1fr}
+  .lj-row{flex-wrap:wrap}
+  .lj-bar-track{min-width:60px}
+}
 </style>
 </head>
 <body>
 
+<!-- PIN -->
+<div class="pin-screen" id="pin-screen">
+  <div class="pin-logo">The Quiet Anvil</div>
+  <div class="pin-sub" id="pin-label">Enter your PIN</div>
+  <div class="pin-dots">
+    <div class="pin-dot" id="pd0"></div><div class="pin-dot" id="pd1"></div>
+    <div class="pin-dot" id="pd2"></div><div class="pin-dot" id="pd3"></div>
+  </div>
+  <div class="pin-pad">
+    <button class="pin-btn" onclick="pp('1')">1</button><button class="pin-btn" onclick="pp('2')">2</button><button class="pin-btn" onclick="pp('3')">3</button>
+    <button class="pin-btn" onclick="pp('4')">4</button><button class="pin-btn" onclick="pp('5')">5</button><button class="pin-btn" onclick="pp('6')">6</button>
+    <button class="pin-btn" onclick="pp('7')">7</button><button class="pin-btn" onclick="pp('8')">8</button><button class="pin-btn" onclick="pp('9')">9</button>
+    <button class="pin-btn clear" onclick="pb()">Clear</button><button class="pin-btn" onclick="pp('0')">0</button><button class="pin-btn clear" onclick="pdel()">⌫</button>
+  </div>
+  <div class="pin-error" id="pin-error"></div>
+</div>
+
+<!-- MOBILE HEADER -->
+<div class="mobile-header">
+  <div class="mobile-logo">The Quiet Anvil</div>
+  <button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+</div>
+<div class="sidebar-overlay" id="sb-overlay" onclick="closeSidebar()"></div>
+
 <!-- SIDEBAR -->
-<div class="sidebar">
+<div class="sidebar" id="sidebar">
   <div class="sb-logo">
     <div class="sb-logo-title">The Quiet Anvil</div>
     <div class="sb-logo-sub">March 28, 2026 — June 1, 2028</div>
@@ -210,8 +320,11 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
     <div class="sb-item" onclick="nav('temper')"><span class="sb-icon">🔥</span>Clean Temper</div>
     <div class="sb-item" onclick="nav('willmaster')"><span class="sb-icon">⚡</span>The Willmaster</div>
     <div class="sb-item" onclick="nav('meta')"><span class="sb-icon">◎</span>Meta Rank</div>
+    <div class="sb-item" onclick="nav('calendar')"><span class="sb-icon">📅</span>Calendar</div>
     <div class="sb-item" onclick="nav('report')"><span class="sb-icon">📜</span>Anvil Report</div>
     <div class="sb-item" onclick="nav('milestones')"><span class="sb-icon">★</span>Milestones</div>
+    <div class="sb-item" onclick="nav('share')"><span class="sb-icon">◈</span>Share</div>
+    <div class="sb-item" onclick="nav('settings')"><span class="sb-icon">⚙</span>Settings</div>
   </div>
   <div class="sb-footer">
     <div class="sb-footer-label">Days to Reckoning</div>
@@ -232,27 +345,22 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
   <div id="screen-temper" class="screen"><div class="loading">Loading commandments...</div></div>
   <div id="screen-willmaster" class="screen"><div class="loading">Loading Willmaster...</div></div>
   <div id="screen-meta" class="screen"><div class="loading">Loading meta rank...</div></div>
+  <div id="screen-calendar" class="screen"><div class="loading">Loading calendar...</div></div>
   <div id="screen-report" class="screen"><div class="loading">Building report...</div></div>
   <div id="screen-milestones" class="screen"><div class="loading">Loading milestones...</div></div>
+  <div id="screen-share" class="screen"><div class="loading">Building share cards...</div></div>
+  <div id="screen-settings" class="screen"><div class="loading">Loading settings...</div></div>
 </div>
 
-<!-- SESSION MODAL -->
+<!-- MODALS -->
 <div class="modal-overlay" id="session-modal">
   <div class="modal">
-    <div class="modal-title" id="session-modal-title">Log session</div>
-    <div class="modal-sub" id="session-modal-sub"></div>
-    <label>Amount</label>
-    <input type="number" id="session-tangible" step="any" min="0">
-    <div id="session-cat-wrap">
-      <label>Category</label>
-      <select id="session-category"><option value="">Select category (optional)</option></select>
-    </div>
-    <div id="session-lang-wrap" style="display:none">
-      <label>Language</label>
-      <select id="session-language"><option value="">Select language</option><option>Urdu</option><option>Hindi</option><option>English</option></select>
-    </div>
-    <label>Notes — what you worked on</label>
-    <input type="text" id="session-notes" placeholder="Brief description...">
+    <div class="modal-title" id="sm-title">Log session</div>
+    <div class="modal-sub" id="sm-sub"></div>
+    <label>Amount</label><input type="number" id="sm-tangible" step="any" min="0">
+    <div id="sm-cat-wrap"><label>Category</label><select id="sm-category"><option value="">Optional</option></select></div>
+    <div id="sm-lang-wrap" style="display:none"><label>Language</label><select id="sm-language"><option value="">Select</option><option>Urdu</option><option>Hindi</option><option>English</option></select></div>
+    <label>Notes</label><input type="text" id="sm-notes" placeholder="What you worked on...">
     <div class="modal-btns">
       <button class="btn btn-danger btn-sm" onclick="closeModal('session-modal')">Cancel</button>
       <button class="btn btn-sm" onclick="submitSession()">Log session</button>
@@ -260,27 +368,23 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
   </div>
 </div>
 
-<!-- SUBMIT PROJECT MODAL (no sessions) -->
 <div class="modal-overlay" id="skip-modal">
   <div class="modal">
-    <div class="modal-title" id="skip-modal-title">Project not logged</div>
-    <div class="modal-sub" id="skip-modal-sub">You committed to this project but logged nothing today.</div>
-    <label>What happened — record honestly</label>
-    <textarea id="skip-reason" placeholder="Why this project was not done today..."></textarea>
+    <div class="modal-title" id="skip-title">Project not logged</div>
+    <div class="modal-sub" id="skip-sub">You committed but logged nothing.</div>
+    <label>What happened</label><textarea id="skip-reason" placeholder="Record honestly..."></textarea>
     <div class="modal-btns">
       <button class="btn btn-danger btn-sm" onclick="closeModal('skip-modal')">Cancel</button>
-      <button class="btn btn-sm" onclick="confirmSkip()">Record and submit project</button>
+      <button class="btn btn-sm" onclick="confirmSkip()">Record and submit</button>
     </div>
   </div>
 </div>
 
-<!-- CT BREAK MODAL -->
 <div class="modal-overlay" id="ct-modal">
   <div class="modal">
-    <div class="modal-title" id="ct-modal-title">Breaking the streak</div>
-    <div class="modal-sub" id="ct-modal-sub"></div>
-    <label>What happened — record honestly</label>
-    <textarea id="ct-reason" placeholder="Record the reason..."></textarea>
+    <div class="modal-title" id="ct-title">Breaking the streak</div>
+    <div class="modal-sub" id="ct-sub"></div>
+    <label>What happened</label><textarea id="ct-reason" placeholder="Record honestly..."></textarea>
     <div class="modal-btns">
       <button class="btn btn-sm" onclick="closeModal('ct-modal')">Cancel</button>
       <button class="btn btn-danger btn-sm" onclick="confirmCTBreak()">Record and mark broken</button>
@@ -288,14 +392,11 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
   </div>
 </div>
 
-<!-- MILESTONE MODAL -->
 <div class="modal-overlay" id="ms-modal">
   <div class="modal">
     <div class="modal-title">Log a milestone</div>
-    <label>Project</label>
-    <select id="ms-project"><option value="">Select project</option></select>
-    <label>Description</label>
-    <textarea id="ms-desc" placeholder="What happened. What it means."></textarea>
+    <label>Project</label><select id="ms-project"><option value="">Select project</option></select>
+    <label>Description</label><textarea id="ms-desc" placeholder="What happened. What it means."></textarea>
     <div class="modal-btns">
       <button class="btn btn-danger btn-sm" onclick="closeModal('ms-modal')">Cancel</button>
       <button class="btn btn-sm" onclick="submitMilestone()">Log milestone</button>
@@ -303,7 +404,25 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
   </div>
 </div>
 
-<!-- LEVEL UNLOCK -->
+<div class="modal-overlay" id="decl-modal">
+  <div class="modal">
+    <div class="modal-title">Declare a period</div>
+    <div class="modal-sub">Suspends penalties for selected projects during this period</div>
+    <label>Type</label>
+    <select id="decl-type"><option>Expedition</option><option>Injury</option><option>Deload</option><option>Recovery</option></select>
+    <label>Start date</label><input type="date" id="decl-start">
+    <label>End date</label><input type="date" id="decl-end">
+    <label>Projects affected</label>
+    <div id="decl-projects" style="margin-bottom:10px"></div>
+    <label>Notes</label><input type="text" id="decl-notes" placeholder="Reason for declaration...">
+    <div class="modal-btns">
+      <button class="btn btn-danger btn-sm" onclick="closeModal('decl-modal')">Cancel</button>
+      <button class="btn btn-sm" onclick="submitDeclaration()">Declare</button>
+    </div>
+  </div>
+</div>
+
+<!-- UNLOCK -->
 <div class="unlock" id="unlock">
   <div class="unlock-eye">Level unlocked</div>
   <div class="unlock-title" id="ul-title"></div>
@@ -318,34 +437,54 @@ const SKEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI
 const {createClient}=supabase;
 const db=createClient(SURL,SKEY);
 
-const GSTART=new Date('2026-03-28');
-const GEND=new Date('2028-06-01');
+// ── GAME CONFIG ────────────────────────────────────────
+function getGameStart(){return localStorage.getItem('qa_start')||'2026-03-28';}
+function getGameEnd(){return '2028-06-01';}
+function GSTART(){return new Date(getGameStart());}
+function GEND(){return new Date(getGameEnd());}
 
 const PROJECTS=[
   {id:'The Practice Room',key:'proj-practice',pillar:'Soul',pts:10,unit:'hrs',ceiling:1200,
    levels:[50,100,170,260,370,500,640,790,970,1200],
    titles:['The Listener','The Initiated','The Woodshedder','The Deliberate','The Emerging','The Interpreter','The Composer','The Troubadour','The Resonant','The Intimate'],
-   cats:['Learning','Practising','Creating','Ear Training'],hasLang:false},
+   cats:['Learning','Practising','Creating','Ear Training'],hasLang:false,
+   floors:null},
   {id:'The Gulmohar Letters',key:'proj-gulmohar',pillar:'Soul',pts:10,unit:'entries',ceiling:800,
    levels:[27,55,96,151,218,307,396,499,629,800],
    titles:['The Dormant','The Rooted','The Rising','The Bud','The First Fragrance','The Whorl','The Unfurled','The Scarlet Promise','The Falling Flame',"In Gulmohar's Shade"],
-   cats:['Scribing','Memorising','Recording','Original Composition'],hasLang:true},
+   cats:['Scribing','Memorising','Recording','Original Composition'],hasLang:true,
+   floors:{
+     'Scribing':    [15,31,54,85,123,173,223,281,354,450],
+     'Memorising':  [9,17,30,47,68,96,124,156,197,250],
+     'Recording':   [2,4,7,11,16,23,30,38,48,60],
+     'Original Composition':[1,3,5,8,11,15,19,24,30,40]
+   }},
   {id:'The Iron Forge',key:'proj-ironforge',pillar:'Body',pts:10,unit:'sessions',ceiling:585,
    levels:[20,40,70,110,160,225,290,365,460,585],
    titles:['The Raw','First Iron','Bar Bearer','Forging Under','Form Drawn','The Annealed','Labors Wrought','Final Temper','Titan Marked','Living Iron'],
-   cats:['Chest','Back','Shoulders','Legs','Biceps','Triceps','Forearms','Core'],hasLang:false},
+   cats:['Chest','Back','Shoulders','Legs','Biceps','Triceps','Forearms','Core'],hasLang:false,
+   floors:{
+     'Chest':    [8,16,28,44,64,90,116,146,184,228],
+     'Back':     [8,16,28,44,64,90,116,146,184,228],
+     'Shoulders':[4,8,14,22,32,45,58,73,92,114],
+     'Legs':     [4,8,14,22,32,45,58,73,92,114],
+     'Biceps':   [8,16,28,44,64,90,116,146,184,228],
+     'Triceps':  [8,16,28,44,64,90,116,146,184,228],
+     'Forearms': [8,16,28,44,64,90,116,146,184,228],
+     'Core':     [12,24,42,66,96,135,174,219,276,342]
+   }},
   {id:'The Iron Ledger',key:'proj-ledger',pillar:'Body',pts:5,unit:'km',ceiling:1200,
    levels:[40,80,140,220,320,450,580,730,920,1200],
    titles:['First Steps','Road Taken','The Climbing','The Unbroken','Miles Held','Distance Kept','The Long Ascent','The Gradient','Mountain Walker','The Summit Keeper'],
-   cats:[],hasLang:false},
+   cats:[],hasLang:false,floors:null},
   {id:'The Water Forge',key:'proj-water',pillar:'Body',pts:5,unit:'laps',ceiling:41000,
    levels:[1400,2800,4900,7700,11200,15750,20300,25550,32200,41000],
    titles:['First Tide','Sea Marked','The Calling Deep','Lashing Wave','Unending Tide','Tidal Force','The Longing Sea','Wave Strider','The Fathomless','Ocean Master'],
-   cats:['Freestyle','Backstroke','Breaststroke','Butterfly','Mixed'],hasLang:false},
+   cats:['Freestyle','Backstroke','Breaststroke','Butterfly','Mixed'],hasLang:false,floors:null},
   {id:'The Giving',key:'proj-giving',pillar:'Business',pts:20,unit:'sessions',ceiling:660,
    levels:[22,45,78,123,179,252,325,410,515,660],
    titles:['The Untested','The Reckoner','The Apprentice','The Wayfarer','The Dealer',"The Craftsman's Hand",'The Trade Wind','The Merchant','The House Built','The Giver'],
-   cats:['Legal','Market Research','Product + Brand Design','Operations','Business Planning'],hasLang:false}
+   cats:['Legal','Market Research','Product + Brand Design','Operations','Business Planning'],hasLang:false,floors:null}
 ];
 
 const CMDS=[
@@ -376,89 +515,165 @@ const CT_TITLES={
 const CT_THR=[7,15,30,60,120,240,365,480,600,720,800];
 
 const UNLOCK_MSGS={
-  'The Practice Room':['The first serious hour. The strings remember nothing yet. You do.','The craft has a name now. You have been initiated.','The grind is real. Repetition has purpose.','Deliberate now. Nothing accidental about your practice.','Something is surfacing. Not borrowed. Yours.','You can take music and make it yours.','Creation. Not reproduction.','The wandering musician. You play for life now.','The music moves through you. Not just from you.','The instrument and you are no longer separate things.'],
-  'The Gulmohar Letters':['The seed buried. The shade found for the first time.','The roots draw from something deep.','The first visible movement above ground.','Closed but trembling with what is inside.','You sense something before you see it.','The inner architecture reveals itself.','Open now. No going back.',"Colour arriving quietly.",'Peak beauty. Surrendering at full bloom.',"You did not sit under the tree. You became it."],
-  'The Iron Forge':['Raw. Unheated. Potential only.','The first real encounter with iron.','The bar is yours now. You bear what others do not.','Under the hammer. Being worked.','Something is emerging from the raw material.','Heat and cooling cycles have set something permanent.','The labor is visible in the material.','Tempering. The character is being fixed.','Marked by something mythic.','Not dead metal. Iron that breathes and moves.'],
-  'The Iron Ledger':['The first step taken seriously.','A decision made and committed to.','The incline has become your defining feature.','The road has not broken you.','The miles held like a promise.','Faithful to the road like keeping a vow.','No shortcuts. Just the long way up.','You do not fight the gradient. You are it.','The treadmill has become a mountain.','The summit is not a destination. It is a place you keep.'],
-  'The Water Forge':['The first tide. Water arriving at you.','The sea has left its mark.','Something beneath is pulling you back.','The wave lashes and you lash back.','The tide does not stop and neither do you.','A force of nature now.','The sea longs for you on the days you do not show up.','You stride waves now.','No bottom. And neither do you.','After 41,000 laps — the ocean recognises you.'],
-  'The Giving':['The arena has not tested you yet.','Learning to count what matters.','Under the craft. Learning its weight.','Direction found. Moving toward something specific.','First real exchanges of value.','Building with deliberate skill now.','The business moves with force larger than daily effort.','Goods moving. Value exchanged.','Something permanent erected.','The journey of The Giving produces The Giver.']
+  'The Practice Room':['The first serious hour. The strings remember nothing yet. You do.','The craft has a name now.','The grind is real. Repetition has purpose.','Deliberate now. Nothing accidental.','Something is surfacing. Not borrowed. Yours.','You can take music and make it yours.','Creation. Not reproduction.','The wandering musician. You play for life now.','The music moves through you.','The instrument and you are one.'],
+  'The Gulmohar Letters':['The seed buried. The shade found.','The roots draw from something deep.','First visible movement above ground.','Closed but trembling with what is inside.','You sense it before you see it.','The inner architecture reveals itself.','Open now. No going back.','Colour arriving quietly.','Peak beauty. Surrendering.',"You became the tree."],
+  'The Iron Forge':['Raw. Unheated. Potential only.','First encounter with iron.','The bar is yours now.','Under the hammer.','Something emerging.','Heat and cooling set something permanent.','The labor is visible.','Tempering. Character fixed.','Marked by something mythic.','Iron that breathes and moves.'],
+  'The Iron Ledger':['First step taken seriously.','A decision committed to.','The incline defines you.','The road has not broken you.','Miles held like a promise.','Faithful to the road.','No shortcuts. The long way up.','You are the gradient.','The treadmill became a mountain.','The summit is a place you keep.'],
+  'The Water Forge':['Water arriving at you.','The sea left its mark.','Something beneath pulls you back.','The wave lashes and you lash back.','The tide does not stop.','A force of nature now.','The sea longs for you.','You stride waves now.','No bottom. Neither do you.','The ocean recognises you.'],
+  'The Giving':['The arena has not tested you.','Learning to count what matters.','Under the craft.','Direction found.','First real exchanges of value.','Building with deliberate skill.','Force larger than daily effort.','Goods moving. Value exchanged.','Something permanent erected.','The Giving produces The Giver.']
 };
 
-// ── STATE ─────────────────────────────────────────────
+const META_T=['The Buried Ore','The Unearthed','The Smelted','The First Cast','The Reheated','The Struck','The Drawn','The Quenched','The Tempered','The Finished Form'];
+const META_D=['Raw. Buried. Potential only.','Unearthed. The process has begun.','Thrown into heat. Impurities rising.','The first rough form. Approximation.','Reheated. Back to malleability.','The hammer has landed. Shape emerges.','Drawn out. Precise dimensions.','Plunged into cold. Shape set.','Gently reheated. Brittleness removed.','The thing itself. Nothing missing. Complete.'];
+
+// ── STATE ──────────────────────────────────────────────
 let S={
-  projects:[],todayLog:null,todaySessions:[],streaks:[],
+  projects:[],todayLog:null,todaySessions:[],streaks:[],declarations:[],
   allLogs:[],allSessions:[],milestones:[],
-  // Forge state
-  committedProjects:{}, // pid -> {committed, submitted, skipReason}
+  committedProjects:{},
   pendingSessionPid:null,pendingSkipPid:null,pendingCT:null,
+  calSelected:null,calDate:new Date(),
   chartsDrawn:{}
 };
 
-// ── HELPERS ───────────────────────────────────────────
+// ── HELPERS ────────────────────────────────────────────
 const today=()=>new Date().toISOString().split('T')[0];
-const daysLeft=()=>Math.max(0,Math.ceil((GEND-new Date())/864e5));
-const dayNum=()=>Math.max(1,Math.ceil((new Date()-GSTART)/864e5));
+const daysLeft=()=>Math.max(0,Math.ceil((GEND()-new Date())/864e5));
+const dayNum=()=>Math.max(1,Math.ceil((new Date()-GSTART())/864e5));
 const weekNum=()=>Math.ceil(dayNum()/7);
 
-function getLvl(pid,total){
+function getCatCounts(pid,sessions){
+  const proj=PROJECTS.find(x=>x.id===pid);
+  if(!proj||!proj.floors)return{};
+  const counts={};
+  proj.cats.forEach(c=>counts[c]=0);
+  sessions.forEach(function(s){if(s.category&&counts[s.category]!==undefined)counts[s.category]+=(s.tangible_logged||1);});
+  return counts;
+}
+
+function floorsMetForLevel(pid,levelIndex,catCounts){
+  const proj=PROJECTS.find(x=>x.id===pid);
+  if(!proj||!proj.floors)return true;
+  return Object.keys(proj.floors).every(function(cat){
+    const req=proj.floors[cat][levelIndex];
+    return(catCounts[cat]||0)>=req;
+  });
+}
+
+function getLvl(pid,total,catCounts){
   const p=PROJECTS.find(x=>x.id===pid);if(!p)return 0;
-  for(let i=p.levels.length-1;i>=0;i--)if(total>=p.levels[i])return i+1;
+  for(let i=p.levels.length-1;i>=0;i--){
+    if(total>=p.levels[i]){
+      // Check category floors if they exist
+      if(p.floors&&catCounts){
+        if(floorsMetForLevel(pid,i,catCounts))return i+1;
+        // Floors not met — check lower levels
+        continue;
+      }
+      return i+1;
+    }
+  }
   return 0;
 }
-function getCurrentTitle(pid,total){
+function getCurTitle(pid,total,catCounts){
   const p=PROJECTS.find(x=>x.id===pid);if(!p)return null;
-  const l=getLvl(pid,total);return l>0?p.titles[l-1]:null;
+  const l=getLvl(pid,total,catCounts);return l>0?p.titles[l-1]:null;
 }
-function getTargetTitle(pid,total){
-  const p=PROJECTS.find(x=>x.id===pid);if(!p)return'—';
-  const l=getLvl(pid,total);
-  if(l>=p.levels.length)return'Ceiling reached';
-  return p.titles[l];
+function getTargetTitle(pid,total,catCounts){
+  const p=PROJECTS.find(x=>x.id===pid);if(!p)return '—';
+  const l=getLvl(pid,total,catCounts);
+  return l>=p.levels.length?'Ceiling reached':p.titles[l];
 }
-function displayTitle(pid,total){
-  const cur=getCurrentTitle(pid,total);
-  if(cur)return cur;
-  return'Working toward '+getTargetTitle(pid,total);
+function dispTitle(pid,total,catCounts){
+  const c=getCurTitle(pid,total,catCounts);
+  return c||('Working toward '+getTargetTitle(pid,total,catCounts));
 }
-function getProg(pid,total){
+function getProg(pid,total,catCounts){
   const p=PROJECTS.find(x=>x.id===pid);if(!p)return 0;
-  const l=getLvl(pid,total);if(l>=p.levels.length)return 100;
-  const prev=l===0?0:p.levels[l-1];const next=p.levels[l];
-  return Math.round(((total-prev)/(next-prev))*100);
+  const l=getLvl(pid,total,catCounts);if(l>=p.levels.length)return 100;
+  const prev=l===0?0:p.levels[l-1];
+  return Math.round(((total-prev)/(p.levels[l]-prev))*100);
 }
-function getNextAt(pid,total){
+function getNextAt(pid,total,catCounts){
   const p=PROJECTS.find(x=>x.id===pid);if(!p)return null;
-  const l=getLvl(pid,total);return l<p.levels.length?p.levels[l]:null;
+  const l=getLvl(pid,total,catCounts);return l<p.levels.length?p.levels[l]:null;
 }
 function ctPts(log){
   if(!log)return 0;
-  return CMDS.reduce((s,c)=>s+(log[c.key]?c.pts:0),0);
+  return CMDS.reduce((s,c)=>s+(log[c.key]===true?c.pts:0),0);
 }
-function ctTitle(key,days){
+function ctTitleFn(key,days){
   const t=CT_TITLES[key];if(!t)return'No streak yet';
   for(let i=CT_THR.length-1;i>=0;i--)if(days>=CT_THR[i])return t[i];
   return'No streak yet';
 }
-function ctNext(key,days){
+function ctNextFn(key,days){
   for(let i=0;i<CT_THR.length;i++)if(days<CT_THR[i])return{title:CT_TITLES[key][i],at:CT_THR[i],rem:CT_THR[i]-days};
   return null;
 }
-function todaySessionsFor(pid){return S.todaySessions.filter(s=>s.project===pid);}
-function todayTangibleFor(pid){return todaySessionsFor(pid).reduce((s,x)=>s+(x.tangible_logged||0),0);}
+function todaySessFor(pid){return S.todaySessions.filter(s=>s.project===pid);}
+function todayTangFor(pid){return todaySessFor(pid).reduce((s,x)=>s+(x.tangible_logged||0),0);}
 
-// ── DATA ──────────────────────────────────────────────
+// 7-day rolling average
+function forgeTemp(){
+  if(!S.allLogs.length)return{avg:0,state:'cool',label:'The forge is cold'};
+  const recent=S.allLogs.slice(-7);
+  const avg=Math.round(recent.reduce((s,l)=>{
+    const ds=S.allSessions.filter(x=>x.date===l.date);
+    return s+ctPts(l)+ds.reduce((a,x)=>a+(x.points_earned||0),0)+ds.reduce((a,x)=>a+(x.penalty||0),0);
+  },0)/recent.length);
+  let state,label;
+  if(avg>=65){state='hot';label='The forge is hot — keep the rhythm';}
+  else if(avg>=45){state='warm';label='The forge is warm — do not let it cool';}
+  else{state='cool';label='The forge is cooling — presence is needed';}
+  return{avg,state,label};
+}
+
+// Pillar balance
+function pillarBalance(){
+  const pillars={Soul:0,Body:0,Business:0};
+  const maxPts={Soul:20,Body:20,Business:20};
+  S.todaySessions.forEach(function(s){
+    const p=PROJECTS.find(x=>x.id===s.project);
+    if(p)pillars[p.pillar]=(pillars[p.pillar]||0)+(s.points_earned||0);
+  });
+  return{pillars,maxPts};
+}
+
+// Personal best per project
+function personalBest(pid){
+  const sessions=S.allSessions.filter(x=>x.project===pid&&x.tangible_logged>0);
+  if(!sessions.length)return null;
+  const best=sessions.reduce((m,s)=>s.tangible_logged>m.tangible_logged?s:m,sessions[0]);
+  return best;
+}
+
+// Active declaration check
+function isProjectDeclared(pid){
+  const t=today();
+  return S.declarations.some(function(d){
+    if(!d.projects)return false;
+    try{
+      const projs=JSON.parse(d.projects);
+      return projs.includes(pid)&&d.start_date<=t&&d.end_date>=t;
+    }catch(e){return false;}
+  });
+}
+
+// ── DATA ───────────────────────────────────────────────
 async function loadData(){
-  const[pR,lR,sR,stR]=await Promise.all([
+  const[pR,lR,sR,stR,dR]=await Promise.all([
     db.from('project_summary').select('*'),
     db.from('daily_log').select('*').eq('date',today()).single(),
     db.from('sessions').select('*').eq('date',today()),
-    db.from('commandment_streaks').select('*').order('points',{ascending:false})
+    db.from('commandment_streaks').select('*').order('points',{ascending:false}),
+    db.from('declarations').select('*').order('start_date',{ascending:false}).limit(20)
   ]);
   S.projects=pR.data||[];
   S.todayLog=lR.data||null;
   S.todaySessions=sR.data||[];
   S.streaks=stR.data||[];
-  // restore committed state from todayLog if exists
+  S.declarations=dR.data||[];
   if(S.todayLog?.committed_projects){
     try{S.committedProjects=JSON.parse(S.todayLog.committed_projects);}catch(e){}
   }
@@ -473,7 +688,9 @@ async function loadAll(){
     db.from('sessions').select('*').order('date'),
     db.from('milestones').select('*').order('date',{ascending:false})
   ]);
-  S.allLogs=lR.data||[];S.allSessions=sR.data||[];S.milestones=mR.data||[];
+  S.allLogs=lR.data||[];
+  S.allSessions=sR.data||[];
+  S.milestones=mR.data||[];
 }
 
 async function ensureLog(){
@@ -487,15 +704,68 @@ async function saveCommitted(){
   await db.from('daily_log').update({committed_projects:JSON.stringify(S.committedProjects)}).eq('date',today());
 }
 
-// ── NAV ───────────────────────────────────────────────
+// ── PIN ────────────────────────────────────────────────
+const DEFAULT_PIN='1111';
+let pinBuf='';let pinMode='unlock';let pinNewBuf='';
+function getPin(){return localStorage.getItem('qa_pin')||DEFAULT_PIN;}
+function setPin(p){localStorage.setItem('qa_pin',p);}
+function pp(d){if(pinBuf.length>=4)return;pinBuf+=d;upDots(pinBuf.length,false);if(pinBuf.length===4)setTimeout(pinSubmit,150);}
+function pdel(){pinBuf=pinBuf.slice(0,-1);upDots(pinBuf.length,false);}
+function pb(){pinBuf='';upDots(0,false);}
+function upDots(n,err){
+  for(let i=0;i<4;i++){const d=document.getElementById('pd'+i);d.className='pin-dot';if(err)d.classList.add('error');else if(i<n)d.classList.add('filled');}
+}
+function pinSubmit(){
+  if(pinMode==='unlock'){
+    if(pinBuf===getPin()){
+      document.getElementById('pin-screen').classList.remove('active');
+      loadData().then(()=>loadAll());
+    } else {
+      upDots(4,true);
+      document.getElementById('pin-error').textContent='Incorrect PIN';
+      setTimeout(()=>{pinBuf='';upDots(0,false);document.getElementById('pin-error').textContent='';},1200);
+    }
+  } else if(pinMode==='set-new'){
+    pinNewBuf=pinBuf;pinBuf='';upDots(0,false);
+    pinMode='confirm-new';document.getElementById('pin-label').textContent='Confirm new PIN';
+  } else if(pinMode==='confirm-new'){
+    if(pinBuf===pinNewBuf){
+      setPin(pinBuf);pinBuf='';pinNewBuf='';pinMode='unlock';
+      document.getElementById('pin-screen').classList.remove('active');
+      document.getElementById('pin-label').textContent='Enter your PIN';
+      renderSettings();alert('PIN updated.');
+    } else {
+      upDots(4,true);document.getElementById('pin-error').textContent='PINs do not match';
+      setTimeout(()=>{pinBuf='';pinNewBuf='';pinMode='set-new';upDots(0,false);document.getElementById('pin-error').textContent='';document.getElementById('pin-label').textContent='Enter new PIN';},1200);
+    }
+  }
+}
+function startChangePIN(){
+  pinBuf='';pinMode='set-new';
+  document.getElementById('pin-label').textContent='Enter new PIN';
+  document.getElementById('pin-error').textContent='';
+  upDots(0,false);
+  document.getElementById('pin-screen').classList.add('active');
+}
+
+// ── MOBILE NAV ─────────────────────────────────────────
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sb-overlay').classList.toggle('open');
+}
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sb-overlay').classList.remove('open');
+}
+
+// ── NAV ────────────────────────────────────────────────
 function nav(screen){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));
   document.getElementById('screen-'+screen).classList.add('active');
-  document.querySelectorAll('.sb-item').forEach(i=>{
-    if(i.getAttribute('onclick')===`nav('${screen}')`)i.classList.add('active');
-  });
+  document.querySelectorAll('.sb-item').forEach(i=>{if(i.getAttribute('onclick')===`nav('${screen}')`)i.classList.add('active');});
   S.chartsDrawn[screen]=false;
+  closeSidebar();
   renderActive();
 }
 
@@ -508,174 +778,179 @@ function renderActive(){
   else if(id==='temper')renderTemper();
   else if(id==='willmaster')renderWillmaster();
   else if(id==='meta')renderMeta();
+  else if(id==='calendar')renderCalendar();
   else if(id==='report')renderReport();
   else if(id==='milestones')renderMilestones();
+  else if(id==='share')renderShare();
+  else if(id==='settings')renderSettings();
 }
 
-// ── FORGE ─────────────────────────────────────────────
+// ── FORGE ──────────────────────────────────────────────
 function renderForge(){
   const ct=ctPts(S.todayLog);
   const nonCt=S.todaySessions.reduce((s,x)=>s+(x.points_earned||0),0);
   const total=ct+nonCt;
-
-  // Calculate today's penalty from committed+skipped projects
   let penToday=0;
-  PROJECTS.forEach(proj=>{
-    const cp=S.committedProjects[proj.id];
-    if(cp&&cp.submitted&&!cp.hasSession)penToday-=proj.pts;
-  });
-
+  PROJECTS.forEach(proj=>{const cp=S.committedProjects[proj.id];if(cp&&cp.submitted&&!cp.hasSession)penToday-=proj.pts;});
   const d=new Date();
   const dateStr=d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 
-  // Build project blocks
+  // Forge temperature
+  const temp=forgeTemp();
+  const tempClass=temp.state==='hot'?'temp-hot':temp.state==='warm'?'temp-warm':'temp-cool';
+  const tempColor=temp.state==='hot'?'var(--gold)':temp.state==='warm'?'var(--warn)':'var(--ember)';
+
+  // Pillar balance
+  const bal=pillarBalance();
+  const pillarsHTML=Object.keys(bal.pillars).map(function(pillar){
+    const earned=bal.pillars[pillar];const max=bal.maxPts[pillar];const pct=Math.round(earned/max*100);
+    return`<div style="flex:1;text-align:center">
+      <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.1em;color:var(--ash);margin-bottom:4px">${pillar.toUpperCase()}</div>
+      <div class="prog-track"><div class="prog-fill" style="width:${pct}%"></div></div>
+      <div style="font-family:var(--fc);font-size:11px;color:var(--parch);margin-top:2px">${earned}/${max}</div>
+    </div>`;
+  }).join('');
+
+  // Active declarations banner
+  let declBanner='';
+  const activeDecls=S.declarations.filter(function(d){return d.start_date<=today()&&d.end_date>=today();});
+  if(activeDecls.length>0){
+    declBanner=`<div class="pen-banner" style="background:var(--warn-dim);border-color:var(--warn)"><div style="width:8px;height:8px;border-radius:50%;background:var(--warn);flex-shrink:0"></div><div style="flex:1;font-size:12px;color:#F0D080">${activeDecls[0].type} declared · ${activeDecls[0].start_date} to ${activeDecls[0].end_date} · Penalties suspended for selected projects</div></div>`;
+  }
+
+  // Projects
   let projHTML='';
-  ['Soul','Body','Business'].forEach(pillar=>{
+  ['Soul','Body','Business'].forEach(function(pillar){
     const pp=PROJECTS.filter(p=>p.pillar===pillar);
     projHTML+=`<div style="margin-bottom:16px"><div style="font-family:var(--fc);font-size:9px;letter-spacing:0.18em;color:var(--ash);margin-bottom:8px">${pillar.toUpperCase()}</div>`;
-    pp.forEach(proj=>{
-      const cp=S.committedProjects[proj.id]||{committed:false,submitted:false};
-      const sessions=todaySessionsFor(proj.id);
-      const tangibleToday=todayTangibleFor(proj.id);
+    pp.forEach(function(proj){
+      const cp=S.committedProjects[proj.id]||{committed:false,submitted:false,hasSession:false};
+      const sessions=todaySessFor(proj.id);
+      const tangToday=todayTangFor(proj.id);
       const sum=S.projects.find(p=>p.project===proj.id)||{};
-      const totalTangible=sum.total_tangible||0;
-      const curTitle=displayTitle(proj.id,totalTangible);
-      const nextTitle=getTargetTitle(proj.id,totalTangible);
-      const submitted=cp.submitted;
-
-      // Sessions list
+      const totalT=sum.total_tangible||0;
+      const declared=isProjectDeclared(proj.id);
       let sessListHTML='';
       if(sessions.length>0){
         sessListHTML='<div class="fp-sessions">';
-        sessions.forEach(s=>{
-          sessListHTML+=`<div class="fp-session-row">
-            <span style="color:var(--ash)">${s.category||'Session'}</span>
-            ${s.notes?`<span style="color:var(--ash);margin-left:6px">— ${s.notes}</span>`:''}
-            <span class="fp-session-tangible">${s.tangible_logged} ${proj.unit}</span>
-          </div>`;
+        sessions.filter(s=>s.tangible_logged>0).forEach(function(s){
+          sessListHTML+=`<div class="fp-session-row"><span style="color:var(--ash)">${s.category||'Session'}</span>${s.notes?`<span style="color:var(--ash);margin-left:6px">— ${s.notes}</span>`:''}<span style="font-family:var(--fc);font-size:11px;color:var(--gold);margin-left:auto">${s.tangible_logged} ${proj.unit}</span></div>`;
         });
-        sessListHTML+=`<div style="font-size:12px;color:var(--ash);padding:4px 0">Total today: <span style="color:var(--gold);font-family:var(--fc)">${tangibleToday} ${proj.unit}</span></div>`;
-        sessListHTML+='</div>';
+        sessListHTML+=`<div style="font-size:12px;color:var(--ash);padding:4px 0">Today: <span style="color:var(--gold);font-family:var(--fc)">${tangToday} ${proj.unit}</span></div></div>`;
       }
-
-      // Footer buttons
-      let footerHTML='<div class="fp-footer" style="gap:8px;flex-wrap:wrap">';
-      if(!submitted){
+      let footHTML='<div style="display:flex;align-items:center;gap:8px;padding-left:28px;flex-wrap:wrap">';
+      if(!cp.submitted){
         if(cp.committed){
-          footerHTML+=`<button class="btn btn-xs" onclick="openSession('${proj.id}')">+ Add session</button>`;
-          footerHTML+=`<button class="btn btn-xs btn-safe" onclick="submitProject('${proj.id}')">Submit project</button>`;
+          footHTML+=`<button class="btn btn-xs" onclick="openSession('${proj.id}')">+ Add session</button>`;
+          footHTML+=`<button class="btn btn-xs btn-safe" onclick="submitProject('${proj.id}')">Submit project</button>`;
         }
       } else {
         if(cp.hasSession){
-          footerHTML+=`<span style="font-size:11px;color:var(--safe);font-family:var(--fc)">✓ Submitted</span>`;
-          footerHTML+=`<button class="btn btn-xs" onclick="openSession('${proj.id}')">+ Add another session</button>`;
+          footHTML+=`<span style="font-size:11px;color:var(--safe);font-family:var(--fc)">✓ Submitted · ${tangToday} ${proj.unit}</span>`;
+          footHTML+=`<button class="btn btn-xs" onclick="openSession('${proj.id}')">+ Add more</button>`;
         } else {
-          footerHTML+=`<span style="font-size:11px;color:var(--ember);font-family:var(--fc)">✗ Skipped — ${cp.skipReason||''}</span>`;
+          footHTML+=`<span style="font-size:11px;color:var(--ember);font-family:var(--fc)">✗ Skipped${declared?' (declaration active)':''}</span>`;
         }
       }
-      footerHTML+='</div>';
-
-      projHTML+=`<div class="fp-block" style="border-color:${submitted?(cp.hasSession?'var(--safe)':'var(--ember)'):'var(--border)'}">
+      footHTML+='</div>';
+      projHTML+=`<div class="fp-block" style="border-color:${cp.submitted?(cp.hasSession?'var(--safe)':'var(--ember)'):'var(--border)'}">
         <div class="fp-header">
-          <div class="fp-commit-check ${cp.committed?'committed':''}" onclick="toggleCommit('${proj.id}')"></div>
+          <div class="fp-commit-check ${cp.committed?'committed':''}" onclick="toggleCommit('${proj.id}')">${cp.committed?'✓':''}</div>
           <div class="fp-name">${proj.id}</div>
-          <div class="fp-pts">${cp.committed?'+'+proj.pts+' pts':''}</div>
+          <div style="font-size:11px;color:var(--ash);font-style:italic;margin-right:8px">${dispTitle(proj.id,totalT)}</div>
+          <div class="fp-pts">${cp.committed?'+'+proj.pts+'pts':''}</div>
         </div>
-        <div class="fp-title">${curTitle}${getLvl(proj.id,totalTangible)>0&&nextTitle!=='Ceiling reached'?' → working toward '+nextTitle:''}</div>
         ${sessListHTML}
-        ${cp.committed?footerHTML:'<div style="font-size:11px;color:var(--ash);padding-left:28px;font-style:italic">Check to commit to this project today</div>'}
+        ${cp.committed?footHTML:`<div style="font-size:11px;color:var(--ash);padding-left:28px;font-style:italic">Check to commit today</div>`}
       </div>`;
     });
     projHTML+='</div>';
   });
 
-  // CT section — only show state if explicitly set
-  const ctHTML=CMDS.map(c=>{
+  const ctMarked=S.todayLog?CMDS.filter(c=>S.todayLog[c.key]===true||S.todayLog[c.key]===false).length:0;
+  const allCTMarked=ctMarked===10;
+
+  const ctHTML=CMDS.map(function(c){
     const val=S.todayLog?.[c.key];
-    const kept=val===true;
-    const broke=val===false;
-    const marked=val===true||val===false;
-    let statusIcon='';
-    if(kept) statusIcon=`<span style="color:var(--safe);font-size:14px;margin-right:4px">✓</span>`;
-    else if(broke) statusIcon=`<span style="color:var(--ember);font-size:14px;margin-right:4px">✗</span>`;
-    return`<div class="ct-item" style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:0.5px solid var(--border)">
-      <div style="width:20px;flex-shrink:0;text-align:center">${statusIcon}</div>
+    const kept=val===true;const broke=val===false;
+    let icon='';
+    if(kept)icon=`<span style="color:var(--safe);font-size:14px;margin-right:6px">✓</span>`;
+    else if(broke)icon=`<span style="color:var(--ember);font-size:14px;margin-right:6px">✗</span>`;
+    return`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)">
+      <div style="width:20px;flex-shrink:0">${icon}</div>
       <div style="flex:1;font-size:13px;color:${kept?'var(--safe)':broke?'var(--ember)':'var(--parch)'}">${c.label}</div>
-      <div style="display:flex;gap:6px;align-items:center">
+      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
         <button class="ct-btn-kept ${kept?'active':''}" onclick="handleCT('${c.key}','${c.label}',true)">Kept</button>
         <button class="ct-btn-broke ${broke?'active':''}" onclick="handleCT('${c.key}','${c.label}',false)">Broke it</button>
-        <span style="font-family:var(--fc);font-size:10px;color:var(--gold);width:30px;text-align:right">${c.pts}pt</span>
+        <span style="font-family:var(--fc);font-size:10px;color:var(--gold);width:28px;text-align:right">${c.pts}pt</span>
       </div>
     </div>`;
   }).join('');
 
-  // Check if all CT marked
-  const allCTMarked=S.todayLog?CMDS.every(c=>S.todayLog[c.key]!==null&&S.todayLog[c.key]!==undefined):false;
-  const ctMarkedCount=S.todayLog?CMDS.filter(c=>S.todayLog[c.key]!==null&&S.todayLog[c.key]!==undefined).length:0;
-
-  const reflectionLocked=!allCTMarked;
-  const reflectionHTML=reflectionLocked
-    ?`<div style="background:var(--ember-dim);border:0.5px solid var(--ember);border-radius:8px;padding:12px 14px;font-size:13px;color:var(--ash)">Mark all 10 commandments as kept or broken before the reflection unlocks. ${10-ctMarkedCount} remaining.</div>`
+  const reflHTML=!allCTMarked
+    ?`<div style="background:var(--ember-dim);border:0.5px solid var(--ember);border-radius:8px;padding:12px 14px;font-size:13px;color:var(--ash)">Mark all 10 commandments before the reflection unlocks. ${10-ctMarked} remaining.</div>`
     :`<div><textarea id="reflection-text" placeholder="What happened today. What the forge produced. What tomorrow needs." rows="4">${S.todayLog?.reflection||''}</textarea><button class="btn btn-block" onclick="closeDay()">Close the day — submit reflection</button></div>`;
 
   document.getElementById('screen-forge').innerHTML=`
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
-      <div>
-        <div class="pt">Daily Forge</div>
-        <div style="font-size:13px;color:var(--ash)">${dateStr} · Day ${dayNum()} of 795 · Week ${weekNum()} of 114</div>
-      </div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
+      <div><div class="pt">Daily Forge</div><div style="font-size:13px;color:var(--ash)">${dateStr} · Day ${dayNum()} of 795 · Week ${weekNum()} of 114</div></div>
       <div style="text-align:right"><div style="font-family:var(--fc);font-size:32px;color:var(--gold);line-height:1">${daysLeft()}</div><div style="font-size:11px;color:var(--ash)">days to reckoning</div></div>
     </div>
 
-    <div class="g4" style="margin-bottom:20px">
+    <div class="g4" style="margin-bottom:14px">
       <div class="sb"><div class="sb-num" style="color:var(--gold)">${total+penToday}</div><div class="sb-lbl">Total / 80</div></div>
       <div class="sb"><div class="sb-num">${ct}</div><div class="sb-lbl">CT / 20</div></div>
       <div class="sb"><div class="sb-num">${nonCt}</div><div class="sb-lbl">Projects / 60</div></div>
-      <div class="sb"><div class="sb-num" style="color:${penToday<0?'var(--ember)':'var(--ash)'}">${penToday}</div><div class="sb-lbl">Penalty Today</div></div>
+      <div class="sb"><div class="sb-num" style="color:${penToday<0?'var(--ember)':'var(--ash)'}">${penToday}</div><div class="sb-lbl">Penalty</div></div>
     </div>
+
+    <div class="temp-indicator ${tempClass}" style="margin-bottom:14px">
+      <div><div style="font-family:var(--fc);font-size:10px;letter-spacing:0.12em;color:var(--ash);margin-bottom:2px">Forge Temperature — 7-day average</div><div style="font-size:13px;color:${tempColor};font-style:italic">${temp.label}</div></div>
+      <div style="font-family:var(--fc);font-size:28px;color:${tempColor}">${temp.avg}</div>
+    </div>
+
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.15em;color:var(--ash);margin-bottom:10px">Pillar Balance — Today</div>
+      <div style="display:flex;gap:16px">${pillarsHTML}</div>
+    </div>
+
+    ${declBanner}
 
     <div class="g2" style="align-items:start">
       <div>
         <div class="st">Direction — today's forge</div>
-        <div style="font-size:12px;color:var(--ash);margin-bottom:12px;font-style:italic">Check projects you intend to work on today. Submit each project when done.</div>
+        <div style="font-size:12px;color:var(--ash);margin-bottom:12px;font-style:italic">Check to commit · Submit when done · Add multiple sessions freely</div>
         ${projHTML}
+        <button class="btn btn-sm btn-warn" onclick="openDeclModal()" style="margin-top:8px">+ Declare expedition / injury</button>
       </div>
       <div>
         <div class="st">The Clean Temper</div>
-        <div class="card" style="margin-bottom:16px">
-          ${ctHTML}
-          <div style="font-size:12px;color:var(--ash);text-align:center;margin-top:10px">${ctMarkedCount} of 10 marked · ${ct} of 20 points</div>
-        </div>
+        <div class="card" style="margin-bottom:14px">${ctHTML}<div style="font-size:12px;color:var(--ash);text-align:center;margin-top:8px">${ctMarked} of 10 marked · ${ct} of 20 points</div></div>
         <div class="st">Nightly reflection</div>
-        <div class="card">${reflectionHTML}</div>
+        <div class="card">${reflHTML}</div>
       </div>
     </div>
   `;
 }
 
-// ── COMMIT / SUBMIT PROJECT ───────────────────────────
+// ── COMMIT / SUBMIT ────────────────────────────────────
 async function toggleCommit(pid){
   if(!S.committedProjects[pid])S.committedProjects[pid]={committed:false,submitted:false,hasSession:false};
-  if(S.committedProjects[pid].submitted)return; // can't uncommit after submission
+  if(S.committedProjects[pid].submitted)return;
   S.committedProjects[pid].committed=!S.committedProjects[pid].committed;
-  await saveCommitted();
-  renderForge();
+  await saveCommitted();renderForge();
 }
 
 async function submitProject(pid){
   const proj=PROJECTS.find(p=>p.id===pid);
-  const sessions=todaySessionsFor(pid);
+  const sessions=todaySessFor(pid).filter(s=>s.tangible_logged>0);
   if(sessions.length>0){
-    // Has sessions — submit cleanly
-    S.committedProjects[pid].submitted=true;
-    S.committedProjects[pid].hasSession=true;
-    await saveCommitted();
-    renderForge();
+    S.committedProjects[pid].submitted=true;S.committedProjects[pid].hasSession=true;
+    await saveCommitted();renderForge();
   } else {
-    // No sessions — trigger skip modal
     S.pendingSkipPid=pid;
-    document.getElementById('skip-modal-title').textContent=proj.id+' — no sessions logged';
-    document.getElementById('skip-modal-sub').textContent='You committed to this project but logged nothing today. A penalty of −'+proj.pts+' points will apply.';
+    document.getElementById('skip-title').textContent=proj.id+' — no sessions logged';
+    document.getElementById('skip-sub').textContent='Penalty of −'+proj.pts+' points will apply.';
     document.getElementById('skip-reason').value='';
     document.getElementById('skip-modal').classList.add('open');
   }
@@ -685,93 +960,67 @@ async function confirmSkip(){
   const reason=document.getElementById('skip-reason').value.trim();
   if(!reason){alert('Please record what happened.');return;}
   const pid=S.pendingSkipPid;
-  S.committedProjects[pid].submitted=true;
-  S.committedProjects[pid].hasSession=false;
-  S.committedProjects[pid].skipReason=reason;
-  // Log penalty session
   const proj=PROJECTS.find(p=>p.id===pid);
+  S.committedProjects[pid].submitted=true;S.committedProjects[pid].hasSession=false;S.committedProjects[pid].skipReason=reason;
   await db.from('sessions').insert({date:today(),project:pid,tangible_logged:0,unit:proj.unit,points_earned:0,penalty:-proj.pts,notes:'Missed — '+reason});
-  await saveCommitted();
-  closeModal('skip-modal');
-  S.pendingSkipPid=null;
-  await loadData();
+  await saveCommitted();closeModal('skip-modal');S.pendingSkipPid=null;
+  S.allSessions=[];await loadData();
 }
 
-// ── SESSION LOGGING ───────────────────────────────────
+// ── SESSION ────────────────────────────────────────────
 function openSession(pid){
   const proj=PROJECTS.find(p=>p.id===pid);
   S.pendingSessionPid=pid;
-  document.getElementById('session-modal-title').textContent=proj.id;
-  document.getElementById('session-modal-sub').textContent=proj.unit+' · '+proj.pts+' points per session';
-  document.getElementById('session-tangible').placeholder='Amount ('+proj.unit+')';
-  document.getElementById('session-tangible').value='';
-  document.getElementById('session-notes').value='';
-  const catSel=document.getElementById('session-category');
+  document.getElementById('sm-title').textContent=proj.id;
+  document.getElementById('sm-sub').textContent=proj.unit+' · '+proj.pts+' points per session';
+  document.getElementById('sm-tangible').placeholder='Amount ('+proj.unit+')';
+  document.getElementById('sm-tangible').value='';
+  document.getElementById('sm-notes').value='';
+  const catSel=document.getElementById('sm-category');
   catSel.innerHTML='<option value="">Category (optional)</option>';
-  if(proj.cats.length>0){
-    proj.cats.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;catSel.appendChild(o);});
-    document.getElementById('session-cat-wrap').style.display='block';
-  } else {
-    document.getElementById('session-cat-wrap').style.display='none';
-  }
-  document.getElementById('session-lang-wrap').style.display=proj.hasLang?'block':'none';
+  if(proj.cats.length>0){proj.cats.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;catSel.appendChild(o);});document.getElementById('sm-cat-wrap').style.display='block';}
+  else{document.getElementById('sm-cat-wrap').style.display='none';}
+  document.getElementById('sm-lang-wrap').style.display=proj.hasLang?'block':'none';
   document.getElementById('session-modal').classList.add('open');
 }
 
 async function submitSession(){
   const proj=PROJECTS.find(p=>p.id===S.pendingSessionPid);
-  const tangible=parseFloat(document.getElementById('session-tangible').value);
+  const tangible=parseFloat(document.getElementById('sm-tangible').value);
   if(!tangible||tangible<=0){alert('Please enter a valid amount.');return;}
-  const category=document.getElementById('session-category').value;
-  const notes=document.getElementById('session-notes').value;
-  const language=document.getElementById('session-language').value;
+  const category=document.getElementById('sm-category').value;
+  const notes=document.getElementById('sm-notes').value;
+  const language=document.getElementById('sm-language').value;
   const oldSum=S.projects.find(p=>p.project===S.pendingSessionPid)||{};
   const oldTotal=oldSum.total_tangible||0;
   const oldLvl=getLvl(S.pendingSessionPid,oldTotal);
   const newTotal=oldTotal+tangible;
   const newLvl=getLvl(S.pendingSessionPid,newTotal);
 
-  await db.from('sessions').insert({
-    date:today(),project:S.pendingSessionPid,tangible_logged:tangible,
-    unit:proj.unit,points_earned:proj.pts,
-    category:category||null,notes:notes||null,language:language||null
-  });
+  await db.from('sessions').insert({date:today(),project:S.pendingSessionPid,tangible_logged:tangible,unit:proj.unit,points_earned:proj.pts,category:category||null,notes:notes||null,language:language||null});
   await db.from('project_summary').update({total_tangible:newTotal,last_session:today()}).eq('project',S.pendingSessionPid);
 
-  // Mark committed project as having a session
-  if(S.committedProjects[S.pendingSessionPid]){
-    S.committedProjects[S.pendingSessionPid].hasSession=true;
-    await saveCommitted();
-  }
-
-  closeModal('session-modal');
-  S.allSessions=[];S.allLogs=[];
-  await loadData();
-
-  if(newLvl>oldLvl){
-    showUnlock(proj.titles[newLvl-1],proj.id+' — Level '+newLvl+' of 10',UNLOCK_MSGS[proj.id]?.[newLvl-1]||'The forge marks you.');
-  }
+  if(S.committedProjects[S.pendingSessionPid]){S.committedProjects[S.pendingSessionPid].hasSession=true;await saveCommitted();}
+  closeModal('session-modal');S.allSessions=[];await loadData();
+  if(newLvl>oldLvl)showUnlock(proj.titles[newLvl-1],proj.id+' — Level '+newLvl+' of 10',UNLOCK_MSGS[proj.id]?.[newLvl-1]||'The forge marks you.');
 }
 
-// ── CT ────────────────────────────────────────────────
+// ── CT ─────────────────────────────────────────────────
 async function handleCT(key,label,keeping){
   if(!keeping){
-    // Broke it — show modal with streak info
     const c=CMDS.find(x=>x.key===key);
     const streak=S.streaks.find(s=>s.commandment===c.short)||{};
     const cur=streak.current_streak||0;
-    const curTitle=ctTitle(key,cur);
     S.pendingCT={key,label};
-    document.getElementById('ct-modal-title').textContent=label.substring(0,50);
-    document.getElementById('ct-modal-sub').textContent=cur>0?`You were on a ${cur} day streak — ${curTitle}. Breaking this resets to zero.`:'Recording a break for today.';
+    document.getElementById('ct-title').textContent=label.substring(0,45)+'...';
+    document.getElementById('ct-sub').textContent=cur>0?`You were on a ${cur} day streak — ${ctTitleFn(key,cur)}. Breaking resets to zero.`:'Recording a break for today.';
     document.getElementById('ct-reason').value='';
     document.getElementById('ct-modal').classList.add('open');
   } else {
     await ensureLog();
     await db.from('daily_log').update({[key]:true}).eq('date',today());
     const{data}=await db.from('daily_log').select('*').eq('date',today()).single();
-    S.todayLog=data;
-    renderActive();
+    S.todayLog=data;renderActive();
   }
 }
 
@@ -783,158 +1032,206 @@ async function confirmCTBreak(){
   const c=CMDS.find(x=>x.key===S.pendingCT.key);
   const streak=S.streaks.find(s=>s.commandment===c.short)||{};
   const breakLog=(streak.break_log||'')+'\n'+today()+' — '+reason;
-  await db.from('commandment_streaks').update({
-    current_streak:0,last_break_date:today(),
-    total_breaks:(streak.total_breaks||0)+1,break_log:breakLog.trim()
-  }).eq('commandment',c.short);
-  closeModal('ct-modal');
-  S.pendingCT=null;
-  await loadData();
+  await db.from('commandment_streaks').update({current_streak:0,last_break_date:today(),total_breaks:(streak.total_breaks||0)+1,break_log:breakLog.trim()}).eq('commandment',c.short);
+  closeModal('ct-modal');S.pendingCT=null;await loadData();
 }
 
-// ── CLOSE DAY ─────────────────────────────────────────
+// ── CLOSE DAY ──────────────────────────────────────────
 async function closeDay(){
-  // Gate 1: All CT marked
   if(!S.todayLog)return;
-  const unmarkedCT=CMDS.filter(c=>S.todayLog[c.key]===null||S.todayLog[c.key]===undefined);
-  if(unmarkedCT.length>0){
-    alert(`${unmarkedCT.length} commandment${unmarkedCT.length>1?'s':''} still unmarked. Mark all 10 as kept or broken before closing the day.`);
-    return;
-  }
-  // Gate 2: All committed projects submitted
-  const uncommitted=PROJECTS.filter(p=>{
-    const cp=S.committedProjects[p.id];
-    return cp&&cp.committed&&!cp.submitted;
-  });
-  if(uncommitted.length>0){
-    alert(`${uncommitted.length} committed project${uncommitted.length>1?'s':''} not yet submitted: ${uncommitted.map(p=>p.id).join(', ')}. Submit each project before closing the day.`);
-    return;
-  }
-  // Gate 3: Reflection text
+  const unmarked=CMDS.filter(c=>S.todayLog[c.key]!==true&&S.todayLog[c.key]!==false);
+  if(unmarked.length>0){alert(`${unmarked.length} commandment${unmarked.length>1?'s':''} still unmarked. Mark all 10 first.`);return;}
+  const uncommitted=PROJECTS.filter(p=>{const cp=S.committedProjects[p.id];return cp&&cp.committed&&!cp.submitted;});
+  if(uncommitted.length>0){alert(`${uncommitted.length} committed project${uncommitted.length>1?'s':''} not submitted: ${uncommitted.map(p=>p.id).join(', ')}`);return;}
   const reflection=document.getElementById('reflection-text')?.value?.trim();
-  if(!reflection){alert('The forge requires your reflection before the day can close.');return;}
-
+  if(!reflection){alert('The forge requires your reflection.');return;}
   await db.from('daily_log').update({reflection,c10_reflection:true,day_closed:true}).eq('date',today());
-
-  // Update CT streaks — only once per day
   for(const c of CMDS){
     const kept=S.todayLog?.[c.key]===true;
     const streak=S.streaks.find(s=>s.commandment===c.short)||{};
-    // Only update if we haven't already updated today
-    if(streak.streak_last_updated===today()) continue;
+    if(streak.streak_last_updated===today())continue;
     if(kept){
       const ns=(streak.current_streak||0)+1;
-      await db.from('commandment_streaks').update({
-        current_streak:ns,
-        longest_streak:Math.max(streak.longest_streak||0,ns),
-        streak_last_updated:today()
-      }).eq('commandment',c.short);
-    } else if(S.todayLog?.[c.key]===false){
-      // Broken today — streak already reset when break was recorded
-      // Just mark as updated so we don't double-process
-      await db.from('commandment_streaks').update({
-        streak_last_updated:today()
-      }).eq('commandment',c.short);
+      await db.from('commandment_streaks').update({current_streak:ns,longest_streak:Math.max(streak.longest_streak||0,ns),streak_last_updated:today()}).eq('commandment',c.short);
+    } else {
+      await db.from('commandment_streaks').update({streak_last_updated:today()}).eq('commandment',c.short);
     }
   }
-
-  S.allLogs=[];S.allSessions=[];
-  await loadData();
-  alert('The day is closed. The forge remembers.');
+  S.allLogs=[];await loadData();alert('The day is closed. The forge remembers.');
 }
 
-// ── ARMOURY ───────────────────────────────────────────
-function renderArmoury(){
-  const META=['The Buried Ore','The Unearthed','The Smelted','The First Cast','The Reheated','The Struck','The Drawn','The Quenched','The Tempered','The Finished Form'];
-  const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,s?.total_tangible||0);})):0;
-  const metaTitle=META[Math.max(0,metaLvl-1)]||META[0];
+// ── DECLARATIONS ───────────────────────────────────────
+function openDeclModal(){
+  document.getElementById('decl-start').value=today();
+  document.getElementById('decl-end').value=today();
+  document.getElementById('decl-notes').value='';
+  const wrap=document.getElementById('decl-projects');
+  wrap.innerHTML=PROJECTS.map(function(p){return`<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--parch);margin-bottom:6px;font-family:var(--ff)"><input type="checkbox" value="${p.id}" style="width:auto;margin:0"> ${p.id}</label>`;}).join('');
+  document.getElementById('decl-modal').classList.add('open');
+}
 
-  let cardsHTML='';
-  PROJECTS.forEach(proj=>{
+async function submitDeclaration(){
+  const type=document.getElementById('decl-type').value;
+  const start=document.getElementById('decl-start').value;
+  const end=document.getElementById('decl-end').value;
+  const notes=document.getElementById('decl-notes').value;
+  const checked=Array.from(document.querySelectorAll('#decl-projects input:checked')).map(x=>x.value);
+  if(!start||!end||checked.length===0){alert('Please fill in dates and select at least one project.');return;}
+  await db.from('declarations').insert({type,start_date:start,end_date:end,projects:JSON.stringify(checked),notes:notes||null});
+  closeModal('decl-modal');S.declarations=[];await loadData();
+}
+
+// ── ARMOURY ────────────────────────────────────────────
+function renderArmoury(){
+  const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,s?.total_tangible||0);})):0;
+  const metaTitle=metaLvl>0?META_T[metaLvl-1]:META_T[0];
+
+  // Pillar summaries
+  const pillarData={Soul:{pts:0,maxPts:20,projects:[]},Body:{pts:0,maxPts:20,projects:[]},Business:{pts:0,maxPts:20,projects:[]}};
+  PROJECTS.forEach(function(proj){
     const s=S.projects.find(p=>p.project===proj.id)||{};
     const total=s.total_tangible||0;
     const l=getLvl(proj.id,total);
-    const dispTitle=displayTitle(proj.id,total);
-    const curTitle=getCurrentTitle(proj.id,total);
-    const nextTitle=getTargetTitle(proj.id,total);
+    pillarData[proj.pillar].projects.push({proj,l,total});
+  });
+
+  const pillarHTML=Object.keys(pillarData).map(function(pillar){
+    const pd=pillarData[pillar];
+    const avgLvl=pd.projects.length?Math.round(pd.projects.reduce((s,p)=>s+p.l,0)/pd.projects.length):0;
+    const lowestLvl=pd.projects.length?Math.min(...pd.projects.map(p=>p.l)):0;
+    const color=lowestLvl>=7?'var(--gold)':lowestLvl>=4?'var(--safe)':lowestLvl>=2?'var(--warn)':'var(--ember)';
+    return`<div class="card" style="text-align:center">
+      <div style="font-family:var(--fc);font-size:10px;letter-spacing:0.15em;color:var(--ash);margin-bottom:6px">${pillar.toUpperCase()}</div>
+      <div style="font-family:var(--fc);font-size:24px;color:${color};margin-bottom:4px">${lowestLvl}<span style="font-size:11px;color:var(--ash)">/10</span></div>
+      <div style="font-size:11px;color:var(--ash)">Floor level</div>
+      ${pd.projects.map(function(x){
+        const pr=getProg(x.proj.id,x.total);
+        return`<div style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:11px">
+          <span style="color:var(--ash);flex:1;text-align:left">${x.proj.id.replace('The ','')}</span>
+          <div style="width:60px;height:3px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${pr}%;background:var(--safe)"></div></div>
+          <span style="font-family:var(--fc);font-size:10px;color:var(--gold);width:20px;text-align:right">L${x.l}</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }).join('');
+
+  let cardsHTML='';
+  PROJECTS.forEach(function(proj){
+    const s=S.projects.find(p=>p.project===proj.id)||{};
+    const total=s.total_tangible||0;
+    const l=getLvl(proj.id,total);
+    const curT=dispTitle(proj.id,total);
+    const nextT=getTargetTitle(proj.id,total);
     const pr=getProg(proj.id,total);
     const next=getNextAt(proj.id,total);
-
     cardsHTML+=`<div class="ac" onclick="nav('${proj.key}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
         <div>
           <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.1em;margin-bottom:2px">${proj.pillar}</div>
           <div style="font-size:14px;color:var(--parch);font-weight:500;margin-bottom:3px">${proj.id}</div>
-          <div style="font-family:var(--fc);font-size:14px;color:var(--gold)">${dispTitle}</div>
+          <div style="font-family:var(--fc);font-size:14px;color:var(--gold)">${curT}</div>
           <div style="font-size:12px;color:var(--ash);margin-top:2px">${total.toLocaleString()} ${proj.unit}</div>
         </div>
-        <div style="text-align:right">
-          <div style="font-family:var(--fc);font-size:28px;color:var(--parch);line-height:1">${l}<span style="font-size:11px;color:var(--ash)">/10</span></div>
-        </div>
+        <div style="text-align:right"><div style="font-family:var(--fc);font-size:28px;color:var(--parch);line-height:1">${l}<span style="font-size:11px;color:var(--ash)">/10</span></div></div>
       </div>
       <div class="prog-track"><div class="prog-fill" style="width:${pr}%"></div></div>
-      <div style="font-size:11px;color:var(--ash);font-style:italic;margin-top:4px">${next?(next-total).toLocaleString()+' '+proj.unit+' to '+nextTitle:'Ceiling reached'}</div>
+      <div style="font-size:11px;color:var(--ash);font-style:italic;margin-top:4px">${next?(next-total).toLocaleString()+' '+proj.unit+' to '+nextT:'Ceiling reached'}</div>
     </div>`;
   });
-
 
   document.getElementById('screen-armoury').innerHTML=`
     <div class="pt">The Armoury</div>
     <div class="ps">Complete campaign overview — click any project to open its page</div>
-    <div class="card card-gold" style="margin-bottom:24px">
-      <div class="st" style="margin-bottom:4px">Meta Rank</div>
-      <div style="font-family:var(--fc);font-size:28px;color:var(--gold)">${metaTitle}</div>
-      <div style="font-size:13px;color:var(--ash);margin-top:3px">Meta Level ${metaLvl} of 10</div>
+    <div class="card card-gold" style="margin-bottom:20px">
+      <div style="font-family:var(--fc);font-size:28px;color:var(--gold);margin-bottom:4px">${metaTitle}</div>
+      <div style="font-size:13px;color:var(--ash)">Meta Level ${metaLvl} of 10 · Day ${dayNum()} of 795</div>
     </div>
+    <div class="st">Pillar balance</div>
+    <div class="g3" style="margin-bottom:20px">${pillarHTML}</div>
+    <div class="st">All projects</div>
     <div class="g2">${cardsHTML}</div>
   `;
 }
 
-// ── PROJECT SCREEN ────────────────────────────────────
+// ── PROJECT ────────────────────────────────────────────
 async function renderProject(screenKey){
   const proj=PROJECTS.find(p=>p.key===screenKey);if(!proj)return;
   const s=S.projects.find(p=>p.project===proj.id)||{};
   const total=s.total_tangible||0;
-  const l=getLvl(proj.id,total);
-  const dispTitle=displayTitle(proj.id,total);
-  const pr=getProg(proj.id,total);
-  const next=getNextAt(proj.id,total);
-  const nextTitle=getTargetTitle(proj.id,total);
 
   await loadAll();
-  const allPS=S.allSessions.filter(x=>x.project===proj.id);
+  const allPS=S.allSessions.filter(x=>x.project===proj.id&&x.tangible_logged>0);
   const recent=allPS.slice(-20).reverse();
+  const totalPts=allPS.reduce((s,x)=>s+(x.points_earned||0),0);
+  const totalPen=S.allSessions.filter(x=>x.project===proj.id).reduce((s,x)=>s+(x.penalty||0),0);
 
-  // Category distribution
+  // Category counts for floor checking
+  const catCounts=getCatCounts(proj.id,allPS);
+  const l=getLvl(proj.id,total,catCounts);
+  const pr=getProg(proj.id,total,catCounts);
+  const next=getNextAt(proj.id,total,catCounts);
+  const nextT=getTargetTitle(proj.id,total,catCounts);
+
+  // Personal best
+  const pb=personalBest(proj.id);
+
+  // Category distribution with floor indicators
   let catHTML='';
   if(proj.cats.length>0&&allPS.length>0){
-    const counts={};proj.cats.forEach(c=>counts[c]=0);
-    allPS.forEach(s=>{if(s.category&&counts[s.category]!==undefined)counts[s.category]++;});
-    const tot=allPS.length;
-    catHTML=`<div class="st">Category distribution</div><div class="card" style="margin-bottom:14px">
-      ${proj.cats.map(c=>{
-        const cnt=counts[c]||0;const pct=tot>0?Math.round(cnt/tot*100):0;
-        return`<div class="cat-row"><div class="cat-label">${c}</div><div class="cat-track"><div class="cat-fill" style="width:${pct}%"></div></div><div class="cat-val">${cnt} <span style="color:var(--ash)">(${pct}%)</span></div></div>`;
-      }).join('')}
-    </div>`;
+    const nextLvlIdx=l; // index of next level to unlock (0-based)
+    catHTML=`<div class="st">Category distribution${proj.floors?' & level floors':''}</div><div class="card" style="margin-bottom:14px">`;
+    proj.cats.forEach(function(cat){
+      const cnt=catCounts[cat]||0;
+      const totalSess=allPS.length;
+      const pct=totalSess>0?Math.round(cnt/totalSess*100):0;
+      let floorInfo='';
+      if(proj.floors&&proj.floors[cat]){
+        const nextFloor=nextLvlIdx<proj.floors[cat].length?proj.floors[cat][nextLvlIdx]:null;
+        if(nextFloor!==null){
+          const floorPct=Math.min(100,Math.round(cnt/nextFloor*100));
+          const met=cnt>=nextFloor;
+          floorInfo=`<div style="margin-top:4px;display:flex;align-items:center;gap:6px">
+            <div style="font-size:10px;color:${met?'var(--safe)':'var(--ash)'}">Floor L${nextLvlIdx+1}: ${cnt}/${nextFloor}</div>
+            <div style="flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${floorPct}%;background:${met?'var(--safe)':'var(--warn)'}"></div></div>
+            <div style="font-size:10px;color:${met?'var(--safe)':'var(--warn)'}";>${met?'✓':Math.max(0,nextFloor-cnt)+' more'}</div>
+          </div>`;
+        }
+      }
+      catHTML+=`<div class="cat-row" style="flex-direction:column;align-items:stretch;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:2px">
+          <div class="cat-label">${cat}</div>
+          <div class="cat-track"><div class="cat-fill" style="width:${pct}%"></div></div>
+          <div class="cat-val">${cnt} <span style="color:var(--ash)">(${pct}%)</span></div>
+        </div>
+        ${floorInfo}
+      </div>`;
+    });
+    catHTML+='</div>';
   }
 
-  // Level journey with correct progress bars
-  const ljHTML=proj.levels.map((threshold,i)=>{
-    const prevThreshold=i===0?0:proj.levels[i-1];
-    const done=total>=threshold;
-    // current = this is the level we are working TOWARD (not yet completed)
-    const cur=!done&&(i===0?total<threshold:total>=proj.levels[i-1]&&total<threshold);
-    let barPct=0;
-    let barColor='var(--safe)';
-    if(done){
-      barPct=100;
-      barColor='var(--safe)';
-    } else if(cur){
-      barPct=Math.round(((total-prevThreshold)/(threshold-prevThreshold))*100);
-      barPct=Math.max(0,Math.min(100,barPct));
-      barColor='var(--gold)';
+  // Floor status summary for current level
+  let floorStatusHTML='';
+  if(proj.floors){
+    const nextLvlIdx=l;
+    if(nextLvlIdx<proj.levels.length){
+      const allMet=Object.keys(proj.floors).every(function(cat){return(catCounts[cat]||0)>=proj.floors[cat][nextLvlIdx];});
+      const totalMet=total>=proj.levels[nextLvlIdx];
+      if(totalMet&&!allMet){
+        floorStatusHTML=`<div class="pen-banner" style="background:var(--warn-dim);border-color:var(--warn);margin-bottom:14px">
+          <div style="width:8px;height:8px;border-radius:50%;background:var(--warn);flex-shrink:0"></div>
+          <div style="flex:1;font-size:12px;color:#F0D080">Total tangible reached for Level ${nextLvlIdx+1} but category floors not yet met. Complete the required sessions per category to unlock ${proj.titles[nextLvlIdx]}.</div>
+        </div>`;
+      }
     }
+  }
+
+  // Level journey
+  const ljHTML=proj.levels.map(function(threshold,i){
+    const prevT=i===0?0:proj.levels[i-1];
+    const done=total>=threshold;
+    const cur=!done&&total>=prevT;
+    let barPct=done?100:cur?Math.max(0,Math.min(100,Math.round(((total-prevT)/(threshold-prevT))*100))):0;
+    const barColor=done?'var(--safe)':cur?'var(--gold)':'var(--border)';
     const cls=cur?'current':done?'done':'future';
     return`<div class="lj-row ${cls}">
       <div class="lj-dot" style="background:${cur?'var(--gold)':done?'var(--safe)':'var(--border2)'}"></div>
@@ -945,42 +1242,41 @@ async function renderProject(screenKey){
     </div>`;
   }).join('');
 
-  // Sessions table
-  const sessHTML=recent.length>0?`<table class="dt">
-    <thead><tr><th>Date</th><th>Amount</th><th>Category</th>${proj.hasLang?'<th>Language</th>':''}<th>Notes</th></tr></thead>
-    <tbody>${recent.map(s=>`<tr>
-      <td style="color:var(--ash)">${s.date}</td>
-      <td style="font-family:var(--fc);font-size:12px;color:var(--gold)">${s.tangible_logged} ${proj.unit}</td>
-      <td>${s.category||'—'}</td>
-      ${proj.hasLang?`<td>${s.language||'—'}</td>`:''}
-      <td style="color:var(--ash)">${s.notes||'—'}</td>
-    </tr>`).join('')}</tbody>
-  </table>`:'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:12px 0">No sessions logged yet. The forge waits.</div>';
-
-  const totalPtsProj=allPS.reduce(function(s,x){return s+(x.points_earned||0);},0);
-  const totalPenProj=allPS.reduce(function(s,x){return s+(x.penalty||0);},0);
+  const sessHTML=recent.length>0?`<table class="dt"><thead><tr><th>Date</th><th>Amount</th><th>Category</th>${proj.hasLang?'<th>Language</th>':''}<th>Notes</th></tr></thead>
+    <tbody>${recent.map(s=>`<tr><td style="color:var(--ash)">${s.date}</td><td style="font-family:var(--fc);font-size:12px;color:var(--gold)">${s.tangible_logged} ${proj.unit}</td><td>${s.category||'—'}</td>${proj.hasLang?`<td>${s.language||'—'}</td>`:''}<td style="color:var(--ash)">${s.notes||'—'}</td></tr>`).join('')}</tbody></table>`
+    :'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:12px 0">No sessions logged yet.</div>';
 
   document.getElementById('screen-'+screenKey).innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
       <div>
         <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.12em;margin-bottom:4px">${proj.pillar}</div>
         <div class="pt">${proj.id}</div>
-        <div style="font-family:var(--fc);font-size:18px;color:var(--gold);margin-top:4px">${dispTitle}</div>
+        <div style="font-family:var(--fc);font-size:18px;color:var(--gold);margin-top:4px">${dispTitle(proj.id,total,catCounts)}</div>
         <div style="font-size:13px;color:var(--ash);margin-top:4px">${total.toLocaleString()} ${proj.unit} logged</div>
       </div>
       <div class="lvl-badge"><div class="lvl-num">${l}</div><div class="lvl-lbl">of 10</div></div>
     </div>
 
-    <div class="g4" style="margin-bottom:20px">
+    ${floorStatusHTML}
+
+    <div class="g4" style="margin-bottom:16px">
       <div class="sm"><div class="sm-val">${total.toLocaleString()}</div><div class="sm-lbl">Total ${proj.unit}</div></div>
-      <div class="sm"><div class="sm-val">${allPS.length}</div><div class="sm-lbl">Sessions logged</div></div>
-      <div class="sm"><div class="sm-val" style="color:var(--gold)">${totalPtsProj.toLocaleString()}</div><div class="sm-lbl">Points earned</div></div>
-      <div class="sm"><div class="sm-val" style="color:${totalPenProj<0?'var(--ember)':'var(--ash)'}">${totalPenProj}</div><div class="sm-lbl">Penalties accrued</div></div>
+      <div class="sm"><div class="sm-val">${allPS.length}</div><div class="sm-lbl">Sessions</div></div>
+      <div class="sm"><div class="sm-val" style="color:var(--gold)">${totalPts.toLocaleString()}</div><div class="sm-lbl">Points earned</div></div>
+      <div class="sm"><div class="sm-val" style="color:${totalPen<0?'var(--ember)':'var(--ash)'}">${totalPen}</div><div class="sm-lbl">Penalties</div></div>
+    </div>
+
+    ${pb?`<div class="card card-gold" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-family:var(--fc);font-size:9px;letter-spacing:0.15em;color:var(--ash);margin-bottom:3px">Personal Best</div><div style="font-size:13px;color:var(--parch)">${pb.date}${pb.category?' · '+pb.category:''}</div></div><div style="font-family:var(--fc);font-size:24px;color:var(--gold)">${pb.tangible_logged} ${proj.unit}</div></div>`:''}
+
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px"><span style="color:var(--ash)">Progress toward ceiling</span><span style="color:var(--gold);font-family:var(--fc)">${Math.round(total/proj.ceiling*100)}%</span></div>
+      <div class="prog-track" style="height:8px"><div class="prog-fill" style="width:${pr}%"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:4px"><span style="color:var(--ash)">${total.toLocaleString()} of ${proj.ceiling.toLocaleString()} ${proj.unit}</span><span style="color:var(--ash)">${next?(next-total).toLocaleString()+' to '+nextT:'Ceiling reached'}</span></div>
     </div>
 
     <div class="g2" style="align-items:start">
       <div>
-        <div class="st">Sessions over time</div>
+        <div class="st">${proj.unit} over time</div>
         <div class="card" style="margin-bottom:14px"><canvas id="chart-${screenKey}" height="160"></canvas></div>
         ${catHTML}
       </div>
@@ -997,62 +1293,36 @@ async function renderProject(screenKey){
 
   if(!S.chartsDrawn[screenKey]&&allPS.length>0){
     S.chartsDrawn[screenKey]=true;
-    setTimeout(()=>{
+    setTimeout(function(){
       const ctx=document.getElementById('chart-'+screenKey);if(!ctx)return;
       const chartData=allPS.map(function(s){return s.tangible_logged;});
       const chartLabels=allPS.map(function(s){return s.date;});
-      new Chart(ctx,{
-        type:'bar',
-        data:{labels:chartLabels,datasets:[{
-          label:proj.unit,
-          data:chartData,
-          backgroundColor:'rgba(42,128,96,0.5)',
-          borderColor:'#2A8060',
-          borderWidth:1
-        }]},
-        options:{
-          responsive:true,
-          maintainAspectRatio:false,
-          plugins:{legend:{display:false}},
-          scales:{
-            x:{ticks:{color:'#A09080',font:{size:9},maxTicksLimit:10},grid:{color:'rgba(74,66,56,0.5)'}},
-            y:{
-              ticks:{color:'#A09080',font:{size:9},callback:function(v){return v+' '+proj.unit;}},
-              grid:{color:'rgba(74,66,56,0.5)'}
-            }
-          }
-        }
-      });
+      new Chart(ctx,{type:'bar',data:{labels:chartLabels,datasets:[{label:proj.unit,data:chartData,backgroundColor:'rgba(42,128,96,0.5)',borderColor:'#2A8060',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#A09080',font:{size:9},maxTicksLimit:10},grid:{color:'rgba(74,66,56,0.5)'}},y:{ticks:{color:'#A09080',font:{size:9},callback:function(v){return v+' '+proj.unit;}},grid:{color:'rgba(74,66,56,0.5)'}}}}});
     },100);
   }
 }
 
-// ── CLEAN TEMPER ──────────────────────────────────────
+// ── CLEAN TEMPER ───────────────────────────────────────
 function renderTemper(){
   const ct=ctPts(S.todayLog);
   const kept=CMDS.filter(c=>S.todayLog?.[c.key]===true).length;
-
-  const html=`
+  document.getElementById('screen-temper').innerHTML=`
     <div class="pt">Clean Temper</div>
     <div class="ps">Ten commandments · Each streak is independent · Every break is recorded</div>
     <div class="g4" style="margin-bottom:24px">
       <div class="sb"><div class="sb-num" style="color:var(--gold)">${ct}<span style="font-size:14px;color:var(--ash)">/20</span></div><div class="sb-lbl">Today's CT Points</div></div>
       <div class="sb"><div class="sb-num">${kept}<span style="font-size:14px;color:var(--ash)">/10</span></div><div class="sb-lbl">Kept Today</div></div>
-      <div class="sb"><div class="sb-num" style="color:var(--safe)">${S.streaks.reduce((m,s)=>Math.max(m,s.current_streak||0),0)}</div><div class="sb-lbl">Best Current Streak</div></div>
+      <div class="sb"><div class="sb-num" style="color:var(--safe)">${S.streaks.reduce((m,s)=>Math.max(m,s.current_streak||0),0)}</div><div class="sb-lbl">Best Streak</div></div>
       <div class="sb"><div class="sb-num">${S.streaks.reduce((m,s)=>Math.max(m,s.longest_streak||0),0)}</div><div class="sb-lbl">All-Time Best</div></div>
     </div>
-    ${CMDS.map(c=>{
+    ${CMDS.map(function(c){
       const streak=S.streaks.find(s=>s.commandment===c.short)||{};
-      const cur=streak.current_streak||0;
-      const longest=streak.longest_streak||0;
-      const title=ctTitle(c.key,cur);
-      const next=ctNext(c.key,cur);
-      const todayKept=S.todayLog?.[c.key]===true;
-      const todayBroke=S.todayLog?.[c.key]===false;
-      // Generate streak dots — last 30 days based on break log
+      const cur=streak.current_streak||0;const longest=streak.longest_streak||0;
+      const title=ctTitleFn(c.key,cur);const next=ctNextFn(c.key,cur);
+      const todayKept=S.todayLog?.[c.key]===true;const todayBroke=S.todayLog?.[c.key]===false;
       const dots=Array(Math.min(cur,30)).fill(0).map(()=>`<div class="s-dot" style="background:var(--safe)"></div>`).join('');
       return`<div class="card" style="margin-bottom:10px;border-color:${todayKept?'var(--safe)':todayBroke?'var(--ember)':'var(--border)'}">
-        <div style="display:flex;align-items:flex-start;gap:16px">
+        <div style="display:flex;align-items:flex-start;gap:14px">
           <div style="flex:1">
             <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
               <div style="font-size:14px;color:var(--parch);font-weight:500;flex:1">${c.label}</div>
@@ -1060,15 +1330,11 @@ function renderTemper(){
             </div>
             <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;flex-wrap:wrap">
               <div style="font-family:var(--fc);font-size:13px;color:var(--gold)">${title}</div>
-              <div style="font-size:12px;color:var(--ash)">${cur} day streak</div>
+              <div style="font-size:12px;color:var(--ash)">${cur} days</div>
               ${next?`<div style="font-size:12px;color:var(--ash)">→ <span style="color:var(--parch)">${next.title}</span> in ${next.rem} days</div>`:''}
             </div>
-            <div class="s-dots" style="margin-bottom:8px">${dots||'<div style="font-size:11px;color:var(--ash);font-style:italic">No streak yet — begin today</div>'}</div>
-            <div style="font-size:11px;color:var(--ash);margin-bottom:10px">
-              Longest: ${longest} days${longest>0?' — '+ctTitle(c.key,longest):''}
-              ${streak.last_break_date?' · Last break: '+streak.last_break_date:''}
-              ${streak.total_breaks?' · Breaks: '+streak.total_breaks:''}
-            </div>
+            <div class="s-dots" style="margin-bottom:8px">${dots||'<div style="font-size:11px;color:var(--ash);font-style:italic">No streak yet</div>'}</div>
+            <div style="font-size:11px;color:var(--ash);margin-bottom:10px">Longest: ${longest} days${longest>0?' — '+ctTitleFn(c.key,longest):''}${streak.last_break_date?' · Last break: '+streak.last_break_date:''}</div>
             <div style="display:flex;gap:8px">
               <button class="ct-btn-kept ${todayKept?'active':''}" onclick="handleCT('${c.key}','${c.label}',true)">Kept today</button>
               <button class="ct-btn-broke ${todayBroke?'active':''}" onclick="handleCT('${c.key}','${c.label}',false)">Broke it today</button>
@@ -1078,118 +1344,77 @@ function renderTemper(){
       </div>`;
     }).join('')}
   `;
-  document.getElementById('screen-temper').innerHTML=html;
 }
 
-// ── WILLMASTER ────────────────────────────────────────
+// ── WILLMASTER ─────────────────────────────────────────
 function renderWillmaster(){
-  const html=`
+  document.getElementById('screen-willmaster').innerHTML=`
     <div class="pt">The Willmaster</div>
-    <div class="ps">Streak progression through 11 titles per commandment · The longest road in the game</div>
-
+    <div class="ps">Streak progression through 11 titles per commandment</div>
     <div class="g4" style="margin-bottom:24px">
-      <div class="sb"><div class="sb-num" style="color:var(--gold)">${S.streaks.reduce(function(m,s){return Math.max(m,s.current_streak||0);},0)}</div><div class="sb-lbl">Best Current Streak</div></div>
-      <div class="sb"><div class="sb-num">${S.streaks.reduce(function(m,s){return Math.max(m,s.longest_streak||0);},0)}</div><div class="sb-lbl">All-Time Best</div></div>
-      <div class="sb"><div class="sb-num" style="color:var(--safe)">${S.streaks.filter(function(s){return (s.current_streak||0)>=7;}).length}</div><div class="sb-lbl">Active Streaks (7d+)</div></div>
-      <div class="sb"><div class="sb-num" style="color:var(--ember)">${S.streaks.reduce(function(t,s){return t+(s.total_breaks||0);},0)}</div><div class="sb-lbl">Total Breaks</div></div>
+      <div class="sb"><div class="sb-num" style="color:var(--gold)">${S.streaks.reduce((m,s)=>Math.max(m,s.current_streak||0),0)}</div><div class="sb-lbl">Best Current Streak</div></div>
+      <div class="sb"><div class="sb-num">${S.streaks.reduce((m,s)=>Math.max(m,s.longest_streak||0),0)}</div><div class="sb-lbl">All-Time Best</div></div>
+      <div class="sb"><div class="sb-num" style="color:var(--safe)">${S.streaks.filter(s=>(s.current_streak||0)>=7).length}</div><div class="sb-lbl">Active (7d+)</div></div>
+      <div class="sb"><div class="sb-num" style="color:var(--ember)">${S.streaks.reduce((t,s)=>t+(s.total_breaks||0),0)}</div><div class="sb-lbl">Total Breaks</div></div>
     </div>
-
     ${CMDS.map(function(c){
-      const streak=S.streaks.find(function(s){return s.commandment===c.short;})||{};
-      const cur=streak.current_streak||0;
-      const longest=streak.longest_streak||0;
-      const curTitle=ctTitle(c.key,cur);
-      const todayKept=S.todayLog?.[c.key]===true;
-      const todayBroke=S.todayLog?.[c.key]===false;
-
-      // Build 11 threshold rows
-      const thresholds=CT_THR; // [7,15,30,60,120,240,365,480,600,720,800]
-      const titles=CT_TITLES[c.key];
-
-      const rowsHTML=thresholds.map(function(t,i){
-        const prevT=i===0?0:thresholds[i-1];
-        const titleDone=cur>=t;
-        const titleCur=!titleDone&&cur>=prevT;
-        let barPct=0;
-        let barColor='var(--safe)';
-        if(titleDone){
-          barPct=100;
-          barColor='var(--safe)';
-        } else if(titleCur){
-          barPct=Math.round(((cur-prevT)/(t-prevT))*100);
-          barPct=Math.max(0,Math.min(100,barPct));
-          barColor='var(--gold)';
-        }
-        return'<div class="lj-row '+(titleCur?'current':titleDone?'done':'future')+'" style="padding:6px 10px">'+
-          '<div class="lj-dot" style="background:'+(titleCur?'var(--gold)':titleDone?'var(--safe)':'var(--border2)')+'"></div>'+
-          '<div class="lj-title" style="color:'+(titleCur?'var(--gold)':titleDone?'var(--safe)':'var(--ash)')+'">'+titles[i]+'</div>'+
-          '<div class="lj-bar-track"><div class="lj-bar-fill" style="width:'+barPct+'%;background:'+barColor+'"></div></div>'+
-          '<div class="lj-threshold">'+t+' days</div>'+
-          '<div class="lj-tag" style="color:'+(titleCur?'var(--gold)':titleDone?'var(--safe)':'var(--border2)')+'">'+
-            (titleCur?barPct+'%':titleDone?'✓':'')+
-          '</div>'+
-        '</div>';
+      const streak=S.streaks.find(s=>s.commandment===c.short)||{};
+      const cur=streak.current_streak||0;const longest=streak.longest_streak||0;
+      const curTitle=ctTitleFn(c.key,cur);
+      const todayKept=S.todayLog?.[c.key]===true;const todayBroke=S.todayLog?.[c.key]===false;
+      const rowsHTML=CT_THR.map(function(t,i){
+        const prevT=i===0?0:CT_THR[i-1];
+        const done=cur>=t;const isCur=!done&&cur>=prevT;
+        let barPct=done?100:isCur?Math.max(0,Math.min(100,Math.round(((cur-prevT)/(t-prevT))*100))):0;
+        const barColor=done?'var(--safe)':isCur?'var(--gold)':'var(--border)';
+        return`<div class="lj-row ${isCur?'current':done?'done':'future'}" style="padding:5px 8px">
+          <div class="lj-dot" style="background:${isCur?'var(--gold)':done?'var(--safe)':'var(--border2)'}"></div>
+          <div class="lj-title" style="color:${isCur?'var(--gold)':done?'var(--safe)':'var(--ash)'}">${CT_TITLES[c.key][i]}</div>
+          <div class="lj-bar-track"><div class="lj-bar-fill" style="width:${barPct}%;background:${barColor}"></div></div>
+          <div class="lj-threshold">${t} days</div>
+          <div class="lj-tag" style="color:${isCur?'var(--gold)':done?'var(--safe)':'var(--border2)'}">${isCur?barPct+'%':done?'✓':''}</div>
+        </div>`;
       }).join('');
-
-      return'<div class="card" style="margin-bottom:12px;border-color:'+(todayKept?'var(--safe)':todayBroke?'var(--ember)':'var(--border)')+'">'+
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">'+
-          '<div>'+
-            '<div style="font-size:14px;color:var(--parch);font-weight:500;margin-bottom:3px">'+c.label+'</div>'+
-            '<div style="display:flex;align-items:center;gap:14px">'+
-              '<div style="font-family:var(--fc);font-size:13px;color:var(--gold)">'+curTitle+'</div>'+
-              '<div style="font-size:12px;color:var(--ash)">'+cur+' day streak</div>'+
-              (longest>0?'<div style="font-size:12px;color:var(--ash)">Longest: '+longest+'</div>':'')+
-            '</div>'+
-          '</div>'+
-          '<div style="font-family:var(--fc);font-size:10px;color:var(--gold)">'+c.pts+' pt'+(c.pts>1?'s':'')+'</div>'+
-        '</div>'+
-        rowsHTML+
-      '</div>';
+      return`<div class="card" style="margin-bottom:12px;border-color:${todayKept?'var(--safe)':todayBroke?'var(--ember)':'var(--border)'}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+          <div><div style="font-size:14px;color:var(--parch);font-weight:500;margin-bottom:3px">${c.label}</div>
+            <div style="display:flex;gap:14px"><div style="font-family:var(--fc);font-size:13px;color:var(--gold)">${curTitle}</div><div style="font-size:12px;color:var(--ash)">${cur} day streak</div>${longest>0?`<div style="font-size:12px;color:var(--ash)">Longest: ${longest}</div>`:''}</div>
+          </div>
+          <div style="font-family:var(--fc);font-size:10px;color:var(--gold)">${c.pts} pt${c.pts>1?'s':''}</div>
+        </div>
+        ${rowsHTML}
+      </div>`;
     }).join('')}
   `;
-  document.getElementById('screen-willmaster').innerHTML=html;
 }
 
-// ── META ──────────────────────────────────────────────
+// ── META ───────────────────────────────────────────────
 function renderMeta(){
-  const META_T=['The Buried Ore','The Unearthed','The Smelted','The First Cast','The Reheated','The Struck','The Drawn','The Quenched','The Tempered','The Finished Form'];
-  const META_D=['Raw. Buried. Potential only. The forge has not yet touched you.','Unearthed from the ground. The process has begun.','Thrown into heat. Impurities rising to the surface.','The first rough form. An approximation of what could be.','Reheated. Brought back to malleability. Ready to be worked again.','The hammer has landed. Shape is beginning to emerge.','Drawn out. Stretched into precise dimensions.','Plunged into cold. The shape is set suddenly.','Gently reheated. Brittleness removed. Strength and flexibility balanced.','The thing itself. Nothing missing. Nothing excess. Complete.'];
-
-  const pLvls=PROJECTS.map(proj=>{
-    const s=S.projects.find(p=>p.project===proj.id)||{};
-    const total=s.total_tangible||0;
-    return{proj,l:getLvl(proj.id,total),total};
-  });
+  const pLvls=PROJECTS.map(function(proj){const s=S.projects.find(p=>p.project===proj.id)||{};const total=s.total_tangible||0;return{proj,l:getLvl(proj.id,total),total};});
   const metaLvl=Math.min(...pLvls.map(p=>p.l));
   const weakest=pLvls.find(p=>p.l===metaLvl);
   const metaTitle=metaLvl>0?META_T[metaLvl-1]:META_T[0];
   const metaDesc=metaLvl>0?META_D[metaLvl-1]:META_D[0];
-
-  const ljHTML=META_T.map((t,i)=>{
-    const done=metaLvl>i+1;const cur=metaLvl===i+1||metaLvl===0&&i===0;
+  const ljHTML=META_T.map(function(t,i){
+    const done=metaLvl>i+1;const cur=metaLvl===i+1||(metaLvl===0&&i===0);
     return`<div class="lj-row ${cur?'current':done?'done':'future'}">
       <div class="lj-dot" style="background:${cur?'var(--gold)':done?'var(--safe)':'var(--border2)'}"></div>
       <div class="lj-title" style="color:${cur?'var(--gold)':done?'var(--safe)':'var(--ash)'}">${t}</div>
-      <div class="lj-bar-track"><div class="lj-bar-fill" style="width:${done?100:cur?50:0}%;background:${cur?'var(--gold)':'var(--safe)'}"></div></div>
+      <div class="lj-bar-track"><div class="lj-bar-fill" style="width:${done?100:cur?40:0}%;background:${cur?'var(--gold)':'var(--safe)'}"></div></div>
       <div class="lj-tag" style="color:${cur?'var(--gold)':done?'var(--safe)':'var(--border2)'}">${cur?'current':done?'✓':''}</div>
     </div>`;
   }).join('');
-
-  const projRows=pLvls.map(({proj,l,total})=>`
-    <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:0.5px solid var(--border)">
-      <div style="font-size:13px;color:var(--parch);width:180px;flex-shrink:0">${proj.id}</div>
-      <div style="flex:1"><div class="prog-track" style="margin:0"><div class="prog-fill" style="width:${getProg(proj.id,total)}%;${l===metaLvl?'background:var(--ember)':''}"></div></div></div>
-      <div style="font-family:var(--fc);font-size:13px;color:${l===metaLvl?'var(--ember)':'var(--gold)'};width:50px;text-align:right">${l}/10</div>
-      <div style="font-family:var(--fc);font-size:11px;color:var(--ash);width:180px;text-align:right">${displayTitle(proj.id,total)}</div>
-    </div>`).join('');
-
+  const projRows=pLvls.map(function(x){return`<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:0.5px solid var(--border)">
+    <div style="font-size:13px;color:var(--parch);width:180px;flex-shrink:0">${x.proj.id}</div>
+    <div style="flex:1"><div class="prog-track" style="margin:0"><div class="prog-fill" style="width:${getProg(x.proj.id,x.total)}%;${x.l===metaLvl?'background:var(--ember)':''}"></div></div></div>
+    <div style="font-family:var(--fc);font-size:13px;color:${x.l===metaLvl?'var(--ember)':'var(--gold)'};width:50px;text-align:right">${x.l}/10</div>
+    <div style="font-family:var(--fc);font-size:11px;color:var(--ash);width:180px;text-align:right">${dispTitle(x.proj.id,x.total)}</div>
+  </div>`;}).join('');
   document.getElementById('screen-meta').innerHTML=`
-    <div class="pt">Meta Rank</div>
-    <div class="ps">Your overall standing — determined by your weakest project</div>
+    <div class="pt">Meta Rank</div><div class="ps">Overall standing — determined by your weakest project</div>
     <div class="card card-gold" style="margin-bottom:24px">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div style="font-family:var(--fc);font-size:32px;color:var(--gold);margin-bottom:8px">${metaTitle}</div>
+        <div><div style="font-family:var(--fc);font-size:32px;color:var(--gold);margin-bottom:8px">${metaTitle}</div>
           <div style="font-size:14px;color:var(--parch);font-style:italic;max-width:500px;line-height:1.6">${metaDesc}</div>
           ${weakest?`<div style="font-size:12px;color:var(--ember);margin-top:10px">Ceiling set by: ${weakest.proj.id} — Level ${weakest.l}</div>`:''}
         </div>
@@ -1197,23 +1422,129 @@ function renderMeta(){
       </div>
     </div>
     <div class="g2" style="align-items:start">
-      <div>
-        <div class="st">Project contributions</div>
-        <div class="card">${projRows}</div>
-      </div>
-      <div>
-        <div class="st">Meta level journey</div>
-        <div class="card">${ljHTML}</div>
-      </div>
+      <div><div class="st">Project contributions</div><div class="card">${projRows}</div></div>
+      <div><div class="st">Meta level journey</div><div class="card">${ljHTML}</div></div>
     </div>
   `;
 }
 
-// ── REPORT ────────────────────────────────────────────
+// ── CALENDAR ───────────────────────────────────────────
+async function renderCalendar(){
+  await loadAll();
+  const el=document.getElementById('screen-calendar');
+  const dayData={};
+  S.allSessions.forEach(function(s){
+    if(!dayData[s.date])dayData[s.date]={nonCtPts:0,pen:0,sessions:[],ctKept:0,ctBroke:0,total:0};
+    dayData[s.date].nonCtPts+=(s.points_earned||0);
+    dayData[s.date].pen+=(s.penalty||0);
+    dayData[s.date].sessions.push(s);
+  });
+  S.allLogs.forEach(function(l){
+    if(!dayData[l.date])dayData[l.date]={nonCtPts:0,pen:0,sessions:[],ctKept:0,ctBroke:0,total:0};
+    dayData[l.date].ct=l;
+    dayData[l.date].ctPts=ctPts(l);
+    CMDS.forEach(function(c){if(l[c.key]===true)dayData[l.date].ctKept++;else if(l[c.key]===false)dayData[l.date].ctBroke++;});
+    dayData[l.date].total=(dayData[l.date].nonCtPts||0)+(dayData[l.date].ctPts||0)+(dayData[l.date].pen||0);
+  });
+
+  function scoreColor(t){if(!t||t<=0)return'var(--border)';if(t>=70)return'var(--gold)';if(t>=50)return'var(--safe)';if(t>=30)return'var(--warn)';return'var(--ember)';}
+
+  const year=S.calDate.getFullYear();const month=S.calDate.getMonth();
+  const firstDay=new Date(year,month,1).getDay();
+  const daysInMonth=new Date(year,month+1,0).getDate();
+  const monthName=S.calDate.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  const todayStr=today();
+
+  let gridHTML='';
+  ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(function(d){gridHTML+=`<div class="cal-day-hdr">${d}</div>`;});
+  for(let i=0;i<firstDay;i++)gridHTML+=`<div class="cal-day empty"></div>`;
+  for(let d=1;d<=daysInMonth;d++){
+    const dateStr=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const data=dayData[dateStr];
+    const isFuture=dateStr>todayStr;
+    const isSelected=S.calSelected===dateStr;
+    const t=data?.total||0;
+    const pct=Math.round(t/80*100);
+
+    // Pillar dots
+    let pillarDots='';
+    if(data){
+      const pillarPts={Soul:0,Body:0,Business:0};
+      (data.sessions||[]).forEach(function(s){const p=PROJECTS.find(x=>x.id===s.project);if(p)pillarPts[p.pillar]+=(s.points_earned||0);});
+      ['Soul','Body','Business'].forEach(function(pillar){
+        const pts=pillarPts[pillar];const max=20;
+        const color=pts>=max?'var(--gold)':pts>0?'var(--safe)':'var(--border)';
+        pillarDots+=`<div class="cal-pillar-dot" style="background:${color}"></div>`;
+      });
+    }
+    gridHTML+=`<div class="cal-day ${isFuture?'future':data?'':'future'} ${isSelected?'selected':''}" onclick="${!isFuture&&data?'calSelect(\''+dateStr+'\')':''}">
+      <div class="cal-day-num">${d}</div>
+      ${data?`<div class="cal-score" style="color:${scoreColor(t)}">${t}</div>`:''}
+      ${data?`<div class="cal-pillars">${pillarDots}<div class="cal-pillar-dot" style="background:${data.ctKept===10?'var(--gold)':data.ctKept>0?'var(--safe)':'var(--border)'}"></div></div>`:''}
+      ${data?`<div class="cal-prog"><div class="cal-prog-fill" style="width:${pct}%;background:${scoreColor(t)}"></div></div>`:''}
+    </div>`;
+  }
+
+  // Detail panel
+  let detailHTML='';
+  if(S.calSelected&&dayData[S.calSelected]){
+    const data=dayData[S.calSelected];
+    const sessHTML=data.sessions.filter(s=>s.tangible_logged>0).map(function(s){
+      return`<div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:0.5px solid var(--border)">
+        <span style="color:var(--ash)">${s.project}</span><span>${s.category||'—'}</span>
+        <span style="font-family:var(--fc);font-size:11px;color:var(--gold)">${s.tangible_logged} ${s.unit}</span>
+        <span style="color:${s.points_earned>0?'var(--safe)':'var(--ember)'}">${s.points_earned>0?'+'+s.points_earned:s.penalty}</span>
+      </div>`;
+    }).join('')||'<div style="font-size:12px;color:var(--ash);font-style:italic">No sessions</div>';
+    const ctDetailHTML=data.ct?CMDS.map(function(c){const v=data.ct[c.key];
+      return`<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0">
+        <div style="width:8px;height:8px;border-radius:2px;background:${v===true?'var(--safe)':v===false?'var(--ember)':'var(--border)'}"></div>
+        <span style="flex:1;color:${v===true?'var(--safe)':v===false?'var(--ember)':'var(--ash)'}">${c.label}</span>
+        <span style="font-family:var(--fc);font-size:10px;color:var(--gold)">${v===true?'+'+c.pts:'—'}</span>
+      </div>`;
+    }).join(''):'<div style="font-size:12px;color:var(--ash);font-style:italic">No CT data</div>';
+    detailHTML=`<div class="card" style="margin-top:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-family:var(--fc);font-size:14px;color:var(--gold)">${S.calSelected}</div>
+        <div style="font-family:var(--fc);font-size:20px;color:var(--gold)">${data.total||0}<span style="font-size:11px;color:var(--ash)">/80</span></div>
+      </div>
+      <div class="st">Sessions</div>${sessHTML}
+      <div class="st" style="margin-top:12px">Clean Temper — ${data.ctKept||0} kept · ${data.ctBroke||0} broken</div>
+      ${ctDetailHTML}
+      ${data.ct?.reflection?`<div class="st" style="margin-top:12px">Reflection</div><div style="font-size:13px;color:var(--parch);font-style:italic;line-height:1.6">${data.ct.reflection}</div>`:''}
+    </div>`;
+  }
+
+  // Legend
+  const legendHTML=`<div style="display:flex;align-items:center;gap:12px;margin-top:12px;font-size:11px;color:var(--ash);flex-wrap:wrap">
+    <span>Score colour:</span>
+    <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--gold)"></div>70+</span>
+    <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--safe)"></div>50+</span>
+    <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--warn)"></div>30+</span>
+    <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--ember)"></div>&lt;30</span>
+    <span style="margin-left:8px">Dots: Soul · Body · Business · CT</span>
+  </div>`;
+
+  el.innerHTML=`
+    <div class="pt">Calendar</div>
+    <div class="ps">Every day of the campaign — tap any date to see what was forged</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <button class="cal-nav-btn" onclick="calPrev()">← Prev</button>
+      <div style="font-family:var(--fc);font-size:14px;color:var(--parch)">${monthName}</div>
+      <button class="cal-nav-btn" onclick="calNext()">Next →</button>
+    </div>
+    <div class="card"><div class="cal-grid">${gridHTML}</div>${legendHTML}</div>
+    ${detailHTML}
+  `;
+}
+function calPrev(){S.calDate.setMonth(S.calDate.getMonth()-1);renderCalendar();}
+function calNext(){S.calDate.setMonth(S.calDate.getMonth()+1);renderCalendar();}
+function calSelect(d){S.calSelected=S.calSelected===d?null:d;renderCalendar();}
+
+// ── REPORT ─────────────────────────────────────────────
 async function renderReport(){
   document.getElementById('screen-report').innerHTML='<div class="loading">Building Anvil Report...</div>';
   await loadAll();
-
   const gNCT=S.allSessions.reduce((s,r)=>s+(r.points_earned||0),0);
   const gCT=S.allLogs.reduce((s,r)=>s+ctPts(r),0);
   const gTotal=gNCT+gCT;
@@ -1224,99 +1555,93 @@ async function renderReport(){
   const avg=dLogged>0?Math.round(net/dLogged):0;
   const perfDays=S.allLogs.filter(l=>ctPts(l)===20).length;
 
-  const projHTML=PROJECTS.map(proj=>{
+  const projHTML=PROJECTS.map(function(proj){
     const s=S.projects.find(p=>p.project===proj.id)||{};
     const total=s.total_tangible||0;
-    const l=getLvl(proj.id,total);
-    const pr=getProg(proj.id,total);
-    const sc=S.allSessions.filter(x=>x.project===proj.id).length;
-    return`<tr>
-      <td>${proj.id}</td>
-      <td style="font-family:var(--fc);font-size:12px;color:var(--gold)">${displayTitle(proj.id,total)}</td>
-      <td style="text-align:center">${l}/10</td>
-      <td style="text-align:center">${total.toLocaleString()} ${proj.unit}</td>
-      <td style="text-align:center">${sc}</td>
-      <td style="width:120px"><div class="prog-track" style="margin:0"><div class="prog-fill" style="width:${pr}%"></div></div></td>
-    </tr>`;
+    const l=getLvl(proj.id,total);const pr=getProg(proj.id,total);
+    const sc=S.allSessions.filter(x=>x.project===proj.id&&x.tangible_logged>0).length;
+    return`<tr><td>${proj.id}</td><td style="font-family:var(--fc);font-size:12px;color:var(--gold)">${dispTitle(proj.id,total)}</td>
+      <td style="text-align:center">${l}/10</td><td style="text-align:center">${total.toLocaleString()} ${proj.unit}</td><td style="text-align:center">${sc}</td>
+      <td style="width:100px"><div class="prog-track" style="margin:0"><div class="prog-fill" style="width:${pr}%"></div></div></td></tr>`;
   }).join('');
 
-  const ctHTM=CMDS.map(c=>{
+  const ctHTML=CMDS.map(function(c){
     const streak=S.streaks.find(s=>s.commandment===c.short)||{};
     const cur=streak.current_streak||0;
-    return`<tr>
-      <td>${c.label}</td>
-      <td style="font-family:var(--fc);font-size:11px;color:var(--gold)">${ctTitle(c.key,cur)}</td>
-      <td style="text-align:center">${cur}</td>
-      <td style="text-align:center">${streak.longest_streak||0}</td>
-      <td style="text-align:center;color:var(--ember)">${streak.total_breaks||0}</td>
-    </tr>`;
+    return`<tr><td style="font-size:12px">${c.label}</td><td style="font-family:var(--fc);font-size:11px;color:var(--gold)">${ctTitleFn(c.key,cur)}</td>
+      <td style="text-align:center">${cur}</td><td style="text-align:center">${streak.longest_streak||0}</td>
+      <td style="text-align:center;color:var(--ember)">${streak.total_breaks||0}</td></tr>`;
   }).join('');
 
+  // Weekly digest — last 4 weeks
+  const weeklyRows=[];
+  for(let w=weekNum();w>=Math.max(1,weekNum()-3);w--){
+    const wLogs=S.allLogs.filter(function(l){return Math.ceil((new Date(l.date)-GSTART())/864e5/7)===w;});
+    const wSess=S.allSessions.filter(function(s){return Math.ceil((new Date(s.date)-GSTART())/864e5/7)===w;});
+    const wPts=wSess.reduce((s,r)=>s+(r.points_earned||0),0)+wLogs.reduce((s,r)=>s+ctPts(r),0)+wSess.reduce((s,r)=>s+(r.penalty||0),0);
+    const wBest=wLogs.length?Math.max(...wLogs.map(function(l){const ds=wSess.filter(s=>s.date===l.date);return ctPts(l)+ds.reduce((a,x)=>a+(x.points_earned||0),0)+ds.reduce((a,x)=>a+(x.penalty||0),0);})):0;
+    weeklyRows.push({w,days:wLogs.length,pts:wPts,best:wBest});
+  }
+  const weeklyHTML=weeklyRows.map(function(r){return`<tr><td style="font-family:var(--fc);font-size:11px">Week ${r.w}</td><td style="text-align:center">${r.days}</td><td style="text-align:center;font-family:var(--fc);color:var(--gold)">${r.pts}</td><td style="text-align:center">${r.best}</td></tr>`;}).join('');
+
+  // Active declarations
+  const activeDecls=S.declarations.filter(function(d){return d.end_date>=today();});
+  const declHTML=activeDecls.length>0?activeDecls.map(function(d){
+    let projs='All';try{projs=JSON.parse(d.projects).join(', ');}catch(e){}
+    return`<div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px;display:flex;gap:12px"><span style="font-family:var(--fc);color:var(--warn);width:80px">${d.type}</span><span style="color:var(--ash)">${d.start_date} → ${d.end_date}</span><span style="flex:1;color:var(--parch)">${projs}</span></div>`;
+  }).join(''):'<div style="font-size:12px;color:var(--ash);font-style:italic">No active declarations</div>';
+
   document.getElementById('screen-report').innerHTML=`
-    <div class="pt">The Anvil Report</div>
-    <div class="ps">Campaign biography · Every number tells a truth</div>
+    <div class="pt">The Anvil Report</div><div class="ps">Campaign biography · Every number tells a truth</div>
     <div class="g4" style="margin-bottom:20px">
       <div class="sb"><div class="sb-num" style="color:var(--gold)">${net.toLocaleString()}</div><div class="sb-lbl">Net Score</div></div>
       <div class="sb"><div class="sb-num">${gTotal.toLocaleString()}</div><div class="sb-lbl">Gross Earned</div></div>
       <div class="sb"><div class="sb-num" style="color:var(--ember)">${tPen}</div><div class="sb-lbl">Total Penalty</div></div>
-      <div class="sb"><div class="sb-num">${pct}%</div><div class="sb-lbl">Of Max (63,600)</div></div>
+      <div class="sb"><div class="sb-num">${pct}%</div><div class="sb-lbl">Of Max</div></div>
     </div>
     <div class="g4" style="margin-bottom:24px">
       <div class="sb"><div class="sb-num">${dLogged}</div><div class="sb-lbl">Days Logged</div></div>
-      <div class="sb"><div class="sb-num">${avg}</div><div class="sb-lbl">Avg Pts / Day</div></div>
+      <div class="sb"><div class="sb-num">${avg}</div><div class="sb-lbl">Avg / Day</div></div>
       <div class="sb"><div class="sb-num" style="color:var(--safe)">${perfDays}</div><div class="sb-lbl">Perfect CT Days</div></div>
-      <div class="sb"><div class="sb-num">${daysLeft()}</div><div class="sb-lbl">Days Remaining</div></div>
+      <div class="sb"><div class="sb-num">${daysLeft()}</div><div class="sb-lbl">Days Left</div></div>
     </div>
     <div class="st">Score over time</div>
     <div class="card" style="margin-bottom:20px"><canvas id="report-chart" height="160"></canvas></div>
+    <div class="g2" style="align-items:start;margin-bottom:20px">
+      <div>
+        <div class="st">Weekly digest — last 4 weeks</div>
+        <div class="card"><table class="dt"><thead><tr><th>Week</th><th>Days</th><th>Total pts</th><th>Best day</th></tr></thead><tbody>${weeklyHTML}</tbody></table></div>
+      </div>
+      <div>
+        <div class="st">Active declarations</div>
+        <div class="card">${declHTML}</div>
+      </div>
+    </div>
     <div class="st">Project standings</div>
-    <div class="card" style="margin-bottom:20px">
-      <table class="dt"><thead><tr><th>Project</th><th>Current Title</th><th>Level</th><th>Tangible</th><th>Sessions</th><th>Progress</th></tr></thead><tbody>${projHTML}</tbody></table>
-    </div>
+    <div class="card" style="margin-bottom:20px"><table class="dt"><thead><tr><th>Project</th><th>Title</th><th>Level</th><th>Tangible</th><th>Sessions</th><th>Progress</th></tr></thead><tbody>${projHTML}</tbody></table></div>
     <div class="st">Clean Temper — commandment streaks</div>
-    <div class="card">
-      <table class="dt"><thead><tr><th>Commandment</th><th>Current Title</th><th>Streak</th><th>Longest</th><th>Breaks</th></tr></thead><tbody>${ctHTM}</tbody></table>
-    </div>
+    <div class="card"><table class="dt"><thead><tr><th>Commandment</th><th>Title</th><th>Streak</th><th>Longest</th><th>Breaks</th></tr></thead><tbody>${ctHTML}</tbody></table></div>
   `;
 
   if(S.allLogs.length>0){
-    setTimeout(()=>{
+    setTimeout(function(){
       const ctx=document.getElementById('report-chart');if(!ctx)return;
       const labels=S.allLogs.map(l=>l.date);
-      const data=S.allLogs.map(l=>{
-        const ds=S.allSessions.filter(s=>s.date===l.date);
-        return ctPts(l)+ds.reduce((s,x)=>s+(x.points_earned||0),0)+ds.reduce((s,x)=>s+(x.penalty||0),0);
-      });
-      const rLabels=S.allLogs.map(function(l){return l.date;});
-      const rData=S.allLogs.map(function(l){
-        var ds=S.allSessions.filter(function(s){return s.date===l.date;});
-        return ctPts(l)+ds.reduce(function(s,x){return s+(x.points_earned||0);},0)+ds.reduce(function(s,x){return s+(x.penalty||0);},0);
-      });
-      new Chart(ctx,{
-        type:'line',
-        data:{labels:rLabels,datasets:[{data:rData,borderColor:'#D4A84C',backgroundColor:'rgba(212,168,76,0.08)',borderWidth:2,pointRadius:2,tension:0.3}]},
-        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{
-          x:{ticks:{color:'#A09080',font:{size:9},maxTicksLimit:12},grid:{color:'rgba(74,66,56,0.5)'}},
-          y:{ticks:{color:'#A09080',font:{size:9}},grid:{color:'rgba(74,66,56,0.5)'}}
-        }}
-      });
+      const data=S.allLogs.map(function(l){const ds=S.allSessions.filter(s=>s.date===l.date);return ctPts(l)+ds.reduce((s,x)=>s+(x.points_earned||0),0)+ds.reduce((s,x)=>s+(x.penalty||0),0);});
+      new Chart(ctx,{type:'line',data:{labels,datasets:[{data,borderColor:'#D4A84C',backgroundColor:'rgba(212,168,76,0.08)',borderWidth:2,pointRadius:2,tension:0.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#A09080',font:{size:9},maxTicksLimit:12},grid:{color:'rgba(74,66,56,0.5)'}},y:{ticks:{color:'#A09080',font:{size:9}},grid:{color:'rgba(74,66,56,0.5)'}}}}});
     },100);
   }
 }
 
-// ── MILESTONES ────────────────────────────────────────
+// ── MILESTONES ─────────────────────────────────────────
 async function renderMilestones(){
   await loadAll();
-  const msHTML=S.milestones.length>0?S.milestones.map(m=>`
-    <div style="display:flex;gap:16px;padding:12px 0;border-bottom:0.5px solid var(--border)">
-      <div style="font-size:12px;color:var(--ash);width:90px;flex-shrink:0">${m.date}</div>
-      <div style="flex:1">
-        <div style="font-size:13px;color:var(--parch);margin-bottom:3px">${m.description}</div>
-        <div style="font-size:11px;color:var(--ash)">${m.project}${m.tangible_at_time!==null?' · '+m.tangible_at_time+' '+(PROJECTS.find(p=>p.id===m.project)?.unit||''):''}${m.level_at_time!==null?' · Level '+m.level_at_time:''}</div>
-      </div>
-    </div>`).join('')
-  :'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:20px 0">No milestones yet. Significant moments belong here.</div>';
-
+  const msHTML=S.milestones.length>0?S.milestones.map(function(m){return`<div style="display:flex;gap:16px;padding:12px 0;border-bottom:0.5px solid var(--border)">
+    <div style="font-size:12px;color:var(--ash);width:90px;flex-shrink:0">${m.date}</div>
+    <div style="flex:1"><div style="font-size:13px;color:var(--parch);margin-bottom:3px">${m.description}</div>
+      <div style="font-size:11px;color:var(--ash)">${m.project}${m.tangible_at_time!==null?' · '+m.tangible_at_time+' '+(PROJECTS.find(p=>p.id===m.project)?.unit||''):''}${m.level_at_time!==null?' · Level '+m.level_at_time:''}</div>
+    </div></div>`;}).join('')
+  :'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:20px 0">No milestones yet.</div>';
   document.getElementById('screen-milestones').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
       <div><div class="pt">Milestones</div><div class="ps">Singular moments that belong to no formula</div></div>
@@ -1328,7 +1653,6 @@ async function renderMilestones(){
   sel.innerHTML='<option value="">Select project</option>';
   PROJECTS.forEach(p=>{const o=document.createElement('option');o.value=p.id;o.textContent=p.id;sel.appendChild(o);});
 }
-
 function openMilestone(){document.getElementById('ms-modal').classList.add('open');}
 async function submitMilestone(){
   const pid=document.getElementById('ms-project').value;
@@ -1337,26 +1661,201 @@ async function submitMilestone(){
   const s=S.projects.find(p=>p.project===pid)||{};
   const total=s.total_tangible||0;
   await db.from('milestones').insert({date:today(),project:pid,description:desc,tangible_at_time:total,level_at_time:getLvl(pid,total)});
-  closeModal('ms-modal');
-  S.milestones=[];S.allSessions=[];S.allLogs=[];
-  await loadAll();
-  renderMilestones();
+  closeModal('ms-modal');S.milestones=[];S.allSessions=[];S.allLogs=[];
+  await loadAll();renderMilestones();
 }
 
-// ── UTILS ─────────────────────────────────────────────
+// ── SHARE ──────────────────────────────────────────────
+async function renderShare(){
+  await loadAll();
+  document.getElementById('screen-share').innerHTML=`
+    <div class="pt">Share</div>
+    <div class="ps">Three card types · Download as PNG · Post to Instagram</div>
+
+    <div class="st">Card 1 — Daily Forge</div>
+    <div class="share-card-outer"><div id="card-daily">${buildDailyCard()}</div></div>
+    <button class="btn btn-block" style="margin-bottom:28px" onclick="dlCard('card-daily','forge-day-'+today())">Download daily card</button>
+
+    <div class="st">Card 2 — Campaign Snapshot</div>
+    <div class="share-card-outer"><div id="card-campaign">${buildCampaignCard()}</div></div>
+    <button class="btn btn-block" style="margin-bottom:28px" onclick="dlCard('card-campaign','forge-campaign-'+today())">Download campaign card</button>
+
+    <div class="st">Card 3 — Level Unlock</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+      ${PROJECTS.map(p=>`<button class="btn btn-sm" onclick="showUnlockCard('${p.id}')">${p.id.replace('The ','')}</button>`).join('')}
+    </div>
+    <div class="share-card-outer"><div id="card-unlock">${buildUnlockCard(null)}</div></div>
+    <button class="btn btn-block" style="margin-bottom:8px" onclick="dlCard('card-unlock','forge-unlock-'+today())">Download unlock card</button>
+  `;
+}
+
+function buildDailyCard(){
+  const ct=ctPts(S.todayLog);
+  const nonCt=S.todaySessions.reduce((s,x)=>s+(x.points_earned||0),0);
+  const total=ct+nonCt;
+  const pen=S.todaySessions.reduce((s,x)=>s+(x.penalty||0),0);
+  const d=new Date();
+  const dayStr=d.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+  const completedProjs=S.todaySessions.filter(s=>s.tangible_logged>0);
+  const pct=Math.round((total+pen)/80*100);
+
+  return`<div class="sc">
+    <div class="sc-eyebrow">The Quiet Anvil</div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div>
+        <div style="font-size:11px;letter-spacing:0.1em;color:#8a6a1a;margin-bottom:4px">${dayStr}</div>
+        <div style="font-size:13px;letter-spacing:0.08em;color:#8a6a1a">Day ${dayNum()} of 795</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:Cinzel,serif;font-size:48px;color:#D4A84C;line-height:1">${total+pen}</div>
+        <div style="font-size:10px;letter-spacing:0.1em;color:#8a6a1a">of 80 points</div>
+      </div>
+    </div>
+    <div style="height:3px;background:#2a2010;border-radius:2px;margin-bottom:20px;overflow:hidden"><div style="height:100%;width:${pct}%;background:#D4A84C;border-radius:2px"></div></div>
+    ${completedProjs.length>0?`<div style="margin-bottom:16px">${completedProjs.map(function(s){const proj=PROJECTS.find(p=>p.id===s.project);return`<div style="display:flex;justify-content:space-between;margin-bottom:6px"><div style="font-size:10px;letter-spacing:0.08em;color:#8a6a1a">${s.project.replace('The ','').toUpperCase()}</div><div style="font-size:13px;color:#D4A84C;font-family:Cinzel,serif">${s.tangible_logged} ${proj?proj.unit:''}</div></div>`;}).join('')}</div>`:''}
+    <div class="sc-divider"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:9px;letter-spacing:0.15em;color:#8a6a1a;margin-bottom:4px">CLEAN TEMPER</div>
+        <div style="display:flex;gap:4px">${CMDS.map(function(c){const v=S.todayLog?.[c.key];return`<div style="width:14px;height:14px;border-radius:3px;background:${v===true?'#2A8060':v===false?'#D04030':'#2a2010'};display:flex;align-items:center;justify-content:center;font-size:8px;color:#fff">${v===true?'✓':v===false?'✗':''}</div>`;}).join('')}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-family:Cinzel,serif;font-size:22px;color:#D4A84C">${ct}<span style="font-size:12px;color:#8a6a1a">/20</span></div>
+        <div style="font-size:9px;letter-spacing:0.1em;color:#8a6a1a">CT POINTS</div>
+      </div>
+    </div>
+    <div class="sc-mark">quiet-anvil.vercel.app</div>
+  </div>`;
+}
+
+function buildCampaignCard(){
+  const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,s?s.total_tangible:0);})):0;
+  const metaTitle=metaLvl>0?META_T[metaLvl-1]:META_T[0];
+  const bestStreak=S.streaks.reduce((m,s)=>Math.max(m,s.current_streak||0),0);
+  const bestStreakCmd=S.streaks.find(s=>(s.current_streak||0)===bestStreak);
+
+  return`<div class="sc">
+    <div class="sc-eyebrow">The Quiet Anvil · Campaign Snapshot</div>
+    <div style="margin-bottom:6px">
+      <div style="font-size:9px;letter-spacing:0.15em;color:#8a6a1a;margin-bottom:6px">META RANK</div>
+      <div style="font-family:Cinzel,serif;font-size:32px;color:#D4A84C;line-height:1;margin-bottom:4px">${metaTitle}</div>
+      <div style="font-size:10px;letter-spacing:0.1em;color:#8a6a1a">Level ${metaLvl} of 10 · Day ${dayNum()} of 795</div>
+    </div>
+    <div class="sc-divider"></div>
+    <div style="margin-bottom:16px">
+      ${PROJECTS.map(function(proj){
+        const s=S.projects.find(p=>p.project===proj.id)||{};
+        const total=s.total_tangible||0;
+        const l=getLvl(proj.id,total);
+        const pr=getProg(proj.id,total);
+        const curT=getCurTitle(proj.id,total)||getTargetTitle(proj.id,total);
+        return`<div class="sc-prog-row">
+          <div class="sc-prog-label">
+            <div class="sc-prog-name">${proj.id.toUpperCase()}</div>
+            <div class="sc-prog-val">${curT} · L${l}</div>
+          </div>
+          <div class="sc-prog-track"><div class="sc-prog-fill" style="width:${pr}%"></div></div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="sc-divider"></div>
+    <div style="display:flex;justify-content:space-between">
+      <div><div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:2px">BEST STREAK</div><div style="font-size:12px;color:#F0E4CC">${bestStreak} days${bestStreakCmd?' · '+bestStreakCmd.commandment:''}</div></div>
+      <div style="text-align:right"><div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:2px">DAYS REMAINING</div><div style="font-family:Cinzel,serif;font-size:20px;color:#D4A84C">${daysLeft()}</div></div>
+    </div>
+    <div class="sc-mark">quiet-anvil.vercel.app</div>
+  </div>`;
+}
+
+function buildUnlockCard(pid){
+  if(!pid)return`<div class="sc" style="min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center">
+    <div style="font-family:Cinzel,serif;font-size:14px;letter-spacing:0.15em;color:#8a6a1a">Select a project above</div>
+  </div>`;
+  const proj=PROJECTS.find(p=>p.id===pid);
+  const s=S.projects.find(p=>p.project===pid)||{};
+  const total=s.total_tangible||0;
+  const l=getLvl(pid,total);
+  const title=getCurTitle(pid,total)||getTargetTitle(pid,total);
+  const msg=UNLOCK_MSGS[pid]?.[Math.max(0,l-1)]||'The forge marks you.';
+  return`<div class="sc">
+    <div class="sc-eyebrow">The Quiet Anvil · Level Unlocked</div>
+    <div style="font-size:9px;letter-spacing:0.15em;color:#8a6a1a;margin-bottom:16px">${pid.toUpperCase()}</div>
+    <div style="font-family:Cinzel,serif;font-size:38px;color:#D4A84C;line-height:1.1;margin-bottom:8px">${title}</div>
+    <div style="font-family:Cinzel,serif;font-size:11px;letter-spacing:0.15em;color:#8a6a1a;margin-bottom:24px">Level ${l} of 10</div>
+    <div class="sc-divider"></div>
+    <div style="font-family:'EB Garamond',serif;font-size:14px;color:#F0E4CC;font-style:italic;line-height:1.7;margin:16px 0">${msg}</div>
+    <div class="sc-divider"></div>
+    <div style="display:flex;justify-content:space-between;margin-top:8px">
+      <div><div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:2px">TANGIBLE AT UNLOCK</div><div style="font-size:13px;color:#D4A84C;font-family:Cinzel,serif">${total.toLocaleString()} ${proj.unit}</div></div>
+      <div style="text-align:right"><div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:2px">DAY</div><div style="font-size:13px;color:#F0E4CC">${dayNum()} of 795</div></div>
+    </div>
+    <div class="sc-mark">quiet-anvil.vercel.app</div>
+  </div>`;
+}
+
+function showUnlockCard(pid){const el=document.getElementById('card-unlock');if(el)el.innerHTML=buildUnlockCard(pid);}
+
+async function dlCard(elId,filename){
+  const el=document.getElementById(elId);if(!el){alert('Card not found.');return;}
+  try{
+    const canvas=await html2canvas(el,{backgroundColor:'#111008',scale:2,useCORS:true,logging:false});
+    const link=document.createElement('a');link.download=filename+'.png';link.href=canvas.toDataURL('image/png');link.click();
+  }catch(e){alert('Could not generate image.');console.error(e);}
+}
+
+// ── SETTINGS ───────────────────────────────────────────
+function renderSettings(){
+  document.getElementById('screen-settings').innerHTML=`
+    <div class="pt">Settings</div><div class="ps">Configure The Quiet Anvil</div>
+    <div class="st">Security</div>
+    <div class="card" style="margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><div style="font-size:14px;color:var(--parch);margin-bottom:3px">PIN lock</div><div style="font-size:12px;color:var(--ash)">Change your 4-digit PIN</div></div>
+        <button class="btn btn-sm" onclick="startChangePIN()">Change PIN</button>
+      </div>
+    </div>
+    <div class="st">Game start date</div>
+    <div class="card" style="margin-bottom:20px">
+      <div style="font-size:13px;color:var(--ash);margin-bottom:10px">Changing this recalculates all day numbers and week numbers from the new start date.</div>
+      <label>Start date</label>
+      <input type="date" id="start-date-input" value="${getGameStart()}" style="max-width:200px">
+      <button class="btn btn-sm btn-safe" onclick="saveStartDate()">Save start date</button>
+    </div>
+    <div class="st">Campaign reference</div>
+    <div class="card" style="margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:0.5px solid var(--border)"><span style="color:var(--ash)">Game end</span><span>June 1, 2028</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:0.5px solid var(--border)"><span style="color:var(--ash)">Total days</span><span>795</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0"><span style="color:var(--ash)">Maximum points</span><span>63,600</span></div>
+    </div>
+    <div class="st">Daily points per project</div>
+    <div class="card" style="margin-bottom:20px">
+      ${PROJECTS.map(p=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:0.5px solid var(--border)"><span style="color:var(--ash)">${p.id}</span><span style="font-family:var(--fc);color:var(--gold)">${p.pts} pts/day</span></div>`).join('')}
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0"><span style="color:var(--ash)">Clean Temper</span><span style="font-family:var(--fc);color:var(--gold)">20 pts/day</span></div>
+    </div>
+    <div class="st">Data</div>
+    <div class="card">
+      <div style="font-size:13px;color:var(--ash);margin-bottom:6px">All data stored in Supabase. Persistent across all devices.</div>
+      <div style="font-size:11px;color:var(--border2)">fswqranekmivhaykfgzy.supabase.co</div>
+    </div>
+  `;
+}
+
+function saveStartDate(){
+  const val=document.getElementById('start-date-input').value;
+  if(!val){alert('Please enter a valid date.');return;}
+  localStorage.setItem('qa_start',val);
+  document.getElementById('sb-countdown').textContent=daysLeft()+' days';
+  alert('Start date updated to '+val+'. All day and week numbers recalculated.');
+  renderSettings();
+}
+
+// ── UTILS ──────────────────────────────────────────────
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 function showUnlock(title,sub,msg){document.getElementById('ul-title').textContent=title;document.getElementById('ul-sub').textContent=sub;document.getElementById('ul-msg').textContent=msg;document.getElementById('unlock').classList.add('open');}
 function closeUnlock(){document.getElementById('unlock').classList.remove('open');}
 
-// ── INIT ──────────────────────────────────────────────
-// We need to add committed_projects column to daily_log
-// This runs on first load to ensure column exists
-async function ensureSchema(){
-  // Try to add column — will fail silently if already exists
-  await db.rpc('exec',{sql:"ALTER TABLE daily_log ADD COLUMN IF NOT EXISTS committed_projects text;"}).catch(()=>{});
-}
-
-loadData().then(()=>loadAll());
+// ── INIT ───────────────────────────────────────────────
+document.getElementById('pin-screen').classList.add('active');
 </script>
 </body>
 </html>
