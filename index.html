@@ -392,7 +392,7 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
 
 <div class="modal-overlay" id="ct-modal">
   <div class="modal">
-    <div class="modal-title" id="ct-title">Breaking the streak</div>
+    <div class="modal-title" id="ct-title">Recording a break</div>
     <div class="modal-sub" id="ct-sub"></div>
     <label>What happened</label><textarea id="ct-reason" placeholder="Record honestly..."></textarea>
     <div class="modal-btns">
@@ -591,6 +591,7 @@ let S={
   sessionPages:{}, // pid -> current page number
   pendingSessionPid:null,pendingSkipPid:null,pendingCT:null,
   calSelected:null,calDate:new Date(),
+  wmDays:30,
   chartsDrawn:{}
 };
 
@@ -877,7 +878,7 @@ function renderForge(){
   let penToday=0;
   PROJECTS.forEach(proj=>{const cp=S.committedProjects[proj.id];if(cp&&cp.submitted&&!cp.hasSession)penToday-=proj.pts;});
   const d=new Date();
-  const dateStr=d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const dateStr=d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).replace(',','');
 
   // Forge temperature
   const temp=forgeTemp();
@@ -899,7 +900,18 @@ function renderForge(){
   let declBanner='';
   const activeDecls=S.declarations.filter(function(d){return d.start_date<=today()&&d.end_date>=today();});
   if(activeDecls.length>0){
-    declBanner=`<div class="pen-banner" style="background:var(--warn-dim);border-color:var(--warn)"><div style="width:8px;height:8px;border-radius:50%;background:var(--warn);flex-shrink:0"></div><div style="flex:1;font-size:12px;color:#F0D080">${activeDecls[0].type} declared · ${activeDecls[0].start_date} to ${activeDecls[0].end_date} · Penalties suspended for selected projects</div></div>`;
+    const decl=activeDecls[0];
+    let declProjs='all projects';
+    try{const pp=JSON.parse(decl.projects);if(pp&&pp.length)declProjs=pp.join(', ');}catch(e){}
+    declBanner=`<div style="background:var(--warn-dim);border:0.5px solid var(--warn);border-radius:8px;padding:12px 16px;margin-bottom:14px">
+      <div style="display:flex;align-items:flex-start;gap:10px">
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--warn);flex-shrink:0;margin-top:4px;animation:pulse 2s infinite"></div>
+        <div>
+          <div style="font-family:var(--fc);font-size:11px;color:var(--warn);letter-spacing:0.1em;margin-bottom:3px">${decl.type.toUpperCase()} DECLARED · Active until ${decl.end_date}</div>
+          <div style="font-size:12px;color:#F0D080">Penalties suspended for: <strong style="color:var(--parch)">${declProjs}</strong></div>
+        </div>
+      </div>
+    </div>`;
   }
 
   // Projects
@@ -966,7 +978,7 @@ function renderForge(){
       <div style="flex:1;font-size:13px;color:${kept?'var(--safe)':broke?'var(--ember)':'var(--parch)'}">${c.label}</div>
       <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
         <button class="ct-btn-kept ${kept?'active':''}" onclick="handleCT('${c.key}','${c.label}',true)">Kept</button>
-        <button class="ct-btn-broke ${broke?'active':''}" onclick="handleCT('${c.key}','${c.label}',false)">Broke it</button>
+        <button class="ct-btn-broke ${broke?'active':''}" onclick="handleCT('${c.key}','${c.label}',false)">Broken</button>
         <span style="font-family:var(--fc);font-size:10px;color:var(--gold);width:28px;text-align:right">${c.pts}pt</span>
       </div>
     </div>`;
@@ -1182,7 +1194,7 @@ async function handleCT(key,label,keeping){
     const streak=S.streaks.find(s=>s.commandment===c.short)||{};
     const cur=streak.current_streak||0;
     S.pendingCT={key,label};
-    document.getElementById('ct-title').textContent=label.substring(0,45)+'...';
+    document.getElementById('ct-title').textContent=label.substring(0,50);
     document.getElementById('ct-sub').textContent=cur>0?`You were on a ${cur} day streak — ${ctTitleFn(key,cur)}. Breaking resets to zero.`:'Recording a break for today.';
     document.getElementById('ct-reason').value='';
     document.getElementById('ct-modal').classList.add('open');
@@ -1267,19 +1279,34 @@ function renderArmoury(){
 
   const pillarHTML=Object.keys(pillarData).map(function(pillar){
     const pd=pillarData[pillar];
-    const avgLvl=pd.projects.length?Math.round(pd.projects.reduce((s,p)=>s+p.l,0)/pd.projects.length):0;
     const lowestLvl=pd.projects.length?Math.min(...pd.projects.map(p=>p.l)):0;
     const color=lowestLvl>=7?'var(--gold)':lowestLvl>=4?'var(--safe)':lowestLvl>=2?'var(--warn)':'var(--ash)';
-    return`<div class="card" style="text-align:center">
-      <div style="font-family:var(--fc);font-size:10px;letter-spacing:0.15em;color:var(--ash);margin-bottom:6px">${pillar.toUpperCase()}</div>
-      <div style="font-family:var(--fc);font-size:24px;color:${color};margin-bottom:4px">${lowestLvl}<span style="font-size:11px;color:var(--ash)">/10</span></div>
-      <div style="font-size:11px;color:var(--ash)">Floor level</div>
+    return`<div class="card" style="padding:18px 20px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;padding-bottom:12px;border-bottom:0.5px solid var(--border)">
+        <div>
+          <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.2em;color:var(--ash);margin-bottom:6px">${pillar.toUpperCase()}</div>
+          <div style="font-family:var(--fc);font-size:30px;color:${color};line-height:1">${lowestLvl}<span style="font-size:13px;color:var(--ash)">/10</span></div>
+          <div style="font-size:11px;color:var(--ash);margin-top:3px">Floor level</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-family:var(--fc);font-size:11px;color:var(--ash);letter-spacing:0.08em;margin-bottom:4px">Avg level</div>
+          <div style="font-family:var(--fc);font-size:20px;color:var(--parch)">${pd.projects.length?Math.round(pd.projects.reduce((s,p)=>s+p.l,0)/pd.projects.length):0}</div>
+        </div>
+      </div>
       ${pd.projects.map(function(x){
+        const ceilPct=Math.min(100,Math.round(x.total/x.proj.ceiling*100));
         const pr=getProg(x.proj.id,x.total);
-        return`<div style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:11px">
-          <span style="color:var(--ash);flex:1;text-align:left">${x.proj.id.replace('The ','')}</span>
-          <div style="width:60px;height:3px;background:var(--border);border-radius:2px;overflow:hidden"><div style="height:100%;width:${pr}%;background:var(--safe)"></div></div>
-          <span style="font-family:var(--fc);font-size:10px;color:var(--gold);width:20px;text-align:right">L${x.l}</span>
+        return`<div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
+            <span style="font-size:12px;color:var(--parch)">${x.proj.id}</span>
+            <div style="display:flex;gap:8px;align-items:baseline">
+              <span style="font-size:11px;color:var(--ash)">${x.total.toLocaleString()} ${x.proj.unit}</span>
+              <span style="font-family:var(--fc);font-size:11px;color:var(--gold)">L${x.l} · ${ceilPct}%</span>
+            </div>
+          </div>
+          <div style="height:4px;background:var(--card2);border-radius:2px;overflow:hidden">
+            <div style="height:100%;width:${pr}%;background:var(--safe);border-radius:2px"></div>
+          </div>
         </div>`;
       }).join('')}
     </div>`;
@@ -1517,7 +1544,7 @@ async function renderProject(screenKey){
       const sortedDates=Object.keys(dateMap).sort();
       const chartData=sortedDates.map(d=>dateMap[d]);
       const chartLabels=sortedDates;
-      new Chart(ctx,{type:'bar',data:{labels:chartLabels,datasets:[{label:proj.unit,data:chartData,backgroundColor:'rgba(42,128,96,0.5)',borderColor:'#2A8060',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#A09080',font:{size:9},maxTicksLimit:10},grid:{color:'rgba(74,66,56,0.5)'}},y:{ticks:{color:'#A09080',font:{size:9},callback:function(v){return v+' '+proj.unit;}},grid:{color:'rgba(74,66,56,0.5)'}}}}});
+      new Chart(ctx,{type:'line',data:{labels:chartLabels,datasets:[{label:proj.unit,data:chartData,borderColor:'#2A8060',backgroundColor:'rgba(42,128,96,0.15)',borderWidth:2,pointRadius:3,pointBackgroundColor:'#2A8060',fill:true,tension:0.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#A09080',font:{size:9},maxTicksLimit:10},grid:{color:'rgba(74,66,56,0.5)'}},y:{ticks:{color:'#A09080',font:{size:9},callback:function(v){return v+' '+proj.unit;}},grid:{color:'rgba(74,66,56,0.5)'}}}}});
     },100);
   }
 }
@@ -1540,26 +1567,37 @@ function renderTemper(){
       const cur=streak.current_streak||0;const longest=streak.longest_streak||0;
       const title=ctTitleFn(c.key,cur);const next=ctNextFn(c.key,cur);
       const todayKept=S.todayLog?.[c.key]===true;const todayBroke=S.todayLog?.[c.key]===false;
-      const dots=Array(Math.min(cur,30)).fill(0).map(()=>`<div class="s-dot" style="background:var(--safe)"></div>`).join('');
-      return`<div class="card" style="margin-bottom:10px;border-color:${todayKept?'var(--safe)':todayBroke?'var(--ember)':'var(--border)'}">
-        <div style="display:flex;align-items:flex-start;gap:14px">
-          <div style="flex:1">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-              <div style="font-size:14px;color:var(--parch);font-weight:500;flex:1">${c.label}</div>
-              <div style="font-family:var(--fc);font-size:10px;color:var(--gold);flex-shrink:0;margin-left:12px">${c.pts} pt${c.pts>1?'s':''}</div>
+      const statusColor=todayKept?'var(--safe)':todayBroke?'var(--ember)':'var(--border)';
+      const statusBg=todayKept?'var(--safe-dim)':todayBroke?'var(--ember-dim)':'transparent';
+      return`<div class="card" style="margin-bottom:8px;border-color:${statusColor};background:${statusBg}">
+        <div style="display:grid;grid-template-columns:1fr auto;gap:20px;align-items:start">
+
+          <!-- LEFT: commandment + streak info -->
+          <div>
+            <div style="font-size:14px;color:var(--parch);font-weight:500;margin-bottom:8px;line-height:1.4">${c.label}</div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+              <div style="font-family:var(--fc);font-size:12px;color:${cur>0?'var(--gold)':'var(--ash)'};">${title}</div>
+              <div style="font-size:11px;color:var(--ash);background:var(--card2);padding:2px 8px;border-radius:4px">${cur} day${cur!==1?'s':''}</div>
+              ${next?`<div style="font-size:11px;color:var(--ash)">→ <span style="color:var(--parch)">${next.title}</span> in ${next.rem}d</div>`:'<div style="font-size:11px;color:var(--gold)">All titles unlocked</div>'}
             </div>
-            <div style="display:flex;align-items:center;gap:16px;margin-bottom:8px;flex-wrap:wrap">
-              <div style="font-family:var(--fc);font-size:13px;color:var(--gold)">${title}</div>
-              <div style="font-size:12px;color:var(--ash)">${cur} days</div>
-              ${next?`<div style="font-size:12px;color:var(--ash)">→ <span style="color:var(--parch)">${next.title}</span> in ${next.rem} days</div>`:''}
-            </div>
-            <div class="s-dots" style="margin-bottom:8px">${dots||'<div style="font-size:11px;color:var(--ash);font-style:italic">No streak yet</div>'}</div>
-            <div style="font-size:11px;color:var(--ash);margin-bottom:10px">Longest: ${longest} days${longest>0?' — '+ctTitleFn(c.key,longest):''}${streak.last_break_date?' · Last break: '+streak.last_break_date:''}</div>
-            <div style="display:flex;gap:8px">
-              <button class="ct-btn-kept ${todayKept?'active':''}" onclick="handleCT('${c.key}','${c.label}',true)">Kept today</button>
-              <button class="ct-btn-broke ${todayBroke?'active':''}" onclick="handleCT('${c.key}','${c.label}',false)">Broke it today</button>
+            <div style="font-size:11px;color:var(--border2)">
+              Best: ${longest}d${longest>0?' · '+ctTitleFn(c.key,longest):''}
+              ${streak.last_break_date?' · Last break: '+streak.last_break_date:''}
             </div>
           </div>
+
+          <!-- RIGHT: points + action buttons + today status -->
+          <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+            <div style="font-family:var(--fc);font-size:22px;color:var(--gold);line-height:1">${c.pts}<span style="font-size:10px;color:var(--ash);margin-left:2px">pt${c.pts>1?'s':''}</span></div>
+            <div style="font-size:11px;font-family:var(--fc);color:${todayKept?'var(--safe)':todayBroke?'var(--ember)':'var(--ash)'}">
+              ${todayKept?'✓ Kept':todayBroke?'✗ Broken':'Unmarked'}
+            </div>
+            <div style="display:flex;gap:6px">
+              <button class="ct-btn-kept ${todayKept?'active':''}" onclick="handleCT('${c.key}','${c.label}',true)">Kept</button>
+              <button class="ct-btn-broke ${todayBroke?'active':''}" onclick="handleCT('${c.key}','${c.label}',false)">Broken</button>
+            </div>
+          </div>
+
         </div>
       </div>`;
     }).join('')}
@@ -1567,10 +1605,11 @@ function renderTemper(){
 }
 
 // ── WILLMASTER ─────────────────────────────────────────
+function setWmDays(n){S.wmDays=n;renderWillmaster();}
 function renderWillmaster(){
-  // Build heatmap — from 90 days ago to TODAY only (left=oldest, right=most recent)
+  // Build heatmap — from N days ago to TODAY only (left=oldest, right=most recent)
   // Only past and today — no future boxes
-  const heatDays=90;
+  const heatDays=S.wmDays||30;
   const heatData={};
   const now=new Date();
   const todayStr=today();
@@ -1597,12 +1636,16 @@ function renderWillmaster(){
 
   document.getElementById('screen-willmaster').innerHTML=`
     <div class="pt">The Willmaster</div>
-    <div class="ps">Streak progression · 11 titles per commandment · 90-day heatmap</div>
-    <div class="g4" style="margin-bottom:24px">
+    <div class="ps">Streak progression · 11 titles per commandment · Selectable time window</div>
+    <div class="g4" style="margin-bottom:20px">
       <div class="sb"><div class="sb-num" style="color:var(--gold)">${S.streaks.reduce((m,s)=>Math.max(m,s.current_streak||0),0)}</div><div class="sb-lbl">Best Streak</div></div>
       <div class="sb"><div class="sb-num">${S.streaks.reduce((m,s)=>Math.max(m,s.longest_streak||0),0)}</div><div class="sb-lbl">All-Time Best</div></div>
       <div class="sb"><div class="sb-num" style="color:var(--safe)">${S.streaks.filter(s=>(s.current_streak||0)>=7).length}</div><div class="sb-lbl">Active (7d+)</div></div>
       <div class="sb"><div class="sb-num" style="color:var(--ember)">${S.streaks.reduce((t,s)=>t+(s.total_breaks||0),0)}</div><div class="sb-lbl">Total Breaks</div></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
+      <span style="font-family:var(--fc);font-size:10px;color:var(--ash);letter-spacing:0.1em">HEATMAP WINDOW</span>
+      ${[7,14,30,60,90].map(n=>`<button class="cal-nav-btn ${S.wmDays===n?'active':''}" onclick="setWmDays(${n})" style="padding:4px 10px">${n}d</button>`).join('')}
     </div>
     ${CMDS.map(function(c){
       const streak=S.streaks.find(s=>s.commandment===c.short)||{};
@@ -1934,7 +1977,7 @@ async function renderReport(){
 
       // Cumulative chart
       const cCtx=document.getElementById('proj-cum-'+proj.key);
-      if(cCtx)new Chart(cCtx,{type:'line',data:{labels:dates,datasets:[{data:cumVals,borderColor:color,backgroundColor:color+'18',borderWidth:2,fill:true,tension:0.4,pointBackgroundColor:pointBg,pointRadius:pointR}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{afterBody:function(items){const idx=items[0].dataIndex;const date=dates[idx];const ms=projMilestones.find(m=>m.date===date);const lvlAnn=levelAnnotations[idx];const lines=[];if(ms)lines.push('★ '+ms.description.substring(0,40));if(lvlAnn)lines.push('↑ Level '+lvlAnn.lvl+': '+lvlAnn.title);return lines;}}}},scales:{x:{ticks:{color:'#A09080',font:{size:8},maxTicksLimit:8},grid:{color:'rgba(74,66,56,0.3)'}},y:{ticks:{color:'#A09080',font:{size:8},callback:v=>v+' '+proj.unit},grid:{color:'rgba(74,66,56,0.3)'}}}}});
+      if(cCtx)new Chart(cCtx,{type:'line',data:{labels:dates,datasets:[{data:cumVals,borderColor:color,backgroundColor:color+'18',borderWidth:2,fill:true,tension:0.4,pointBackgroundColor:pointBg,pointRadius:Math.max(3,pointR[0]||3)}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{afterBody:function(items){const idx=items[0].dataIndex;const date=dates[idx];const ms=projMilestones.find(m=>m.date===date);const lvlAnn=levelAnnotations[idx];const lines=[];if(ms)lines.push('★ '+ms.description.substring(0,40));if(lvlAnn)lines.push('↑ Level '+lvlAnn.lvl+': '+lvlAnn.title);return lines;}}}},scales:{x:{ticks:{color:'#A09080',font:{size:8},maxTicksLimit:8},grid:{color:'rgba(74,66,56,0.3)'}},y:{ticks:{color:'#A09080',font:{size:8},callback:v=>v+' '+proj.unit},grid:{color:'rgba(74,66,56,0.3)'}}}}});
     });
   },150);
 }
@@ -2520,13 +2563,17 @@ async function renderCalendar(){
         data.sessions.filter(s=>s.tangible_logged>0).forEach(function(s){
           byProj[s.project]=(byProj[s.project]||0)+s.tangible_logged;
         });
+        // Build nice project abbreviations
+        const projAbbr={'The Practice Room':'Music','The Gulmohar Letters':'Letters','The Iron Forge':'Lifting','The Iron Ledger':'Running','The Water Forge':'Swimming','The Giving':'Business'};
         projLines='<div style="margin-top:2px">';
-        Object.keys(byProj).slice(0,2).forEach(function(pid){
+        Object.keys(byProj).slice(0,3).forEach(function(pid){
           const proj=PROJECTS.find(p=>p.id===pid);
-          const abbr=pid.replace('The ','').substring(0,6);
-          projLines+=`<div style="font-size:8px;color:var(--ash);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${abbr}: <span style="color:var(--gold)">${byProj[pid]}${proj?proj.unit:''}</span></div>`;
+          const abbr=projAbbr[pid]||pid.replace('The ','').substring(0,7);
+          const val=fmtT(byProj[pid],proj?proj.unit:'');
+          const unit=proj?proj.unit:'';
+          projLines+=`<div style="display:flex;justify-content:space-between;font-size:8px;margin-bottom:1px"><span style="color:var(--ash)">${abbr}</span><span style="color:var(--gold);font-family:var(--fc)">${val}${unit}</span></div>`;
         });
-        if(Object.keys(byProj).length>2)projLines+=`<div style="font-size:8px;color:var(--border2)">+${Object.keys(byProj).length-2} more</div>`;
+        if(Object.keys(byProj).length>3)projLines+=`<div style="font-size:8px;color:var(--border2)">+${Object.keys(byProj).length-3} more</div>`;
         projLines+='</div>';
       }
       grid+=`<div style="background:${isSel?'var(--gold-dim)':data&&!isFuture?'var(--card)':'var(--card2)'};border:0.5px solid ${isSel?'var(--gold)':'var(--border)'};border-radius:8px;padding:7px 5px;min-height:80px;cursor:${!isFuture&&data?'pointer':'default'};opacity:${isFuture?0.3:1};transition:border-color 0.2s" onclick="${!isFuture&&data?'calSelect(\''+ds+'\')':''}">
@@ -2540,9 +2587,15 @@ async function renderCalendar(){
       </div>`;
     }
     contentHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <button class="cal-nav-btn" onclick="calPrev()">← Prev</button>
+      <div style="display:flex;gap:4px">
+        <button class="cal-nav-btn" onclick="calJumpYear(-1)" style="padding:5px 8px;font-size:9px">−Yr</button>
+        <button class="cal-nav-btn" onclick="calPrev()">← Month</button>
+      </div>
       <div style="font-family:var(--fc);font-size:14px;color:var(--parch)">${monthName}</div>
-      <button class="cal-nav-btn" onclick="calNext()">Next →</button>
+      <div style="display:flex;gap:4px">
+        <button class="cal-nav-btn" onclick="calNext()">Month →</button>
+        <button class="cal-nav-btn" onclick="calJumpYear(1)" style="padding:5px 8px;font-size:9px">+Yr</button>
+      </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${grid}</div>`;
 
@@ -2584,13 +2637,18 @@ async function renderCalendar(){
     }
     weekHTML+='</div>';
     contentHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <button class="cal-nav-btn" onclick="calPrev()">← Prev</button>
-      <div style="display:flex;align-items:center;gap:8px">
-        <div style="font-family:var(--fc);font-size:13px;color:var(--parch)">${sowStr} — ${eowStr}</div>
-        <button class="cal-nav-btn" onclick="calGoToday()" style="font-size:9px;padding:4px 10px">This week</button>
-        <input type="week" onchange="calJumpWeek(this.value)" style="background:var(--card2);border:0.5px solid var(--border);border-radius:6px;color:var(--ash);font-size:11px;padding:4px 8px;width:auto;margin:0;cursor:pointer" title="Jump to week">
+      <div style="display:flex;gap:4px">
+        <button class="cal-nav-btn" onclick="calJumpWeeks(-4)" style="font-size:9px;padding:5px 8px">−4wk</button>
+        <button class="cal-nav-btn" onclick="calPrev()">← Week</button>
       </div>
-      <button class="cal-nav-btn" onclick="calNext()">Next →</button>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+        <div style="font-family:var(--fc);font-size:13px;color:var(--parch)">${sowStr} — ${eowStr}</div>
+        <button class="cal-nav-btn" onclick="calGoToday()" style="font-size:9px;padding:3px 10px">This week</button>
+      </div>
+      <div style="display:flex;gap:4px">
+        <button class="cal-nav-btn" onclick="calNext()">Week →</button>
+        <button class="cal-nav-btn" onclick="calJumpWeeks(4)" style="font-size:9px;padding:5px 8px">+4wk</button>
+      </div>
     </div>${weekHTML}`;
 
   } else {
@@ -2622,7 +2680,10 @@ async function renderCalendar(){
     yHTML+='</div></div>';
     contentHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <button class="cal-nav-btn" onclick="calPrev()">← ${year-1}</button>
-      <div style="font-family:var(--fc);font-size:14px;color:var(--parch)">${year}</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-family:var(--fc);font-size:14px;color:var(--parch)">${year}</div>
+        <button class="cal-nav-btn" onclick="calGoToday()" style="font-size:9px;padding:3px 10px">This year</button>
+      </div>
       <button class="cal-nav-btn" onclick="calNext()">${year+1} →</button>
     </div>${yHTML}`;
   }
@@ -2718,6 +2779,8 @@ async function renderCalendar(){
 
 function setCalView(v){calView=v;S.calSelected=null;renderCalendar();}
 function calGoToday(){S.calDate=new Date();S.calSelected=null;renderCalendar();}
+function calJumpYear(dir){S.calDate.setFullYear(S.calDate.getFullYear()+dir);S.calSelected=null;renderCalendar();}
+function calJumpWeeks(n){S.calDate.setDate(S.calDate.getDate()+(n*7));S.calSelected=null;renderCalendar();}
 function calJumpWeek(val){
   if(!val)return;
   // val is "YYYY-Www" format
