@@ -602,6 +602,9 @@ function calcFloors(projId,newCeiling){
 }
 
 function getEffectiveProject(pid){
+  // Guard: if passed an object instead of string, extract id
+  if(pid&&typeof pid==='object')pid=pid.id;
+  if(!pid||typeof pid!=='string')return null;
   var base=PROJECTS_DEFAULT.find(function(p){return p.id===pid;});
   if(!base)return null;
   var ov=S.projectConfig&&S.projectConfig[pid];
@@ -614,7 +617,10 @@ function getEffectiveProject(pid){
 }
 
 function getActiveProjects(){
-  return PROJECTS_DEFAULT.map(getEffectiveProject).filter(function(p){return p&&p.isActive!==false;});
+  if(!PROJECTS_DEFAULT||!PROJECTS_DEFAULT.length)return PROJECTS_DEFAULT||[];
+  return PROJECTS_DEFAULT.map(function(proj){
+    return getEffectiveProject(proj.id);
+  }).filter(function(p){return p&&p.isActive!==false;});
 }
 
 const CMDS=[
@@ -833,7 +839,7 @@ function isProjectDeclared(pid){
 async function loadData(){
   const[pR,lR,sR,stR,dR]=await Promise.all([
     db.from('project_summary').select('*'),
-    db.from('daily_log').select('*').eq('date',today()).single(),
+    db.from('daily_log').select('*').eq('date',today()).maybeSingle(),
     db.from('sessions').select('*').eq('date',today()).order('created_at'),
     db.from('commandment_streaks').select('*').order('points',{ascending:false}),
     db.from('declarations').select('*').order('start_date',{ascending:false}).limit(50)
@@ -1298,7 +1304,7 @@ async function autoCloseYesterday(){
   var yd=yest.toISOString().split('T')[0];
   if(yd<getGameStart())return;
   try{
-    var r=await db.from('daily_log').select('*').eq('date',yd).single();
+    var r=await db.from('daily_log').select('*').eq('date',yd).maybeSingle();
     var yl=r.data;
     if(!yl||yl.day_closed)return;
     var allMarked=CMDS.every(function(cmd){return yl[cmd.key]!==null&&yl[cmd.key]!==undefined;});
@@ -1681,7 +1687,7 @@ async function handleCT(key,label,keeping){
       toast('Break undone — streak restored to '+preBreak+' days','success');
     }
     await db.from('daily_log').update({[key]:true}).eq('date',today());
-    const{data:newLog}=await db.from('daily_log').select('*').eq('date',today()).single();
+    const{data:newLog}=await db.from('daily_log').select('*').eq('date',today()).maybeSingle();
     S.todayLog=newLog;
     // Refresh streaks
     const{data:newStreaks}=await db.from('commandment_streaks').select('*').order('points',{ascending:false});
