@@ -1361,19 +1361,16 @@ async function submitProject(pid){
   const sessions=todaySessFor(pid).filter(s=>s.tangible_logged>0);
   if(sessions.length>0){
     S.committedProjects[pid].submitted=true;S.committedProjects[pid].hasSession=true;
-    await saveCommitted();renderForge();
-  } else if(isProjectDeclared(pid)){
-    // Declaration active — submit with no penalty, no modal needed
-    S.committedProjects[pid].submitted=true;S.committedProjects[pid].hasSession=false;
-    S.committedProjects[pid].skipReason='Declaration active — no penalty';
-    await db.from('sessions').insert({date:today(),project:pid,tangible_logged:0,unit:proj.unit,points_earned:0,penalty:0,notes:'Skipped — declaration active'});
     await saveCommitted();
-    toast(proj.id+' submitted — no penalty (declaration active)','info');
     S.allSessions=[];await loadData();
   } else {
+    // Show skip modal — penalty=0 if declared, full penalty otherwise
     S.pendingSkipPid=pid;
+    const declaredNow=isProjectDeclared(pid);
     document.getElementById('skip-title').textContent=proj.id+' — no sessions logged';
-    document.getElementById('skip-sub').textContent='Penalty of −'+proj.pts+' points will apply.';
+    document.getElementById('skip-sub').textContent=declaredNow
+      ?'Declaration active — no penalty. Please record what happened.'
+      :'Penalty of −'+proj.pts+' points will apply.';
     document.getElementById('skip-reason').value='';
     document.getElementById('skip-modal').classList.add('open');
   }
@@ -1464,7 +1461,10 @@ async function submitSession(){
     .order('created_at',{ascending:true});
   const n=(todaySessions||[]).length;
   // Use integer distribution — no floating point
-  const pts=distributePoints(proj.pts, n);
+  // If project is under active declaration, award 0 points even if session logged
+  const projDeclared=isProjectDeclared(S.pendingSessionPid);
+  const ptsPerSession=projDeclared?0:proj.pts;
+  const pts=distributePoints(ptsPerSession, n);
   for(let i=0;i<(todaySessions||[]).length;i++){
     await db.from('sessions').update({points_earned:pts[i]}).eq('id',todaySessions[i].id);
   }
