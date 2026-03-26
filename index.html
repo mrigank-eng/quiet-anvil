@@ -3260,13 +3260,15 @@ async function renderCalendar(){
           byProj[s.project]=(byProj[s.project]||0)+s.tangible_logged;
         });
         // Build nice project abbreviations
-        const projAbbr={'The Practice Room':'Music','The Gulmohar Letters':'Letters','The Iron Forge':'Lifting','The Iron Ledger':'Running','The Water Forge':'Swimming','The Giving':'Business'};
+        const projAbbr={'The Practice Room':'Music','The Gulmohar Letters':'Letters','The Iron Forge':'Iron Forge','The Iron Ledger':'Running','The Water Forge':'Swimming','The Giving':'Business'};
         projLines='<div style="margin-top:2px">';
         Object.keys(byProj).slice(0,3).forEach(function(pid){
           const proj=PROJECTS.find(p=>p.id===pid);
           const abbr=projAbbr[pid]||pid.replace('The ','').substring(0,7);
-          const val=fmtT(byProj[pid],proj?proj.unit:'');
-          const unit=proj?proj.unit:'';
+          const projUD=proj&&proj.uniqueDays;
+          const sessCount=data.sessions.filter(function(s){return s.project===pid&&s.tangible_logged>0;}).length;
+          const val=projUD?sessCount:fmtT(byProj[pid],proj?proj.unit:'');
+          const unit=projUD?(sessCount===1?'sess':'sess'):(proj?' '+proj.unit:'');
           projLines+=`<div style="display:flex;justify-content:space-between;font-size:8px;margin-bottom:1px"><span style="color:var(--ash)">${abbr}</span><span style="color:var(--gold);font-family:var(--fc)">${val}${unit}</span></div>`;
         });
         if(Object.keys(byProj).length>3)projLines+=`<div style="font-size:8px;color:var(--border2)">+${Object.keys(byProj).length-3} more</div>`;
