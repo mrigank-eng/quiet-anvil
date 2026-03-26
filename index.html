@@ -580,23 +580,22 @@ const PROJECTS=[
 // ── DYNAMIC PROJECT CONFIG ──────────────────────────────────────
 const PROJECTS_DEFAULT=PROJECTS.slice(); // reference to hardcoded defaults
 
-function calcLevels(ceiling){
-  var r=[];
-  for(var i=0;i<10;i++){
-    var t=(i+1)/10;
-    r.push(Math.round(ceiling*(Math.log(1+t*9)/Math.log(10))));
-  }
-  return r;
+function calcLevels(ceiling,projId){
+  // Proportional scaling from default levels — preserves original curve shape
+  var base=PROJECTS_DEFAULT.find(function(p){return p.id===projId;});
+  if(!base)return[];
+  var defCeil=base.ceiling;
+  return base.levels.map(function(v){return Math.round(v*ceiling/defCeil);});
 }
 
 function calcFloors(projId,newCeiling){
+  // Proportional scaling from default floors — preserves original curve shape
   var proj=PROJECTS_DEFAULT.find(function(p){return p.id===projId;});
   if(!proj||!proj.floors)return null;
+  var defCeil=proj.ceiling;
   var result={};
   Object.keys(proj.floors).forEach(function(cat){
-    var maxFloor=proj.floors[cat][9];
-    var share=maxFloor/proj.ceiling;
-    result[cat]=calcLevels(Math.round(newCeiling*share));
+    result[cat]=proj.floors[cat].map(function(v){return Math.round(v*newCeiling/defCeil);});
   });
   return result;
 }
@@ -611,7 +610,7 @@ function getEffectiveProject(pid){
   if(!ov)return Object.assign({},base,{isActive:true});
   var ceiling=ov.ceiling||base.ceiling;
   var isActive=ov.is_active!==false;
-  var levels=(ceiling!==base.ceiling)?calcLevels(ceiling):base.levels;
+  var levels=(ceiling!==base.ceiling)?calcLevels(ceiling,pid):base.levels;
   var floors=(ceiling!==base.ceiling&&base.floors)?calcFloors(pid,ceiling):base.floors;
   return Object.assign({},base,{ceiling:ceiling,levels:levels,floors:floors,isActive:isActive});
 }
@@ -1608,7 +1607,7 @@ async function renderProjectMgmt(){
       +'<div style="flex:1"><label style="font-family:var(--fc);font-size:9px;letter-spacing:0.12em;color:var(--ash);display:block;margin-bottom:4px">CEILING ('+eff.unit+')</label>'
       +'<input type="number" id="ceil-'+psafe+'" value="'+effCeil+'" min="1" style="width:100%;padding:7px 10px;background:var(--card2);border:0.5px solid var(--border);border-radius:6px;color:var(--parch);font-family:var(--fc);font-size:13px"></div>'
       +'<button data-pid="'+defProj.id+'" data-psafe="'+psafe+'" class="proj-save-ceil btn btn-sm btn-safe">Save</button>'
-      +'<button data-pid="'+defProj.id+'" class="proj-reset-def btn btn-sm">Reset</button>'
+      +'<button data-pid="'+defProj.id+'" class="proj-reset-def btn btn-sm">Restore Ceiling Defaults</button>'
       +'</div>'
       +'<details><summary style="font-family:var(--fc);font-size:9px;letter-spacing:0.12em;color:var(--ash);cursor:pointer">LEVELS & FLOORS ▸</summary>'
       +'<div style="margin-top:8px">'+lvlRows+flrRows+'</div>'
