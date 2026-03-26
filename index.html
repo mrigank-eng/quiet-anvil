@@ -361,6 +361,21 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
 </div>
 
 
+<!-- Clear Today's Forge Modal -->
+<div id="clear-forge-modal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-title" style="color:var(--warn)">⚠ Clear Today's Forge</div>
+    <div style="font-size:13px;color:var(--parch);margin-bottom:16px;line-height:1.6">
+      This will permanently delete all sessions, commitments and log entries for <strong id="clear-forge-date"></strong>.<br><br>
+      Use this only if you logged incorrect data. This cannot be undone.
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-warn" onclick="confirmClearForge()" style="flex:1">Yes, clear everything</button>
+      <button class="btn" onclick="closeModal('clear-forge-modal')" style="flex:1">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- Start date change modal -->
 <div class="modal-overlay" id="start-date-modal">
   <div class="modal">
@@ -675,6 +690,7 @@ let S={
 // ── DATE HELPERS ────────────────────────────────────────
 // localToday: actual local calendar date (never UTC)
 const localToday=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+const localDateStr=d=>{return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
 // activeDate: the date the forge is operating on
 // Advances only when: forge closed for activeDate AND localToday > activeDate
 function getActiveDate(){return localStorage.getItem('qa_activeDate')||null;}
@@ -892,11 +908,8 @@ async function advanceDayIfReady(){
   // Then leave the most recent unclosed day for user to close manually
   // A "fully elapsed" day = a day that is strictly before yesterday
   // (yesterday may still need user closure — that's Case 2 handled below)
-  const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);
-  const yesterdayStr=yesterday.toISOString().split('T')[0].replace(/T.*/,'');
-  // Recalc yesterday properly using local
   const yest=new Date();yest.setDate(yest.getDate()-1);
-  const yStr=yest.getFullYear()+'-'+String(yest.getMonth()+1).padStart(2,'0')+'-'+String(yest.getDate()).padStart(2,'0');
+  const yStr=localDateStr(yest);
 
   // Find all unclosed days between active and yesterday (exclusive of yesterday itself)
   if(active<yStr){
@@ -907,7 +920,7 @@ async function advanceDayIfReady(){
     const d=new Date(active+'T00:00:00');
     const yDate=new Date(yStr+'T00:00:00');
     while(d<yDate){
-      const ds=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      const ds=localDateStr(d);
       const log=logMap[ds];
       if(!log||!log.day_closed){
         await autoClosePastDay(ds,log||null);
@@ -1437,7 +1450,7 @@ function renderForge(){
   if(!allSubmitted)gateMsg+=unsubmitted.map(function(p){return p.id;}).join(', ')+' not submitted.';
   const reflHTML=!gateOpen
     ?`<div style="background:var(--ember-dim);border:0.5px solid var(--ember);border-radius:8px;padding:12px 14px;font-size:13px;color:var(--ash)">${gateMsg||'Complete all tasks to unlock reflection.'}</div>`
-    :`<div><textarea id="reflection-text" placeholder="What happened today. What the forge produced. What tomorrow needs." rows="4">${S.todayLog?.reflection||''}</textarea><button class="btn btn-block" onclick="closeDay()">Close the day — submit reflection</button></div>`;
+    :`<div><textarea id="reflection-text" placeholder="What happened today. What the forge produced. What tomorrow needs." rows="4">${S.todayLog?.reflection||''}</textarea><button class="btn btn-block" onclick="closeDay()">Close the day — submit reflection</button><button class="btn btn-sm btn-warn" onclick="openClearForgeModal()" style="margin-top:8px;width:100%">⚠ Clear today's forge</button></div>`;
 
   document.getElementById('screen-forge').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
@@ -1496,7 +1509,7 @@ function renderForge(){
 async function endDeclaration(id){
   // End by setting end_date to yesterday
   const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);
-  const yd=yesterday.toISOString().split('T')[0];
+  const yd=localDateStr(yesterday);
   await db.from('declarations').update({end_date:yd}).eq('id',id);
   const{data}=await db.from('declarations').select('*').order('start_date',{ascending:false}).limit(20);
   S.declarations=data||[];
@@ -1508,7 +1521,7 @@ async function endDeclaration(id){
 // ── AUTO-CLOSE YESTERDAY ───────────────────────────────────────
 async function autoCloseYesterday(){
   var yest=new Date();yest.setDate(yest.getDate()-1);
-  var yd=yest.toISOString().split('T')[0];
+  var yd=localDateStr(yest);
   if(yd<getGameStart())return;
   try{
     var r=await db.from('daily_log').select('*').eq('date',yd).maybeSingle();
@@ -1931,6 +1944,35 @@ async function confirmCTBreak(){
     break_log:breakLog.trim()
   }).eq('commandment',c.short);
   closeModal('ct-modal');S.pendingCT=null;await loadData();
+}
+
+
+// ── CLEAR TODAY'S FORGE ─────────────────────────────────
+function openClearForgeModal(){
+  document.getElementById('clear-forge-date').textContent=today();
+  document.getElementById('clear-forge-modal').classList.add('open');
+}
+
+async function confirmClearForge(){
+  const activeDate=today();
+  try{
+    // Delete all sessions for today
+    await db.from('sessions').delete().eq('date',activeDate);
+    // Delete today's daily_log
+    await db.from('daily_log').delete().eq('date',activeDate);
+    // Reset committed projects state
+    S.committedProjects={};
+    S.todaySessions=[];
+    S.todayLog=null;
+    S.allSessions=[];
+    S.allLogs=[];
+    closeModal('clear-forge-modal');
+    toast('Today\'s forge has been cleared. Begin anew.','success',3500);
+    await loadData();
+  }catch(e){
+    toast('Failed to clear forge.','error');
+    console.error(e);
+  }
 }
 
 // ── CLOSE DAY ──────────────────────────────────────────
@@ -2748,16 +2790,18 @@ let missedDays=[];
 let missedDayIndex=0;
 
 async function checkMissedDays(){
-  // Find all dates from game start to yesterday with no closed daily_log
-  const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);
-  const start=new Date(getGameStart());
-  if(yesterday<start)return;
+  // Find all dates from game start to yesterday (local) with no closed daily_log
+  const yest=new Date();yest.setDate(yest.getDate()-1);
+  const yesterdayStr=localDateStr(yest);
+  const startStr=getGameStart();
+  if(yesterdayStr<startStr)return;
   const{data:logs}=await db.from('daily_log').select('date,day_closed').order('date');
   const closedDates=new Set((logs||[]).filter(l=>l.day_closed).map(l=>l.date));
   missedDays=[];
+  const start=new Date(startStr+'T12:00:00');
   const d=new Date(start);
-  while(d<=yesterday){
-    const ds=d.toISOString().split('T')[0];
+  while(localDateStr(d)<=yesterdayStr){
+    const ds=localDateStr(d);
     if(!closedDates.has(ds))missedDays.push(ds);
     d.setDate(d.getDate()+1);
   }
@@ -2787,24 +2831,37 @@ async function submitMissedDay(){
   const reflection=document.getElementById('missed-reflection').value.trim();
   if(!reflection){toast('Write a reflection before saving.','error');return;}
   const ctVals={};
-  CMDS.forEach(function(c){
-    const el=document.getElementById('missed-ct-'+c.key);
-    ctVals[c.key]=el?el.checked:false;
+  CMDS.forEach(function(cmd){
+    const el=document.getElementById('missed-ct-'+cmd.key);
+    ctVals[cmd.key]=el?el.checked:false;
   });
   // Upsert daily_log for that date
-  const{data:existing}=await db.from('daily_log').select('id').eq('date',dateStr).single();
-  if(existing){
-    await db.from('daily_log').update({...ctVals,reflection,day_closed:true,c10_reflection:true}).eq('date',dateStr);
+  const existR=await db.from('daily_log').select('id').eq('date',dateStr).maybeSingle();
+  if(existR.data){
+    await db.from('daily_log').update(Object.assign({},ctVals,{reflection,day_closed:true,c10_reflection:true})).eq('date',dateStr);
   } else {
-    await db.from('daily_log').insert({date:dateStr,...ctVals,reflection,day_closed:true,c10_reflection:true});
+    await db.from('daily_log').insert(Object.assign({date:dateStr},ctVals,{reflection,day_closed:true,c10_reflection:true}));
   }
-  // Update streaks for kept commandments
-  const{data:streaks}=await db.from('commandment_streaks').select('*');
-  for(const c of CMDS){
-    if(ctVals[c.key]===true){
-      const streak=(streaks||[]).find(s=>s.commandment===c.short)||{};
-      const ns=(streak.current_streak||0)+1;
-      await db.from('commandment_streaks').update({current_streak:ns,longest_streak:Math.max(streak.longest_streak||0,ns)}).eq('commandment',c.short);
+  // Update streaks — kept=+1, broken=reset to 0
+  const streakR=await db.from('commandment_streaks').select('*');
+  const streaks=streakR.data||[];
+  for(var i=0;i<CMDS.length;i++){
+    var cmd=CMDS[i];
+    var kept=ctVals[cmd.key]===true;
+    var streak=streaks.find(function(s){return s.commandment===cmd.short;})||{};
+    if(streak.streak_last_updated===dateStr)continue;
+    if(kept){
+      var ns=(streak.current_streak||0)+1;
+      await db.from('commandment_streaks').update({
+        current_streak:ns,
+        longest_streak:Math.max(streak.longest_streak||0,ns),
+        streak_last_updated:dateStr
+      }).eq('commandment',cmd.short);
+    } else {
+      await db.from('commandment_streaks').update({
+        current_streak:0,
+        streak_last_updated:dateStr
+      }).eq('commandment',cmd.short);
     }
   }
   missedDayIndex++;
@@ -2894,7 +2951,7 @@ async function renderFood(){
     const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     for(let i=0;i<7;i++){
       const d=new Date(startOfWeek);d.setDate(d.getDate()+i);
-      const ds=d.toISOString().split('T')[0];
+      const ds=localDateStr(d);
       const data=dayMap[ds];const isFuture=ds>today();
       const color=isFuture?'var(--card2)':data?dayColor(data):'var(--card2)';
       const meals=data?data.meals:[];
@@ -2921,7 +2978,7 @@ async function renderFood(){
       yHTML+=`<div style="display:flex;flex-direction:column;gap:2px"><div style="font-family:var(--fc);font-size:8px;color:var(--ash);height:14px;line-height:14px">${mPos[wi]||''}</div>`;
       w.forEach(function(day){
         if(!day){yHTML+=`<div style="width:12px;height:12px"></div>`;return;}
-        const ds=day.toISOString().split('T')[0];
+        const ds=localDateStr(day);
         const data=dayMap[ds];const isFuture=ds>today();
         const color=isFuture?'var(--card2)':data?dayColor(data):'rgba(74,66,56,0.4)';
         yHTML+=`<div style="width:12px;height:12px;border-radius:2px;background:${color}" title="${ds}"></div>`;
@@ -3208,7 +3265,7 @@ async function renderCalendar(){
     const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     for(let i=0;i<7;i++){
       const d=new Date(sow);d.setDate(d.getDate()+i);
-      const ds=d.toISOString().split('T')[0];
+      const ds=localDateStr(d);
       const data=dayData[ds];const localNowCal=localToday();const isFuture=ds>localNowCal;const isLocalToday=ds===localNowCal;const isSel=S.calSelected===ds;
       const t=data?.total||0;
       // Aggregate sessions by project for clean display
@@ -3276,7 +3333,7 @@ async function renderCalendar(){
       yHTML+=`<div style="display:flex;flex-direction:column;gap:2px"><div style="font-family:var(--fc);font-size:8px;color:var(--ash);height:14px;line-height:14px">${mPos[wi]||''}</div>`;
       w.forEach(function(day){
         if(!day){yHTML+=`<div style="width:12px;height:12px"></div>`;return;}
-        const ds=day.toISOString().split('T')[0];
+        const ds=localDateStr(day);
         const data=dayData[ds];const isFuture=ds>today();const t=data?.total||0;
         const bg=isFuture?'var(--card2)':data?scoreColor(t,data.pen||0):'rgba(74,66,56,0.3)';
         yHTML+=`<div style="width:12px;height:12px;border-radius:2px;background:${bg};cursor:${data?'pointer':'default'}" title="${ds}: ${t} pts" onclick="${data?'calSelect(\''+ds+'\')':''}"></div>`;
