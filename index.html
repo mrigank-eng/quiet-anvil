@@ -932,6 +932,9 @@ function getNextLevelPending(pid, total, catCounts){
     return{type:'total',gap:totalGap,title:nextTitle,unit:proj.unit};
   }
 
+  // For uniqueDays projects (Iron Forge), floors count sessions not days
+  const floorUnit=proj.uniqueDays?'sessions':proj.unit;
+
   // Compute floor gaps
   const floorGaps={};
   let anyFloorUnmet=false;
@@ -959,11 +962,11 @@ function getNextLevelPending(pid, total, catCounts){
 
   if(anyFloorUnmet&&totalMet){
     // Rule 3: Total met, floors are the only bottleneck
-    return{type:'floors',gaps:floorGaps,sum:sumFloorGaps,title:nextTitle,unit:proj.unit};
+    return{type:'floors',gaps:floorGaps,sum:sumFloorGaps,title:nextTitle,unit:proj.unit,floorUnit:floorUnit};
   }
 
   // Rule 4: Both total and floors are gaps — show both
-  return{type:'both',totalGap,floorGaps,floorSum:sumFloorGaps,title:nextTitle,unit:proj.unit};
+  return{type:'both',totalGap,floorGaps,floorSum:sumFloorGaps,title:nextTitle,unit:proj.unit,floorUnit:floorUnit};
 }
 
 function renderNextLevelPending(pending){
@@ -976,13 +979,15 @@ function renderNextLevelPending(pending){
     const lines=Object.keys(pending.gaps).map(function(cat){
       return cat+': '+pending.gaps[cat]+' more';
     });
-    return pending.sum+' '+pending.unit+' across lagging categories to unlock '+pending.title+'<br><span style="font-size:10px;color:var(--ash)">'+lines.join(' · ')+'</span>';
+    var fu=pending.floorUnit||pending.unit;
+    return pending.sum+' '+fu+' across lagging categories to unlock '+pending.title+'<br><span style="font-size:10px;color:var(--ash)">'+lines.join(' · ')+'</span>';
   }
   if(pending.type==='both'){
     const lines=Object.keys(pending.floorGaps).map(function(cat){
       return cat+': '+pending.floorGaps[cat]+' more';
     });
-    return pending.totalGap+' '+pending.unit+' to threshold &nbsp;+&nbsp; '+pending.floorSum+' '+pending.unit+' across lagging floors<br><span style="font-size:10px;color:var(--ash)">Floors: '+lines.join(' · ')+'</span>';
+    var fu2=pending.floorUnit||pending.unit;
+    return pending.totalGap+' '+pending.unit+' to threshold &nbsp;+&nbsp; '+pending.floorSum+' '+fu2+' across lagging floors<br><span style="font-size:10px;color:var(--ash)">Floors: '+lines.join(' · ')+'</span>';
   }
   return'';
 }
