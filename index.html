@@ -934,7 +934,7 @@ function getNextLevelPending(pid, total, catCounts){
   if(!proj.floors){
     // No floors — purely total based
     if(totalMet)return{type:'unlocked',title:nextTitle};
-    return{type:'total',gap:totalGap,title:nextTitle,unit:proj.unit};
+    return{type:'total',gap:totalGap,title:nextTitle,unit:proj.unit,pid:proj.id};
   }
 
   // For uniqueDays projects (Iron Forge), floors count sessions not days
@@ -962,39 +962,73 @@ function getNextLevelPending(pid, total, catCounts){
 
   if(!anyFloorUnmet&&!totalMet){
     // Rule 1: No floors bottleneck, total is the only gap
-    return{type:'total',gap:totalGap,title:nextTitle,unit:proj.unit};
+    return{type:'total',gap:totalGap,title:nextTitle,unit:proj.unit,pid:proj.id};
   }
 
   if(anyFloorUnmet&&totalMet){
     // Rule 3: Total met, floors are the only bottleneck
-    return{type:'floors',gaps:floorGaps,sum:sumFloorGaps,title:nextTitle,unit:proj.unit,floorUnit:floorUnit};
+    return{type:'floors',gaps:floorGaps,sum:sumFloorGaps,title:nextTitle,unit:proj.unit,floorUnit:floorUnit,nextIdx:nextIdx,pid:proj.id};
   }
 
   // Rule 4: Both total and floors are gaps — show both
-  return{type:'both',totalGap,floorGaps,floorSum:sumFloorGaps,title:nextTitle,unit:proj.unit,floorUnit:floorUnit};
+  return{type:'both',totalGap,floorGaps,floorSum:sumFloorGaps,title:nextTitle,unit:proj.unit,floorUnit:floorUnit,nextIdx:nextIdx,pid:proj.id};
 }
 
 function renderNextLevelPending(pending){
   if(!pending||pending.type==='ceiling')return'Ceiling reached';
-  if(pending.type==='unlocked')return'Level unlocked — '+pending.title;
+  if(pending.type==='unlocked')return'<span style="color:var(--safe)">✓ Level unlocked — '+pending.title+'</span>';
   if(pending.type==='total'){
-    return pending.gap.toLocaleString()+' '+pending.unit+' to '+pending.title;
+    return pending.gap.toLocaleString()+' '+pending.unit+' to <span style="color:var(--parch)">'+pending.title+'</span>';
   }
   if(pending.type==='floors'){
-    const lines=Object.keys(pending.gaps).map(function(cat){
-      return cat+': '+pending.gaps[cat]+' more';
-    });
-    var fu=pending.floorUnit||pending.unit;
-    return pending.sum+' '+fu+' across lagging categories to unlock '+pending.title+'<br><span style="font-size:10px;color:var(--ash)">'+lines.join(' · ')+'</span>';
+    // Count cleared vs total
+    const proj=PROJECTS_DEFAULT.find(p=>p.id===pending.pid);
+    const totalCats=proj&&proj.floors?Object.keys(proj.floors).length:0;
+    const unmetCats=Object.keys(pending.gaps).length;
+    const clearedCats=totalCats-unmetCats;
+    return clearedCats+' of '+totalCats+' floors cleared to unlock <span style="color:var(--parch)">'+pending.title+'</span>';
   }
   if(pending.type==='both'){
-    const lines=Object.keys(pending.floorGaps).map(function(cat){
-      return cat+': '+pending.floorGaps[cat]+' more';
-    });
-    var fu2=pending.floorUnit||pending.unit;
-    return pending.totalGap+' '+pending.unit+' to threshold &nbsp;+&nbsp; '+pending.floorSum+' '+fu2+' across lagging floors<br><span style="font-size:10px;color:var(--ash)">Floors: '+lines.join(' · ')+'</span>';
+    const proj=PROJECTS_DEFAULT.find(p=>p.id===pending.pid);
+    const totalCats=proj&&proj.floors?Object.keys(proj.floors).length:0;
+    const unmetCats=Object.keys(pending.floorGaps).length;
+    const clearedCats=totalCats-unmetCats;
+    return pending.totalGap+' '+pending.unit+' to threshold · '+clearedCats+' of '+totalCats+' floors cleared';
   }
   return'';
+}
+
+// Pill grid for project page ceiling tile
+function renderFloorPillGrid(pid, pending, catCounts){
+  const proj=PROJECTS_DEFAULT.find(p=>p.id===pid);
+  if(!proj||!proj.floors||!pending)return renderNextLevelPending(pending);
+  if(pending.type==='ceiling')return'<span style="color:var(--safe)">Ceiling reached</span>';
+  if(pending.type==='unlocked')return'<span style="color:var(--safe)">✓ '+pending.title+'</span>';
+  if(pending.type==='total'){
+    return pending.gap.toLocaleString()+' '+pending.unit+' to <span style="color:var(--parch)">'+pending.title+'</span>';
+  }
+  // Has floors — build pill grid
+  const nextIdx=pending.nextIdx||0;
+  const floorGaps=pending.type==='both'?pending.floorGaps:(pending.type==='floors'?pending.gaps:{});
+  const cats=Object.keys(proj.floors);
+  const floorUnit=proj.uniqueDays?'sess':'';
+  const cols=cats.length>4?2:1;
+  const rows=cols===2?Math.ceil(cats.length/2):cats.length;
+  let grid='<div style="display:grid;grid-template-columns:'+('1fr '.repeat(cols)).trim()+';gap:4px 12px;margin-top:4px">';
+  cats.forEach(function(cat){
+    const req=proj.floors[cat][Math.min(nextIdx, proj.floors[cat].length-1)];
+    const have=catCounts[cat]||0;
+    const pct=req>0?Math.min(100,Math.round(have/req*100)):100;
+    const met=have>=req;
+    const barColor=met?'var(--safe)':'var(--warn)';
+    grid+='<div style="display:flex;align-items:center;gap:6px;padding:3px 0">'
+      +'<span style="font-size:10px;color:var(--ash);width:80px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+cat+'</span>'
+      +'<div style="flex:1;height:3px;background:var(--card2);border-radius:2px;min-width:30px"><div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:2px"></div></div>'
+      +'<span style="font-family:var(--fc);font-size:10px;color:'+(met?'var(--safe)':'var(--warn)')+';flex-shrink:0">'+have+'/'+req+'</span>'
+      +'</div>';
+  });
+  grid+='</div>';
+  return grid;
 }
 
 // ── TOAST ──────────────────────────────────────────────
@@ -2083,7 +2117,7 @@ async function renderProject(screenKey){
         </div>
         <div style="text-align:right">
           <div style="font-family:var(--fc);font-size:36px;color:var(--gold);line-height:1">${Math.round(total/proj.ceiling*100)}<span style="font-size:16px;color:var(--ash)">%</span></div>
-          <div style="font-size:12px;color:var(--ash);margin-top:4px;max-width:280px;text-align:right">${renderNextLevelPending(getNextLevelPending(proj.id,total,catCounts))}</div>
+          <div style="font-size:12px;color:var(--ash);margin-top:4px;max-width:280px;text-align:right">${renderFloorPillGrid(proj.id,getNextLevelPending(proj.id,total,catCounts),catCounts)}</div>
         </div>
       </div>
       <div style="height:8px;background:var(--card2);border-radius:4px;overflow:hidden">
