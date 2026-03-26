@@ -2539,7 +2539,7 @@ async function renderReport(){
         const sessions=S.allSessions.filter(s=>s.date===date&&s.project===proj.id);
         return sessions.reduce((s,x)=>s+(x.points_earned||0),0);
       });
-      return{label:proj.id.replace('The ',''),data,backgroundColor:projColors[i]+'44',borderColor:projColors[i],borderWidth:1.5,fill:true,tension:0.3,pointRadius:0};
+      return{label:proj.id,data,backgroundColor:projColors[i]+'44',borderColor:projColors[i],borderWidth:1.5,fill:true,tension:0.3,pointRadius:0};
     });
     const ctDataset={label:'CT',data:allDates.map(d=>{const l=S.allLogs.find(x=>x.date===d);return l?ctPts(l):0;}),backgroundColor:ctColor,borderColor:'#A08050',borderWidth:1,fill:true,tension:0.3,pointRadius:0};
 
@@ -2635,7 +2635,7 @@ async function renderShare(){
 
     <div class="st">Card 3 — Level Unlock</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-      ${PROJECTS.map(p=>`<button class="btn btn-sm" onclick="showUnlockCard('${p.id}')">${p.id.replace('The ','')}</button>`).join('')}
+      ${PROJECTS.map(p=>`<button class="btn btn-sm" onclick="showUnlockCard('${p.id}')">${p.id}</button>`).join('')}
     </div>
     <div class="share-card-outer"><div id="card-unlock">${buildUnlockCard(null)}</div></div>
     <button class="btn btn-block" style="margin-bottom:8px" onclick="dlCard('card-unlock','forge-unlock-'+today())">Download unlock card</button>
@@ -2670,7 +2670,7 @@ function buildDailyCard(){
       var rows=completedProjs.map(function(s){
         var proj=PROJECTS.find(function(p){return p.id===s.project;});
         return '<div style="display:flex;justify-content:space-between;margin-bottom:6px">'
-          +'<div style="font-size:10px;letter-spacing:0.08em;color:#8a6a1a">'+s.project.replace('The ','').toUpperCase()+'</div>'
+          +'<div style="font-size:10px;letter-spacing:0.08em;color:#8a6a1a">'+s.project.toUpperCase()+'</div>'
           +'<div style="font-size:13px;color:#D4A84C;font-family:Cinzel,serif">'+s.tangible_logged+' '+(proj?proj.unit:'')+'</div>'
           +'</div>';
       }).join('');
@@ -3259,17 +3259,14 @@ async function renderCalendar(){
         data.sessions.filter(s=>s.tangible_logged>0).forEach(function(s){
           byProj[s.project]=(byProj[s.project]||0)+s.tangible_logged;
         });
-        // Build nice project abbreviations
-        const projAbbr={'The Practice Room':'Music','The Gulmohar Letters':'Letters','The Iron Forge':'Iron Forge','The Iron Ledger':'Running','The Water Forge':'Swimming','The Giving':'Business'};
         projLines='<div style="margin-top:2px">';
         Object.keys(byProj).slice(0,3).forEach(function(pid){
           const proj=PROJECTS.find(p=>p.id===pid);
-          const abbr=projAbbr[pid]||pid.replace('The ','').substring(0,7);
           const projUD=proj&&proj.uniqueDays;
           const sessCount=data.sessions.filter(function(s){return s.project===pid&&s.tangible_logged>0;}).length;
           const val=projUD?sessCount:fmtT(byProj[pid],proj?proj.unit:'');
           const unit=projUD?(sessCount===1?' session':' sessions'):(proj?' '+proj.unit:'');
-          projLines+=`<div style="display:flex;justify-content:space-between;font-size:8px;margin-bottom:1px"><span style="color:var(--ash)">${abbr}</span><span style="color:var(--gold);font-family:var(--fc)">${val}${unit}</span></div>`;
+          projLines+=`<div style="display:flex;justify-content:space-between;font-size:8px;margin-bottom:1px"><span style="color:var(--ash)">${pid}</span><span style="color:var(--gold);font-family:var(--fc)">${val}${unit}</span></div>`;
         });
         if(Object.keys(byProj).length>3)projLines+=`<div style="font-size:8px;color:var(--border2)">+${Object.keys(byProj).length-3} more</div>`;
         projLines+='</div>';
@@ -3324,7 +3321,7 @@ async function renderCalendar(){
         const dispVal=isUD?cnt:fmtT(projTotals[pid],proj?proj.unit:'');
         const dispUnit=isUD?(cnt===1?' session':' sessions'):(proj?' '+proj.unit:'');
         return`<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;border-bottom:0.5px solid var(--border)">
-          <span style="font-size:9px;color:var(--ash);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pid.replace('The ','')}</span>
+          <span style="font-size:9px;color:var(--ash);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pid}</span>
           <span style="font-family:var(--fc);font-size:9px;color:var(--gold);margin-left:4px;flex-shrink:0">${dispVal}${dispUnit}</span>
         </div>`;
       }).join('');
