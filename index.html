@@ -659,6 +659,7 @@ const META_D=['Raw. Buried. Potential only.','Unearthed. The process has begun.'
 
 // ── STATE ──────────────────────────────────────────────
 let S={
+  activeDate:null,
   projects:[],todayLog:null,todaySessions:[],streaks:[],declarations:[],
   allLogs:[],allSessions:[],milestones:[],
   committedProjects:{},
@@ -671,7 +672,14 @@ let S={
 };
 
 // ── HELPERS ────────────────────────────────────────────
-const today=()=>new Date().toISOString().split('T')[0];
+// ── DATE HELPERS ────────────────────────────────────────
+// localToday: actual local calendar date (never UTC)
+const localToday=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+// activeDate: the date the forge is operating on
+// Advances only when: forge closed for activeDate AND localToday > activeDate
+function getActiveDate(){return localStorage.getItem('qa_activeDate')||localToday();}
+function setActiveDate(d){localStorage.setItem('qa_activeDate',d);S.activeDate=d;}
+const today=()=>S.activeDate||getActiveDate();
 const daysLeft=()=>Math.max(0,Math.ceil((GEND()-new Date())/864e5));
 const dayNum=()=>{
   const start=new Date(getGameStart());start.setHours(0,0,0,0);
@@ -836,7 +844,102 @@ function isProjectDeclared(pid){
 }
 
 // ── DATA ───────────────────────────────────────────────
+// ── DAY TRANSITION LOGIC ────────────────────────────────
+// Silently close a past day (no reflection required)
+async function autoClosePastDay(dateStr,logEntry){
+  try{
+    // Update streaks for this date
+    const sr=await db.from('commandment_streaks').select('*');
+    const streaks=sr.data||[];
+    for(var ci=0;ci<CMDS.length;ci++){
+      var cmd=CMDS[ci];
+      var kept=logEntry&&logEntry[cmd.key]===true;
+      var streak=streaks.find(function(s){return s.commandment===cmd.short;})||{};
+      if(streak.streak_last_updated===dateStr)continue;
+      if(kept){
+        var ns=(streak.current_streak||0)+1;
+        await db.from('commandment_streaks').update({
+          current_streak:ns,
+          longest_streak:Math.max(streak.longest_streak||0,ns),
+          streak_last_updated:dateStr
+        }).eq('commandment',cmd.short);
+      } else {
+        // Broken or unmarked = reset streak to 0
+        await db.from('commandment_streaks').update({
+          current_streak:0,
+          streak_last_updated:dateStr
+        }).eq('commandment',cmd.short);
+      }
+    }
+    // Mark day closed
+    if(logEntry){
+      await db.from('daily_log').update({day_closed:true}).eq('date',dateStr);
+    } else {
+      // No log entry exists — create a minimal one
+      await db.from('daily_log').insert({date:dateStr,day_closed:true,auto_closed:true});
+    }
+  }catch(e){console.warn('autoClosePastDay error:',e);}
+}
+
+// Check if we need to auto-close fully elapsed days and advance activeDate
+async function advanceDayIfReady(){
+  const local=localToday();
+  let active=getActiveDate();
+  // If activeDate is before game start, reset to game start
+  if(active<getGameStart()){active=getGameStart();setActiveDate(active);}
+
+  // Case 5: 2+ local days have passed — auto-close all fully elapsed days up to (localToday-2)
+  // Then leave the most recent unclosed day for user to close manually
+  // A "fully elapsed" day = a day that is strictly before yesterday
+  // (yesterday may still need user closure — that's Case 2 handled below)
+  const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);
+  const yesterdayStr=yesterday.toISOString().split('T')[0].replace(/T.*/,'');
+  // Recalc yesterday properly using local
+  const yest=new Date();yest.setDate(yest.getDate()-1);
+  const yStr=yest.getFullYear()+'-'+String(yest.getMonth()+1).padStart(2,'0')+'-'+String(yest.getDate()).padStart(2,'0');
+
+  // Find all unclosed days between active and yesterday (exclusive of yesterday itself)
+  if(active<yStr){
+    // There are fully elapsed days to auto-close
+    const{data:logs}=await db.from('daily_log').select('date,day_closed').gte('date',active).lt('date',yStr);
+    const logMap={};(logs||[]).forEach(function(l){logMap[l.date]=l;});
+    // Walk each day from active up to (yStr - 1 day)
+    const d=new Date(active+'T00:00:00');
+    const yDate=new Date(yStr+'T00:00:00');
+    while(d<yDate){
+      const ds=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      const log=logMap[ds];
+      if(!log||!log.day_closed){
+        await autoClosePastDay(ds,log||null);
+      }
+      d.setDate(d.getDate()+1);
+    }
+    // Now advance activeDate to yesterday
+    setActiveDate(yStr);
+    active=yStr;
+    S.allSessions=[];S.allLogs=[];
+  }
+
+  // Check if we can advance from activeDate to localToday
+  // Conditions: forge closed for activeDate AND localToday > activeDate
+  if(local>active){
+    // Check if activeDate's forge is closed
+    const{data:log}=await db.from('daily_log').select('day_closed').eq('date',active).maybeSingle();
+    if(log&&log.day_closed){
+      // Both conditions met — advance to localToday
+      setActiveDate(local);
+      S.allSessions=[];S.allLogs=[];
+      toast('The forge advances — Day '+(dayNum())+' begins.','success',3000);
+    }
+    // If forge not closed: stay on activeDate (Case 2 — user must close forge first)
+  }
+}
+
 async function loadData(){
+  // Initialize activeDate from localStorage on every load
+  if(!S.activeDate)S.activeDate=getActiveDate();
+  // Check if day should advance
+  await advanceDayIfReady();
   const[pR,lR,sR,stR,dR]=await Promise.all([
     db.from('project_summary').select('*'),
     db.from('daily_log').select('*').eq('date',today()).maybeSingle(),
@@ -850,7 +953,6 @@ async function loadData(){
     const cfR=await db.from('project_config').select('*');
     (cfR.data||[]).forEach(function(row){S.projectConfig[row.project]=row;});
   }catch(e){console.warn('project_config not found, using defaults');}
-  await autoCloseYesterday();
   S.todayLog=lR.data||null;
   S.todaySessions=sR.data||[];
   S.streaks=stR.data||[];
@@ -1146,6 +1248,40 @@ function renderForge(){
     return;
   }
 
+  // ── DAY STATE CHECKS ──
+  const localNow=localToday();
+  const activeDay=today();
+  const dayClosed=S.todayLog&&S.todayLog.day_closed===true;
+  const dayAdvancePending=localNow>activeDay&&!dayClosed;
+
+  // If forge is sealed AND day has already advanced — show sealed state
+  if(dayClosed&&localNow===activeDay){
+    // Day closed but local date hasn't changed yet — show sealed state
+    document.getElementById('screen-forge').innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
+        <div>
+          <div class="pt">Daily Forge</div>
+          <div style="display:flex;align-items:center;gap:0;margin-top:4px;flex-wrap:wrap">
+            <span style="font-size:13px;color:var(--parch)">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).replace(',','')}</span>
+            <span style="color:var(--border2);margin:0 12px;font-size:13px">·</span>
+            <span style="font-family:var(--fc);font-size:11px;color:var(--ash);letter-spacing:0.08em">Day ${dayNum()} of ${totalCampaignDays()}</span>
+            <span style="color:var(--border2);margin:0 12px;font-size:13px">·</span>
+            <span style="font-family:var(--fc);font-size:11px;color:var(--ash);letter-spacing:0.08em">Week ${weekNum()} of ${Math.ceil(totalCampaignDays()/7)}</span>
+          </div>
+        </div>
+        <div style="text-align:right"><div style="font-family:var(--fc);font-size:32px;color:var(--gold);line-height:1">${daysLeft()}</div><div style="font-size:11px;color:var(--ash)">days to reckoning</div></div>
+      </div>
+      <div class="card" style="border-color:var(--safe);padding:32px;text-align:center;margin-bottom:14px">
+        <div style="font-family:var(--fc);font-size:13px;letter-spacing:0.2em;color:var(--safe);margin-bottom:12px">✓ FORGE SEALED</div>
+        <div style="font-size:15px;color:var(--parch);margin-bottom:8px">The day is recorded. The anvil rests.</div>
+        <div style="font-size:12px;color:var(--ash)">The new day begins when the local date changes.</div>
+      </div>
+    `;
+    return;
+  }
+
+  // dayAdvancePending: local date has moved but forge not sealed — banner shown inline below
+
   const ct=ctPts(S.todayLog);
   const nonCt=S.todaySessions.reduce((s,x)=>s+(x.points_earned||0),0);
   const total=ct+nonCt;
@@ -1307,6 +1443,10 @@ function renderForge(){
       <div class="sb"><div class="sb-num" style="color:${penToday<0?'var(--ember)':'var(--ash)'}">${penToday}</div><div class="sb-lbl">Penalty</div></div>
     </div>
 
+    ${dayAdvancePending?`<div class="card" style="border-color:var(--warn);padding:16px 20px;margin-bottom:14px">
+      <div style="font-family:var(--fc);font-size:10px;letter-spacing:0.18em;color:var(--warn);margin-bottom:6px">⚠ THE DAY HAS TURNED — FORGE UNSEALED</div>
+      <div style="font-size:13px;color:var(--parch)">The date has changed. Seal this forge with a nightly reflection before the new day begins.</div>
+    </div>`:''}
     <div class="temp-indicator ${tempClass}" style="margin-bottom:14px">
       <div><div style="font-family:var(--fc);font-size:10px;letter-spacing:0.12em;color:var(--ash);margin-bottom:2px">Forge Temperature — 7-day average</div><div style="font-size:13px;color:${tempColor};font-style:italic">${temp.label}</div></div>
       <div style="font-family:var(--fc);font-size:28px;color:${tempColor}">${temp.avg}</div>
@@ -1778,25 +1918,41 @@ async function confirmCTBreak(){
 // ── CLOSE DAY ──────────────────────────────────────────
 async function closeDay(){
   if(!S.todayLog)return;
-  const unmarked=CMDS.filter(c=>S.todayLog[c.key]!==true&&S.todayLog[c.key]!==false);
-  if(unmarked.length>0){toast(`${unmarked.length} commandment${unmarked.length>1?'s':''} still unmarked`,'error');return;}
+  const unmarked=CMDS.filter(cmd=>S.todayLog[cmd.key]!==true&&S.todayLog[cmd.key]!==false);
+  if(unmarked.length>0){toast(unmarked.length+' commandment'+(unmarked.length>1?'s':'')+' still unmarked','error');return;}
   const uncommitted=PROJECTS.filter(p=>{const cp=S.committedProjects[p.id];return cp&&cp.committed&&!cp.submitted;});
   if(uncommitted.length>0){toast('Submit all committed projects first','error');return;}
   const reflection=document.getElementById('reflection-text')?.value?.trim();
-  if(!reflection){toast('Write your reflection first.','error');return;}
-  await db.from('daily_log').update({reflection,c10_reflection:true,day_closed:true}).eq('date',today());
-  for(const c of CMDS){
-    const kept=S.todayLog?.[c.key]===true;
-    const streak=S.streaks.find(s=>s.commandment===c.short)||{};
-    if(streak.streak_last_updated===today())continue;
+  if(!reflection){toast('Write your nightly reflection first.','error');return;}
+  const activeDate=today();
+  // Save closure
+  await db.from('daily_log').update({reflection,c10_reflection:true,day_closed:true}).eq('date',activeDate);
+  // Update streaks — broken commandments reset to 0
+  const sr=await db.from('commandment_streaks').select('*');
+  const streaks=sr.data||[];
+  for(var i=0;i<CMDS.length;i++){
+    var cmd=CMDS[i];
+    var kept=S.todayLog?.[cmd.key]===true;
+    var streak=streaks.find(function(s){return s.commandment===cmd.short;})||{};
+    if(streak.streak_last_updated===activeDate)continue;
     if(kept){
-      const ns=(streak.current_streak||0)+1;
-      await db.from('commandment_streaks').update({current_streak:ns,longest_streak:Math.max(streak.longest_streak||0,ns),streak_last_updated:today()}).eq('commandment',c.short);
+      var ns=(streak.current_streak||0)+1;
+      await db.from('commandment_streaks').update({
+        current_streak:ns,
+        longest_streak:Math.max(streak.longest_streak||0,ns),
+        streak_last_updated:activeDate
+      }).eq('commandment',cmd.short);
     } else {
-      await db.from('commandment_streaks').update({streak_last_updated:today()}).eq('commandment',c.short);
+      // Broken — reset streak to 0
+      await db.from('commandment_streaks').update({
+        current_streak:0,
+        streak_last_updated:activeDate
+      }).eq('commandment',cmd.short);
     }
   }
-  S.allLogs=[];await loadData();toast('Day closed. The forge remembers.','success',3500);
+  toast('The forge is sealed. The day is recorded.','success',3500);
+  S.allLogs=[];S.allSessions=[];
+  await loadData();
 }
 
 // ── DECLARATIONS ───────────────────────────────────────
