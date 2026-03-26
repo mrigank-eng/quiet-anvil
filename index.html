@@ -805,10 +805,8 @@ function pillarBalance(){
   activeP.forEach(function(p){maxPts[p.pillar]=(maxPts[p.pillar]||0)+p.pts;});
   S.todaySessions.forEach(function(s){
     var p=activeP.find(function(x){return x.id===s.project;});
-    if(p)pillars[p.pillar]=(pillars[p.pillar]||0)+(s.points_earned||0);
+    if(p)pillars[p.pillar]=(pillars[p.pillar]||0)+(s.points_earned||0)+(s.penalty||0);
   });
-  // Penalties are already in session.penalty column
-  // pillarBalance only tracks earned points from points_earned column
   return{pillars,maxPts};
 }
 
@@ -3373,11 +3371,13 @@ async function renderCalendar(){
 
     // Aggregate sessions by project for clean display
     const projMap={};
-    (data.sessions||[]).filter(s=>s.tangible_logged>0).forEach(function(s){
-      if(!projMap[s.project])projMap[s.project]={sessions:[],total:0,pts:0,proj:PROJECTS.find(p=>p.id===s.project)};
-      projMap[s.project].sessions.push(s);
-      projMap[s.project].total+=s.tangible_logged;
-      projMap[s.project].pts+=s.points_earned||0;
+    (data.sessions||[]).forEach(function(s){
+      // Include all sessions — tangible ones AND skip/penalty/declaration ones
+      if(!projMap[s.project])projMap[s.project]={sessions:[],total:0,pts:0,pen:0,skipNotes:[],proj:PROJECTS.find(p=>p.id===s.project)};
+      if(s.tangible_logged>0)projMap[s.project].sessions.push(s);
+      projMap[s.project].total+=s.tangible_logged||0;
+      projMap[s.project].pts+=(s.points_earned||0)+(s.penalty||0);
+      projMap[s.project].pen+=s.penalty||0;
     });
 
     const projRows=Object.keys(projMap).map(function(pid){
@@ -3399,11 +3399,23 @@ async function renderCalendar(){
           </div>
           <div style="text-align:right">
             <div style="font-family:var(--fc);font-size:16px;color:var(--gold)">${fmtT(pd.total,proj?proj.unit:'')} <span style="font-size:11px">${proj?proj.unit:''}</span></div>
-            <div style="font-size:11px;color:var(--safe)">+${fmtPts(pd.pts)} pts</div>
+            <div style="font-size:11px;color:${pd.pts<0?'var(--ember)':pd.pts===0?'var(--ash)':'var(--safe)'}">${pd.pts>0?'+':''}${fmtPts(pd.pts)} pts${pd.pen<0?' (penalty: '+pd.pen+')':''}</div>
           </div>
         </div>
         ${pd.sessions.length>1?sesLines:''}
         ${pd.sessions.length===1&&pd.sessions[0].notes?`<div style="font-size:12px;color:var(--ash);margin-top:4px;padding-left:2px;font-style:italic">${pd.sessions[0].notes}</div>`:''}
+        ${(function(){
+          if(!pd.skipNotes||!pd.skipNotes.length)return'';
+          return pd.skipNotes.map(function(sn){
+            var col=sn.pen<0?'var(--ember)':'var(--warn)';
+            var tag=sn.pen<0?'PENALTY':'DECLARED';
+            return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0 3px 12px;border-left:2px solid '+col+'">'
+              +'<span style="font-family:var(--fc);font-size:10px;color:'+col+'">'+tag+'</span>'
+              +'<span style="font-size:12px;color:var(--ash);flex:1">'+sn.notes+'</span>'
+              +(sn.pen<0?'<span style="font-family:var(--fc);font-size:11px;color:var(--ember)">'+sn.pen+' pts</span>':'')
+              +'</div>';
+          }).join('');
+        })()}
       </div>`;
     }).join('')||'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:8px 0">No sessions logged</div>';
 
