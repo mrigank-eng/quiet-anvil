@@ -2622,7 +2622,7 @@ async function renderShare(){
 
     <div class="st">Card 3 — Level Unlock</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-      ${PROJECTS.map(p=>`<button class="btn btn-sm" onclick="showUnlockCard('${p.id}')">${p.id.replace('The ','')}</button>`).join('')}
+      ${PROJECTS.map(p=>'<button class="btn btn-sm" onclick="showUnlockCard(\'' + p.id + '\')">'+p.id.replace('The ','')+' </button>').join('')}
     </div>
     <div class="share-card-outer"><div id="card-unlock">${buildUnlockCard(null)}</div></div>
     <button class="btn btn-block" style="margin-bottom:8px" onclick="dlCard('card-unlock','forge-unlock-'+today())">Download unlock card</button>
