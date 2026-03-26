@@ -1171,12 +1171,12 @@ function renderForge(){
     const earned=bal.pillars[pillar];const max=bal.maxPts[pillar];const pct=Math.round(earned/max*100);
     const pColor=earned===0?'var(--warn)':earned===max?'var(--safe)':'var(--gold)';
     return'<div style="flex:1;padding:0 16px;'+(i>0?'border-left:0.5px solid var(--border)':'')+'">'
-      +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">'
-      +'<span style="font-family:var(--fc);font-size:9px;letter-spacing:0.15em;color:var(--ash)">'+pillar.toUpperCase()+'</span>'
-      +'<span style="font-family:var(--fc);font-size:13px;color:'+pColor+'">'+earned+'<span style="font-size:10px;color:var(--ash)">/'+max+'</span></span>'
+      +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">'
+      +'<span style="font-family:var(--fc);font-size:13px;letter-spacing:0.15em;color:var(--ash)">'+pillar.toUpperCase()+'</span>'
+      +'<span style="font-family:var(--fc);font-size:18px;color:'+pColor+'">'+earned+'<span style="font-size:14px;color:var(--ash)">/'+max+'</span></span>'
       +'</div>'
-      +'<div style="height:4px;background:var(--card2);border-radius:2px;overflow:hidden">'
-      +'<div style="height:100%;width:'+pct+'%;background:'+pColor+';border-radius:2px"></div></div>'
+      +'<div style="height:6px;background:var(--card2);border-radius:3px;overflow:hidden">'
+      +'<div style="height:100%;width:'+pct+'%;background:'+pColor+';border-radius:3px"></div></div>'
       +'</div>';
   }).join('');
 
@@ -1333,7 +1333,7 @@ function renderForge(){
       </div>
       <div>
         <div class="st" style="justify-content:center;text-align:center;margin-top:24px">The Clean Temper</div>
-        <div class="card" style="margin-bottom:14px"><div style="font-family:var(--fc);font-size:9px;letter-spacing:0.15em;color:var(--ash);margin-bottom:10px">COMMANDMENTS</div>${ctHTML}<div style="font-size:12px;color:var(--ash);text-align:center;margin-top:8px">${ctMarked} of 10 marked · ${ct} of 20 points</div></div>
+        <div class="card" style="margin-bottom:14px">${ctHTML}<div style="font-size:12px;color:var(--ash);text-align:center;margin-top:8px">${ctMarked} of 10 marked · ${ct} of 20 points</div></div>
         <div class="st" style="justify-content:center;text-align:center">Nightly Reflection</div>
         <div class="card">${reflHTML}</div>
       </div>
@@ -1863,8 +1863,8 @@ async function renderArmoury(){
         const pr=getProg(x.proj.id,x.total);
         return`<div style="margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
-            <span style="font-size:12px;color:var(--parch)">${x.proj.id} <span style="font-size:10px;color:var(--ash)">(${ceilPct}%)</span></span>
-            <span style="font-family:var(--fc);font-size:11px;color:var(--gold)">L${x.l}&nbsp;&nbsp;${Math.round(pr)}%</span>
+            <span style="font-size:12px;color:var(--parch)">${x.proj.id}&nbsp;&nbsp;<span style="font-family:var(--fc);font-size:11px;color:var(--ash)">(${ceilPct}%)</span></span>
+            <span style="font-family:var(--fc);font-size:11px;color:var(--gold)">L${x.l}&nbsp;&nbsp;${Math.round(getProg(x.proj.id,x.total,armCatCounts[x.proj.id]||{}))}%</span>
           </div>
           <div style="height:4px;background:var(--card2);border-radius:2px;overflow:hidden">
             <div style="height:100%;width:${pr}%;background:var(--safe);border-radius:2px"></div>
@@ -1885,55 +1885,63 @@ async function renderArmoury(){
     const pr=getProg(proj.id,total,cc);
     const next=getNextAt(proj.id,total,cc);
     const ceilPct=Math.round(total/proj.ceiling*100);
+    const armPend=getNextLevelPending(proj.id,total,cc);
+    const armPendStr=(function(p){
+      if(!p||p.type==='ceiling')return'';
+      if(p.type==='unlocked')return'<span style="color:var(--safe)">✓ '+p.title+'</span>';
+      if(p.type==='total')return p.gap.toLocaleString()+' '+p.unit+' to <em>'+p.title+'</em>';
+      if(p.type==='floors')return'0 tangible gap · '+(Object.keys(p.gaps||{}).length)+' categories remaining';
+      if(p.type==='both')return p.totalGap+' '+p.unit+' to <em>'+p.title+'</em>';
+      return'';
+    })(armPend);
     cardsHTML+=`<div class="ac" onclick="nav('${proj.key}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
         <div style="flex:1;min-width:0">
           <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.1em;margin-bottom:3px">${proj.pillar.toUpperCase()}</div>
-          <div style="display:flex;justify-content:space-between;align-items:baseline">
-            <div style="font-size:14px;color:var(--parch);font-weight:500">${proj.id}</div>
-            <div style="font-family:var(--fc);font-size:22px;color:var(--parch);line-height:1;flex-shrink:0;padding-left:10px">${l}<span style="font-size:10px;color:var(--ash)">/10</span></div>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:2px">
-            <div style="font-family:var(--fc);font-size:12px;color:var(--gold)">${curT}</div>
-            <div style="font-family:var(--fc);font-size:10px;color:var(--ash)">${ceilPct}% done</div>
-          </div>
-          <div style="font-size:12px;color:var(--ash);margin-top:3px">${total.toLocaleString()} ${proj.unit}</div>
+          <div style="font-size:14px;color:var(--parch);font-weight:500;margin-bottom:3px">${proj.id}&nbsp;&nbsp;&nbsp;<span style="font-size:11px;color:var(--ash)">(${ceilPct}%)</span></div>
+          <div style="font-family:var(--fc);font-size:13px;color:var(--gold);margin-bottom:4px">${curT}</div>
+          <div style="font-size:12px;color:var(--ash)">${total.toLocaleString()} ${proj.unit}</div>
         </div>
-        <div style="display:none">
+        <div style="text-align:right;flex-shrink:0;padding-left:10px">
+          <div style="font-family:var(--fc);font-size:28px;color:var(--parch);line-height:1">${l}<span style="font-size:11px;color:var(--ash)">/10</span></div>
         </div>
       </div>
-      <div class="prog-track"><div class="prog-fill" style="width:${pr}%"></div></div>
-      ${(function(){
-        var pend=getNextLevelPending(proj.id,total,cc);
-        if(!pend||pend.type==='ceiling')return'<div style="font-size:11px;color:var(--safe);font-style:italic;margin-top:4px">Ceiling reached</div>';
-        if(pend.type==='unlocked')return'<div style="font-size:11px;color:var(--safe);font-style:italic;margin-top:4px">✓ '+pend.title+'</div>';
-        var left='';var right='';
-        if(pend.type==='total'){left=pend.gap.toLocaleString()+' '+pend.unit+' to '+pend.title;}
-        else if(pend.type==='floors'){left='';right=Object.keys(pend.gaps||{}).length+'/'+(Object.keys((PROJECTS_DEFAULT.find(function(p){return p.id===proj.id;})||{}).floors||{}).length)+' floors cleared';}
-        else if(pend.type==='both'){left=pend.totalGap+' '+pend.unit+' to threshold';right=(Object.keys((PROJECTS_DEFAULT.find(function(p){return p.id===proj.id;})||{}).floors||{}).length-Object.keys(pend.floorGaps||{}).length)+'/'+(Object.keys((PROJECTS_DEFAULT.find(function(p){return p.id===proj.id;})||{}).floors||{}).length)+' floors cleared';}
-        return'<div style="display:flex;justify-content:space-between;margin-top:4px">'
-          +(left?'<span style="font-size:11px;color:var(--ash);font-style:italic">'+left+'</span>':'<span></span>')
-          +(right?'<span style="font-size:11px;color:var(--ash);font-style:italic">'+right+'</span>':'')
-          +'</div>';
-      })()}
+      <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
+        <div style="font-size:11px;color:var(--ash);font-style:italic;text-align:right">${armPendStr}</div>
+      </div>
+      <div class="prog-track" title="${pr}% of level"><div class="prog-fill" style="width:${pr}%"></div></div>
     </div>`;
   });
 
   // Fix meta title — show working toward if level 0
   const metaDisplayTitle = metaLvl > 0 ? metaTitle : '<span style="font-size:18px;color:var(--ash)">Working toward</span> ' + META_T[0];
 
+  const armDateStr=(new Date()).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}).replace(',','');
   document.getElementById('screen-armoury').innerHTML=`
-    <div class="pt">The Armoury</div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
+      <div>
+        <div class="pt">The Armoury</div>
+        <div style="display:flex;align-items:center;gap:0;margin-top:4px;flex-wrap:wrap">
+          <span style="font-size:13px;color:var(--parch)">${armDateStr}</span>
+          <span style="color:var(--border2);margin:0 12px;font-size:13px">·</span>
+          <span style="font-family:var(--fc);font-size:11px;color:var(--ash);letter-spacing:0.08em">Day ${dayNum()} of ${totalCampaignDays()}</span>
+          <span style="color:var(--border2);margin:0 12px;font-size:13px">·</span>
+          <span style="font-family:var(--fc);font-size:11px;color:var(--ash);letter-spacing:0.08em">Week ${weekNum()} of ${Math.ceil(totalCampaignDays()/7)}</span>
+        </div>
+      </div>
+      <div style="text-align:right"><div style="font-family:var(--fc);font-size:32px;color:var(--gold);line-height:1">${daysLeft()}</div><div style="font-size:11px;color:var(--ash)">days to reckoning</div></div>
+    </div>
     <div class="card card-gold" style="margin-bottom:20px;padding:20px 24px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div>
-          <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.2em;color:var(--ash);margin-bottom:10px">META RANK</div>
-          <div style="font-family:var(--fc);font-size:32px;color:var(--gold);line-height:1.1">${metaDisplayTitle}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="flex:1">
+          <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.2em;color:var(--ash);margin-bottom:12px">META RANK</div>
+          <div style="font-family:var(--fc);font-size:28px;color:var(--gold);line-height:1.1">${metaDisplayTitle}</div>
         </div>
         <div style="text-align:right;flex-shrink:0;padding-left:20px">
-          <div style="font-family:var(--fc);font-size:11px;color:var(--ash);margin-bottom:6px;letter-spacing:0.08em">Level ${metaLvl} of 10</div>
-          <div style="font-family:var(--fc);font-size:11px;color:var(--ash);margin-bottom:6px;letter-spacing:0.08em">Day ${dayNum()} of ${totalCampaignDays()}</div>
-          <div style="font-family:var(--fc);font-size:11px;color:var(--ash);letter-spacing:0.08em">${daysLeft()} days remaining</div>
+          <div style="background:var(--card2);border:0.5px solid var(--gold2);border-radius:8px;padding:10px 16px;text-align:center">
+            <div style="font-family:var(--fc);font-size:28px;color:var(--gold);line-height:1">${metaLvl}</div>
+            <div style="font-family:var(--fc);font-size:11px;color:var(--ash);margin-top:2px">of 10</div>
+          </div>
         </div>
       </div>
     </div>
@@ -2068,13 +2076,32 @@ async function renderProject(screenKey){
     const titleColor=done?'var(--safe)':isCur?'var(--gold)':floorBlocked?'var(--warn)':'var(--ash)';
     const tag=done?'✓':isCur?barPct+'%':floorBlocked?'⚠':'';
     const cls=done?'done':isCur?'current':floorBlocked?'blocked':'future';
+    const pendingLine=(function(){
+      if(!isCur&&!floorBlocked)return'';
+      if(floorBlocked){
+        const lockedCats=proj.floors?Object.keys(proj.floors).filter(function(cat){return(catCounts[cat]||0)<proj.floors[cat][i];}).length:0;
+        return lockedCats>0?'<div style="font-size:10px;color:var(--warn);font-style:italic;margin:2px 0 4px 20px">'+lockedCats+' categor'+(lockedCats===1?'y':'ies')+' remaining</div>':'';
+      }
+      const gap=threshold-total;
+      const floorUnit=proj.uniqueDays?'sessions':proj.unit;
+      if(proj.floors){
+        const lockedCats=Object.keys(proj.floors).filter(function(cat){return(catCounts[cat]||0)<proj.floors[cat][i];}).length;
+        const totalCats=Object.keys(proj.floors).length;
+        const clearedCats=totalCats-lockedCats;
+        return'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ash);font-style:italic;margin:2px 0 4px 20px">'
+          +'<span>'+gap.toLocaleString()+' '+proj.unit+' to go</span>'
+          +'<span>'+clearedCats+'/'+totalCats+' floors cleared</span>'
+          +'</div>';
+      }
+      return'<div style="font-size:10px;color:var(--ash);font-style:italic;margin:2px 0 4px 20px">'+gap.toLocaleString()+' '+proj.unit+' to go</div>';
+    })();
     return`<div class="lj-row ${cls}">
       <div class="lj-dot" style="background:${dotColor}"></div>
       <div class="lj-title" style="color:${titleColor}">${proj.titles[i]}</div>
       <div class="lj-bar-track"><div class="lj-bar-fill" style="width:${barPct}%;background:${barColor}"></div></div>
       <div class="lj-threshold">${threshold.toLocaleString()} ${proj.unit}</div>
       <div class="lj-tag" style="color:${dotColor};font-size:${floorBlocked?'14px':'inherit'}">${tag}</div>
-    </div>`;
+    </div>${pendingLine}`;
   }).join('');
 
   const totalPages=Math.ceil(allPS.length/SESS_PER_PAGE);
@@ -2106,9 +2133,9 @@ async function renderProject(screenKey){
         <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.18em;margin-bottom:8px">${proj.pillar.toUpperCase()} · ${proj.pts} PTS / DAY</div>
         <div style="font-family:var(--fc);font-size:26px;color:var(--parch);letter-spacing:0.04em;line-height:1.1;margin-bottom:10px">${proj.id}</div>
         <div style="font-family:var(--fc);font-size:13px;color:var(--gold);letter-spacing:0.06em;margin-bottom:6px">${dispTitle(proj.id,total,catCounts)}</div>
-        <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13px;color:var(--ash)">${total.toLocaleString()} ${proj.unit} logged</span><span style="font-size:13px;color:var(--ash)">Level ${l} of 10</span></div>
+        <div style="font-size:13px;color:var(--ash)">${total.toLocaleString()} ${proj.unit} logged · Level ${l} of 10</div>
       </div>
-      <div class="lvl-badge" style="align-self:stretch;display:flex;flex-direction:column;justify-content:center"><div class="lvl-num">${l}</div><div class="lvl-lbl">of 10</div></div>
+      <div class="lvl-badge"><div class="lvl-num">${l}</div><div class="lvl-lbl">of 10</div></div>
     </div>
 
     ${floorStatusHTML}
@@ -2122,14 +2149,14 @@ async function renderProject(screenKey){
 
     ${pb?`<div class="card card-gold" style="margin-bottom:14px">
       <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.2em;color:var(--ash);margin-bottom:10px">Personal Best</div>
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-          <span style="font-size:13px;color:var(--ash)">${ordinalDate(pb.date)}</span>
-          ${!proj.uniqueDays&&pb.category?`<span style="font-family:var(--fc);font-size:11px;letter-spacing:0.1em;color:var(--parch);background:var(--card2);padding:3px 8px;border-radius:4px">${pb.category}</span>`:''}
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-size:13px;color:var(--ash);margin-bottom:6px">${ordinalDate(pb.date)}</div>
+          ${!proj.uniqueDays&&pb.category?`<div style="font-family:var(--fc);font-size:11px;letter-spacing:0.1em;color:var(--parch);background:var(--card2);padding:4px 10px;border-radius:4px;display:inline-block">${pb.category}</div>`:''}
         </div>
-        <div style="display:flex;align-items:baseline;gap:4px;flex-shrink:0">
-          <span style="font-family:var(--fc);font-size:22px;color:var(--gold);line-height:1">${proj.uniqueDays?pb.sessionCount:fmtT(pb.tangible_logged,proj.unit)}</span>
-          <span style="font-family:var(--fc);font-size:10px;color:var(--ash);letter-spacing:0.08em">${proj.uniqueDays?(pb.sessionCount===1?'SESSION':'SESSIONS'):proj.unit.toUpperCase()}</span>
+        <div style="text-align:right">
+          <div style="font-family:var(--fc);font-size:32px;color:var(--gold);line-height:1">${proj.uniqueDays?pb.sessionCount:fmtT(pb.tangible_logged,proj.unit)}</div>
+          <div style="font-family:var(--fc);font-size:11px;color:var(--ash);letter-spacing:0.08em;margin-top:2px">${proj.uniqueDays?(pb.sessionCount===1?'SESSION':'SESSIONS'):proj.unit.toUpperCase()}</div>
         </div>
       </div>
     </div>`:''}
@@ -2139,15 +2166,16 @@ async function renderProject(screenKey){
         <div>
           <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.18em;color:var(--ash);margin-bottom:6px">PROGRESS TOWARD CEILING</div>
           <div style="font-family:var(--fc);font-size:32px;color:var(--parch);line-height:1">${total.toLocaleString()} <span style="font-size:14px;color:var(--ash)">${proj.unit}</span></div>
-          <div style="font-size:12px;color:var(--ash);margin-top:4px">of ${proj.ceiling.toLocaleString()} ${proj.unit} ceiling</div>
+
         </div>
         <div style="text-align:right">
           <div style="font-family:var(--fc);font-size:36px;color:var(--gold);line-height:1">${Math.round(total/proj.ceiling*100)}<span style="font-size:16px;color:var(--ash)">%</span></div>
+          <div style="font-size:12px;color:var(--ash);margin-top:4px;max-width:280px;text-align:right">${renderFloorPillGrid(proj.id,getNextLevelPending(proj.id,total,catCounts),catCounts)}</div>
         </div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-        <span style="font-family:var(--fc);font-size:9px;letter-spacing:0.12em;color:var(--ash)">${proj.unit.toUpperCase()}</span>
-        <span style="font-size:10px;color:var(--ash)">${total.toLocaleString()} / ${proj.ceiling.toLocaleString()}</span>
+        <span style="font-family:var(--fc);font-size:13px;letter-spacing:0.12em;color:var(--ash)">${proj.unit.toUpperCase()}</span>
+        <span style="font-family:var(--fc);font-size:14px;color:var(--ash)">${total.toLocaleString()} / ${proj.ceiling.toLocaleString()}</span>
       </div>
       <div style="height:8px;background:var(--card2);border-radius:4px;overflow:hidden">
         <div style="height:100%;width:${Math.min(100,Math.round(total/proj.ceiling*100))}%;background:var(--safe);border-radius:4px;transition:width 0.6s"></div>
@@ -2179,50 +2207,27 @@ async function renderProject(screenKey){
       const ctx=document.getElementById('chart-'+screenKey);if(!ctx)return;
       const existChart=Chart.getChart?Chart.getChart(ctx):null;if(existChart)existChart.destroy();
       const pUnit=proj.unit;
-      // Build date map: positive sessions from allPS
       const dateMap={};
       allPS.forEach(function(s){
-        if(proj.uniqueDays){dateMap[s.date]=1;}
+        if(proj.uniqueDays){dateMap[s.date]=1;}// Iron Forge: 1 day per date
         else{dateMap[s.date]=(dateMap[s.date]||0)+s.tangible_logged;}
       });
-      // Skip sessions (tangible=0, penalty<0) from allSessions
-      const skipDates={};
-      S.allSessions.filter(function(s){return s.project===proj.id&&s.tangible_logged===0&&(s.penalty||0)<0;})
-        .forEach(function(s){skipDates[s.date]=true;});
-      // Build unified date list: all dates from campaign start to today
-      const allDates=[];
-      const cStart=new Date(getGameStart());
-      const cEnd=new Date(today());
-      for(var d=new Date(cStart);d<=cEnd;d.setDate(d.getDate()+1)){
-        allDates.push(d.toISOString().split('T')[0]);
-      }
-      const chartVals=allDates.map(function(dt){return dateMap[dt]||0;});
-      const ptColors=allDates.map(function(dt){
-        if(dateMap[dt]&&dateMap[dt]>0)return'#2A8060';   // green — logged
-        if(skipDates[dt])return'#D04030';                  // red — skipped
-        return'rgba(160,144,128,0.3)';                     // grey — no commitment
-      });
-      const ptRadii=allDates.map(function(dt){
-        if(dateMap[dt]&&dateMap[dt]>0)return 4;
-        if(skipDates[dt])return 4;
-        return 2;
-      });
-      const yTickCb=(function(u){return function(v){return Number.isInteger(v)&&v>=0?v+' '+u:null;};})(pUnit);
+      const sortedDates=Object.keys(dateMap).sort();
+      const chartData=sortedDates.map(function(d){return dateMap[d];});
+      const yTickCb=(function(u){return function(v){return Number.isInteger(v)?v+' '+u:null;};})(pUnit);
       new Chart(ctx,{
         type:'line',
-        data:{labels:allDates,datasets:[{
-          label:pUnit,data:chartVals,
-          borderColor:'rgba(120,100,80,0.4)',backgroundColor:'transparent',
-          borderWidth:1.5,pointRadius:ptRadii,pointBackgroundColor:ptColors,
-          pointBorderColor:ptColors,fill:false,tension:0,
-          pointHoverRadius:6
+        data:{labels:sortedDates,datasets:[{
+          label:pUnit,data:chartData,
+          borderColor:'#2A8060',backgroundColor:'rgba(42,128,96,0.15)',
+          borderWidth:2,pointRadius:4,pointBackgroundColor:'#2A8060',fill:true,tension:0.3
         }]},
         options:{
           responsive:true,maintainAspectRatio:false,
           plugins:{legend:{display:false}},
           scales:{
-            x:{ticks:{color:'#A09080',font:{size:9},maxTicksLimit:10,maxRotation:45,minRotation:45},grid:{color:'rgba(74,66,56,0.3)'}},
-            y:{beginAtZero:true,min:0,ticks:{color:'#A09080',font:{size:9},precision:0,callback:yTickCb},grid:{color:'rgba(74,66,56,0.3)'}}
+            x:{border:{display:true,color:'rgba(160,144,128,0.5)'},ticks:{color:'#A09080',font:{size:9},maxTicksLimit:10,maxRotation:45,minRotation:45},grid:{color:'rgba(74,66,56,0.3)'}},
+            y:{border:{display:true,color:'rgba(160,144,128,0.5)'},beginAtZero:true,ticks:{color:'#A09080',font:{size:9},precision:0,stepSize:1,callback:yTickCb},grid:{color:'rgba(74,66,56,0.3)'}}
           }
         }
       });
