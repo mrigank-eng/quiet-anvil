@@ -812,8 +812,18 @@ function pillarBalance(){
 
 // Personal best per project
 function personalBest(pid){
+  const proj=PROJECTS_DEFAULT.find(p=>p.id===pid);
   const sessions=S.allSessions.filter(x=>x.project===pid&&x.tangible_logged>0);
   if(!sessions.length)return null;
+  if(proj&&proj.uniqueDays){
+    // PB = day with most sessions logged
+    const byDate={};
+    sessions.forEach(function(s){byDate[s.date]=(byDate[s.date]||[]).concat(s);});
+    var bestDate=null,bestCount=0;
+    Object.keys(byDate).forEach(function(d){if(byDate[d].length>bestCount){bestCount=byDate[d].length;bestDate=d;}});
+    if(!bestDate)return null;
+    return{date:bestDate,sessionCount:bestCount,uniqueDays:true};
+  }
   const best=sessions.reduce((m,s)=>s.tangible_logged>m.tangible_logged?s:m,sessions[0]);
   return best;
 }
@@ -1176,9 +1186,14 @@ function renderForge(){
       if(sessions.length>0){
         sessListHTML='<div class="fp-sessions">';
         sessions.filter(s=>s.tangible_logged>0).forEach(function(s){
-          sessListHTML+=`<div class="fp-session-row" style="display:grid;grid-template-columns:110px 1fr auto auto;align-items:center;gap:8px"><span style="color:var(--ash);font-family:var(--fc);font-size:11px">${s.category||'Session'}</span><span style="color:var(--ash);font-size:12px">${s.notes||'—'}</span><span style="font-family:var(--fc);font-size:11px;color:var(--gold)">${fmtT(s.tangible_logged,proj.unit)} ${proj.unit}</span><button onclick="deleteSession('${s.id}','${proj.id}',${s.tangible_logged})" style="background:none;border:none;cursor:pointer;color:var(--ember);font-size:12px;padding:2px 4px;opacity:0.6;line-height:1" title="Delete session">✕</button></div>`;
+          sessListHTML+=`<div class="fp-session-row" style="display:grid;grid-template-columns:110px 1fr auto auto;align-items:center;gap:8px"><span style="color:var(--ash);font-family:var(--fc);font-size:11px">${s.category||'Session'}</span><span style="color:var(--ash);font-size:12px">${s.notes||'—'}</span><span style="font-family:var(--fc);font-size:11px;color:var(--gold)">${proj.uniqueDays?'1 session':(fmtT(s.tangible_logged,proj.unit)+' '+proj.unit)}</span><button onclick="deleteSession('${s.id}','${proj.id}',${s.tangible_logged})" style="background:none;border:none;cursor:pointer;color:var(--ember);font-size:12px;padding:2px 4px;opacity:0.6;line-height:1" title="Delete session">✕</button></div>`;
         });
-        sessListHTML+=`<div style="font-size:12px;color:var(--ash);padding:4px 0">Today: <span style="color:var(--gold);font-family:var(--fc)">${fmtT(tangToday,proj.unit)} ${proj.unit}</span></div></div>`;
+        const todaySessCount=sessions.filter(s=>s.tangible_logged>0).length;
+        sessListHTML+='<div style="font-size:12px;color:var(--ash);padding:4px 0">'+
+          (proj.uniqueDays
+            ? '✓ <span style="color:var(--safe);font-family:var(--fc)">Attended</span> · <span style="color:var(--gold);font-family:var(--fc)">'+todaySessCount+' session'+(todaySessCount!==1?'s':'')+'</span>'
+            : 'Today: <span style="color:var(--gold);font-family:var(--fc)">'+fmtT(tangToday,proj.unit)+' '+proj.unit+'</span>')
+          +'</div></div>';
       }
       let footHTML='<div style="display:flex;align-items:center;gap:8px;padding-left:28px;flex-wrap:wrap">';
       if(!cp.submitted){
@@ -2050,11 +2065,11 @@ async function renderProject(screenKey){
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
           <div style="font-size:13px;color:var(--ash);margin-bottom:6px">${ordinalDate(pb.date)}</div>
-          ${pb.category?`<div style="font-family:var(--fc);font-size:11px;letter-spacing:0.1em;color:var(--parch);background:var(--card2);padding:4px 10px;border-radius:4px;display:inline-block">${pb.category}</div>`:''}
+          ${!proj.uniqueDays&&pb.category?`<div style="font-family:var(--fc);font-size:11px;letter-spacing:0.1em;color:var(--parch);background:var(--card2);padding:4px 10px;border-radius:4px;display:inline-block">${pb.category}</div>`:''}
         </div>
         <div style="text-align:right">
           <div style="font-family:var(--fc);font-size:32px;color:var(--gold);line-height:1">${fmtT(pb.tangible_logged,proj.unit)}</div>
-          <div style="font-family:var(--fc);font-size:11px;color:var(--ash);letter-spacing:0.08em;margin-top:2px">${proj.unit.toUpperCase()}</div>
+          <div style="font-family:var(--fc);font-size:11px;color:var(--ash);letter-spacing:0.08em;margin-top:2px">${proj.uniqueDays?(pb.sessionCount===1?'SESSION':'SESSIONS'):proj.unit.toUpperCase()}</div>
         </div>
       </div>
     </div>`:''}
@@ -3196,7 +3211,14 @@ async function renderCalendar(){
     dayData[l.date].total=(dayData[l.date].pts||0)+cp+(dayData[l.date].pen||0);
   });
 
-  function scoreColor(t){if(!t||t<=0)return'var(--border)';if(t>=70)return'var(--gold)';if(t>=50)return'var(--safe)';if(t>=30)return'var(--warn)';return'var(--ember)';}
+  function scoreColor(t,pen){
+    // t = total net (pts+pen+ct), pen = penalty sum (0 or negative)
+    if(!t&&pen===0)return'var(--border2)';    // no data
+    if(t<0)return'var(--ember)';              // net negative = red
+    if(t>0&&pen<0)return'var(--warn)';        // mixed day = amber
+    if(t>0)return'var(--safe)';               // all positive = green
+    return'var(--ash)';                        // zero = grey
+  }
 
   let contentHTML='';
 
@@ -3250,13 +3272,13 @@ async function renderCalendar(){
         if(Object.keys(byProj).length>3)projLines+=`<div style="font-size:8px;color:var(--border2)">+${Object.keys(byProj).length-3} more</div>`;
         projLines+='</div>';
       }
-      grid+=`<div style="background:${isSel?'var(--gold-dim)':data&&!isFuture?'var(--card)':'var(--card2)'};border:0.5px solid ${isSel?'var(--gold)':'var(--border)'};border-radius:8px;padding:7px 5px;min-height:80px;cursor:${!isFuture&&data?'pointer':'default'};opacity:${isFuture?0.3:1};transition:border-color 0.2s" onclick="${!isFuture&&data?'calSelect(\''+ds+'\')':''}">
+      grid+=`<div style="background:${isSel?'var(--gold-dim)':data&&!isFuture?scoreColor(data.total,data.pen||0)+'22':'var(--card2)'};border:0.5px solid ${isSel?'var(--gold)':data&&!isFuture?scoreColor(data.total,data.pen||0):'var(--border)'};border-radius:8px;padding:7px 5px;min-height:80px;cursor:${!isFuture&&data?'pointer':'default'};opacity:${isFuture?0.3:1};transition:border-color 0.2s" onclick="${!isFuture&&data?'calSelect(\''+ds+'\')':''}">
         <div style="font-family:var(--fc);font-size:10px;color:var(--ash);margin-bottom:2px">${d}</div>
         ${data&&!isFuture?`
-          <div style="font-family:var(--fc);font-size:13px;color:${scoreColor(t)};line-height:1;margin-bottom:3px">${t}</div>
+          <div style="font-family:var(--fc);font-size:13px;color:${scoreColor(t,data.pen||0)};line-height:1;margin-bottom:3px">${t}</div>
           ${ctDots}
           ${projLines}
-          <div style="height:2px;background:var(--border);border-radius:1px;overflow:hidden;margin-top:2px"><div style="height:100%;width:${pct}%;background:${scoreColor(t)}"></div></div>
+          <div style="height:2px;background:var(--border);border-radius:1px;overflow:hidden;margin-top:2px"><div style="height:100%;width:${pct}%;background:${scoreColor(t,data.pen||0)}"></div></div>
         `:''}
       </div>`;
     }
@@ -3299,11 +3321,11 @@ async function renderCalendar(){
         </div>`;
       }).join('');
       const ctHTML=data?.ct?CMDS.map(c=>`<div style="width:7px;height:7px;border-radius:2px;background:${data.ct[c.key]===true?'var(--safe)':data.ct[c.key]===false?'var(--ember)':'var(--border)'}"></div>`).join(''):'';
-      weekHTML+=`<div style="background:${isSel?'var(--gold-dim)':data&&!isFuture?'var(--card)':'var(--card2)'};border:0.5px solid ${isSel?'var(--gold)':'var(--border)'};border-radius:8px;padding:10px;opacity:${isFuture?0.3:1};cursor:${!isFuture&&data?'pointer':'default'}" onclick="${!isFuture&&data?'calSelect(\''+ds+'\')':''}">
+      weekHTML+=`<div style="background:${isSel?'var(--gold-dim)':data&&!isFuture?scoreColor(data.total,data.pen||0)+'22':'var(--card2)'};border:0.5px solid ${isSel?'var(--gold)':data&&!isFuture?scoreColor(data.total,data.pen||0):'var(--border)'};border-radius:8px;padding:10px;opacity:${isFuture?0.3:1};cursor:${!isFuture&&data?'pointer':'default'}" onclick="${!isFuture&&data?'calSelect(\''+ds+'\')':''}">
         <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.1em;margin-bottom:2px">${dayNames[i]}</div>
         <div style="font-family:var(--fc);font-size:12px;color:var(--ash);margin-bottom:6px">${d.getDate()}</div>
         ${data&&!isFuture?`
-          <div style="font-family:var(--fc);font-size:18px;color:${scoreColor(t)};line-height:1;margin-bottom:6px">${fmtPts(t)}<span style="font-size:9px;color:var(--ash);margin-left:2px">pts</span></div>
+          <div style="font-family:var(--fc);font-size:18px;color:${scoreColor(t,data.pen||0)};line-height:1;margin-bottom:6px">${fmtPts(t)}<span style="font-size:9px;color:var(--ash);margin-left:2px">pts</span></div>
           ${sessHTML}
           <div style="display:flex;gap:2px;flex-wrap:wrap;margin-top:6px">${ctHTML}</div>
         `:'<div style="font-size:11px;color:var(--border2);font-style:italic">—</div>'}
@@ -3346,7 +3368,7 @@ async function renderCalendar(){
         if(!day){yHTML+=`<div style="width:12px;height:12px"></div>`;return;}
         const ds=day.toISOString().split('T')[0];
         const data=dayData[ds];const isFuture=ds>today();const t=data?.total||0;
-        const bg=isFuture?'var(--card2)':data?scoreColor(t):'rgba(74,66,56,0.3)';
+        const bg=isFuture?'var(--card2)':data?scoreColor(t,data.pen||0):'rgba(74,66,56,0.3)';
         yHTML+=`<div style="width:12px;height:12px;border-radius:2px;background:${bg};cursor:${data?'pointer':'default'}" title="${ds}: ${t} pts" onclick="${data?'calSelect(\''+ds+'\')':''}"></div>`;
       });
       yHTML+='</div>';
@@ -3388,7 +3410,7 @@ async function renderCalendar(){
         return`<div style="display:flex;align-items:center;gap:8px;padding:3px 0 3px 12px;border-left:2px solid var(--border)">
           ${s.category?`<span style="font-family:var(--fc);font-size:10px;color:var(--ash);letter-spacing:0.06em">${s.category}</span>`:''}
           ${s.notes?`<span style="font-size:12px;color:var(--ash);flex:1">— ${s.notes}</span>`:'<span style="flex:1"></span>'}
-          <span style="font-family:var(--fc);font-size:11px;color:var(--gold)">${fmtT(s.tangible_logged,proj?proj.unit:'')} ${proj?proj.unit:''}</span>
+          <span style="font-family:var(--fc);font-size:11px;color:var(--gold)">${proj&&proj.uniqueDays?'1 session':(fmtT(s.tangible_logged,proj?proj.unit:'')+' '+(proj?proj.unit:''))}</span>
         </div>`;
       }).join('');
       return`<div style="padding:10px 0;border-bottom:0.5px solid var(--border)">
@@ -3398,7 +3420,7 @@ async function renderCalendar(){
             ${pd.sessions.length>1?`<div style="font-size:11px;color:var(--ash)">${pd.sessions.length} sessions</div>`:''}
           </div>
           <div style="text-align:right">
-            <div style="font-family:var(--fc);font-size:16px;color:var(--gold)">${fmtT(pd.total,proj?proj.unit:'')} <span style="font-size:11px">${proj?proj.unit:''}</span></div>
+            <div style="font-family:var(--fc);font-size:16px;color:var(--gold)">${proj&&proj.uniqueDays?(pd.sessions.length+' session'+(pd.sessions.length!==1?'s':'')):(fmtT(pd.total,proj?proj.unit:'')+(proj?' '+proj.unit:''))}</div>
             <div style="font-size:11px;color:${pd.pts<0?'var(--ember)':pd.pts===0?'var(--ash)':'var(--safe)'}">${pd.pts>0?'+':''}${fmtPts(pd.pts)} pts${pd.pen<0?' (penalty: '+pd.pen+')':''}</div>
           </div>
         </div>
