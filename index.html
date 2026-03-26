@@ -326,10 +326,8 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
   <div class="sb-div"></div>
   <div class="sb-sec">
     <div class="sb-item" onclick="nav('temper')"><span class="sb-icon">🔥</span>Clean Temper</div>
-    <div class="sb-item" onclick="nav('willmaster')"><span class="sb-icon">⚡</span>The Willmaster</div>
     <div class="sb-item" onclick="nav('meta')"><span class="sb-icon">◎</span>Meta Rank</div>
     <div class="sb-item" onclick="nav('calendar')"><span class="sb-icon">📅</span>Calendar</div>
-    <div class="sb-item" onclick="nav('report')"><span class="sb-icon">📜</span>Anvil Report</div>
     <div class="sb-item" onclick="nav('milestones')"><span class="sb-icon">★</span>Milestones</div>
     <div class="sb-item" onclick="nav('share')"><span class="sb-icon">◈</span>Share</div>
     <div class="sb-item" onclick="nav('food')"><span class="sb-icon">🍽</span>Food Log</div>
@@ -1863,7 +1861,7 @@ async function renderArmoury(){
         const pr=getProg(x.proj.id,x.total);
         return`<div style="margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
-            <span style="font-size:12px;color:var(--parch)">${x.proj.id}&nbsp;&nbsp;<span style="font-family:var(--fc);font-size:11px;color:var(--ash)">(${ceilPct}%)</span></span>
+            <span style="font-size:12px;color:var(--parch)">${x.proj.id}&nbsp;&nbsp;<span style="font-family:var(--fc);font-size:15px;color:var(--ash)">(${ceilPct}%)</span></span>
             <span style="font-family:var(--fc);font-size:11px;color:var(--gold)">L${x.l}&nbsp;&nbsp;${Math.round(getProg(x.proj.id,x.total,armCatCounts[x.proj.id]||{}))}%</span>
           </div>
           <div style="height:4px;background:var(--card2);border-radius:2px;overflow:hidden">
@@ -1898,16 +1896,16 @@ async function renderArmoury(){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
         <div style="flex:1;min-width:0">
           <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.1em;margin-bottom:3px">${proj.pillar.toUpperCase()}</div>
-          <div style="font-size:14px;color:var(--parch);font-weight:500;margin-bottom:3px">${proj.id}&nbsp;&nbsp;&nbsp;<span style="font-size:11px;color:var(--ash)">(${ceilPct}%)</span></div>
+          <div style="font-size:14px;color:var(--parch);font-weight:500;margin-bottom:3px">${proj.id}&nbsp;&nbsp;&nbsp;<span style="font-family:var(--fc);font-size:15px;color:var(--ash)">(${ceilPct}%)</span></div>
           <div style="font-family:var(--fc);font-size:13px;color:var(--gold);margin-bottom:4px">${curT}</div>
-          <div style="font-size:12px;color:var(--ash)">${total.toLocaleString()} ${proj.unit}</div>
         </div>
         <div style="text-align:right;flex-shrink:0;padding-left:10px">
           <div style="font-family:var(--fc);font-size:28px;color:var(--parch);line-height:1">${l}<span style="font-size:11px;color:var(--ash)">/10</span></div>
         </div>
       </div>
-      <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
-        <div style="font-size:11px;color:var(--ash);font-style:italic;text-align:right">${armPendStr}</div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+        <span style="font-size:14px;color:var(--ash)">${total.toLocaleString()} ${proj.unit}</span>
+        <span style="font-size:14px;color:var(--ash);font-style:italic;text-align:right">${armPendStr}</span>
       </div>
       <div class="prog-track" title="${pr}% of level"><div class="prog-fill" style="width:${pr}%"></div></div>
     </div>`;
@@ -2166,18 +2164,12 @@ async function renderProject(screenKey){
         <div>
           <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.18em;color:var(--ash);margin-bottom:6px">PROGRESS TOWARD CEILING</div>
           <div style="font-family:var(--fc);font-size:32px;color:var(--parch);line-height:1">${total.toLocaleString()} <span style="font-size:14px;color:var(--ash)">${proj.unit}</span></div>
-
-        </div>
-        <div style="text-align:right">
-          <div style="font-family:var(--fc);font-size:36px;color:var(--gold);line-height:1">${Math.round(total/proj.ceiling*100)}<span style="font-size:16px;color:var(--ash)">%</span></div>
-          <div style="font-size:12px;color:var(--ash);margin-top:4px;max-width:280px;text-align:right">${renderFloorPillGrid(proj.id,getNextLevelPending(proj.id,total,catCounts),catCounts)}</div>
         </div>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-        <span style="font-family:var(--fc);font-size:13px;letter-spacing:0.12em;color:var(--ash)">${proj.unit.toUpperCase()}</span>
+      <div style="display:flex;justify-content:flex-end;align-items:baseline;margin-bottom:4px">
         <span style="font-family:var(--fc);font-size:14px;color:var(--ash)">${total.toLocaleString()} / ${proj.ceiling.toLocaleString()}</span>
       </div>
-      <div style="height:8px;background:var(--card2);border-radius:4px;overflow:hidden">
+      <div style="height:8px;background:var(--card2);border-radius:4px;overflow:hidden" title="${Math.round(total/proj.ceiling*100)}%">
         <div style="height:100%;width:${Math.min(100,Math.round(total/proj.ceiling*100))}%;background:var(--safe);border-radius:4px;transition:width 0.6s"></div>
       </div>
     </div>
