@@ -869,7 +869,6 @@ async function loadData(){
 }
 
 async function loadAll(){
-  if(S.allSessions.length&&S.allLogs.length)return;
   try{
     const[lR,sR,mR]=await Promise.all([
       db.from('daily_log').select('*').order('date'),
