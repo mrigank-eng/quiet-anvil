@@ -3268,7 +3268,7 @@ async function renderCalendar(){
           const projUD=proj&&proj.uniqueDays;
           const sessCount=data.sessions.filter(function(s){return s.project===pid&&s.tangible_logged>0;}).length;
           const val=projUD?sessCount:fmtT(byProj[pid],proj?proj.unit:'');
-          const unit=projUD?(sessCount===1?'sess':'sess'):(proj?' '+proj.unit:'');
+          const unit=projUD?(sessCount===1?' session':' sessions'):(proj?' '+proj.unit:'');
           projLines+=`<div style="display:flex;justify-content:space-between;font-size:8px;margin-bottom:1px"><span style="color:var(--ash)">${abbr}</span><span style="color:var(--gold);font-family:var(--fc)">${val}${unit}</span></div>`;
         });
         if(Object.keys(byProj).length>3)projLines+=`<div style="font-size:8px;color:var(--border2)">+${Object.keys(byProj).length-3} more</div>`;
@@ -3311,15 +3311,21 @@ async function renderCalendar(){
       const t=data?.total||0;
       // Aggregate sessions by project for clean display
       const projTotals={};
+      const projSessCounts={};
       (data?.sessions||[]).filter(s=>s.tangible_logged>0).forEach(function(s){
         if(!projTotals[s.project])projTotals[s.project]=0;
         projTotals[s.project]+=s.tangible_logged;
+        projSessCounts[s.project]=(projSessCounts[s.project]||0)+1;
       });
       const sessHTML=Object.keys(projTotals).map(function(pid){
         const proj=PROJECTS.find(p=>p.id===pid);
+        const isUD=proj&&proj.uniqueDays;
+        const cnt=projSessCounts[pid]||0;
+        const dispVal=isUD?cnt:fmtT(projTotals[pid],proj?proj.unit:'');
+        const dispUnit=isUD?(cnt===1?' session':' sessions'):(proj?' '+proj.unit:'');
         return`<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 0;border-bottom:0.5px solid var(--border)">
           <span style="font-size:9px;color:var(--ash);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${pid.replace('The ','')}</span>
-          <span style="font-family:var(--fc);font-size:9px;color:var(--gold);margin-left:4px;flex-shrink:0">${fmtT(projTotals[pid],proj?proj.unit:'')}${proj?proj.unit:''}</span>
+          <span style="font-family:var(--fc);font-size:9px;color:var(--gold);margin-left:4px;flex-shrink:0">${dispVal}${dispUnit}</span>
         </div>`;
       }).join('');
       const ctHTML=data?.ct?CMDS.map(c=>`<div style="width:7px;height:7px;border-radius:2px;background:${data.ct[c.key]===true?'var(--safe)':data.ct[c.key]===false?'var(--ember)':'var(--border)'}"></div>`).join(''):'';
@@ -3456,7 +3462,7 @@ async function renderCalendar(){
           <div style="font-family:var(--fc);font-size:15px;color:var(--gold)">${dateFormatted}</div>
         </div>
         <div style="text-align:right">
-          <div style="font-family:var(--fc);font-size:28px;color:var(--gold);line-height:1">${fmtPts(data.total||0)}</div>
+          <div style="font-family:var(--fc);font-size:28px;color:${scoreColor(data.total||0,data.pen||0)};line-height:1">${fmtPts(data.total||0)}</div>
           <div style="font-size:11px;color:var(--ash)">of ${dailyMax()} pts</div>
         </div>
       </div>
