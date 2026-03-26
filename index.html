@@ -865,15 +865,21 @@ async function loadData(){
 
 async function loadAll(){
   if(S.allSessions.length&&S.allLogs.length)return;
-  const[lR,sR,mR]=await Promise.all([
-    db.from('daily_log').select('*').order('date'),
-    db.from('sessions').select('*').order('date'),
-    db.from('milestones').select('*').order('date',{ascending:false})
-  ]);
-  var gs=getGameStart();
-  S.allLogs=(lR.data||[]).filter(function(l){return l.date>=gs;});
-  S.allSessions=(sR.data||[]).filter(function(s){return s.date>=gs;});
-  S.milestones=mR.data||[];
+  try{
+    const[lR,sR,mR]=await Promise.all([
+      db.from('daily_log').select('*').order('date'),
+      db.from('sessions').select('*').order('date'),
+      db.from('milestones').select('*').order('date',{ascending:false})
+    ]);
+    S.allLogs=lR.data||[];
+    S.allSessions=sR.data||[];
+    S.milestones=mR.data||[];
+  }catch(e){
+    console.error('loadAll error:',e);
+    S.allLogs=S.allLogs||[];
+    S.allSessions=S.allSessions||[];
+    S.milestones=S.milestones||[];
+  }
 }
 
 async function ensureLog(){
@@ -1865,7 +1871,8 @@ async function renderArmoury(){
 
 // ── PROJECT ────────────────────────────────────────────
 async function renderProject(screenKey){
-  const proj=PROJECTS.find(p=>p.key===screenKey);if(!proj)return;
+  const projBase=PROJECTS.find(p=>p.key===screenKey);if(!projBase)return;
+  const proj=getEffectiveProject(projBase.id)||projBase;
   const s=S.projects.find(p=>p.project===proj.id)||{};
   const total=s.total_tangible||0;
 
@@ -1896,8 +1903,8 @@ async function renderProject(screenKey){
   let catFloorHTML='';
   let langHTML='';
   if(proj.cats.length>0&&allPS.length>0){
-    const nextLvlIdx=l;
-    const hasFloors=proj.floors&&nextLvlIdx<proj.levels.length;
+    const nextLvlIdx=Math.min(l,proj.levels.length-1);
+    const hasFloors=proj.floors&&l<proj.levels.length;
     const totalTangibleForCat=allPS.reduce(function(s,x){return s+(x.tangible_logged||0);},0);
     catHTML=`<div class="st">Category distribution</div><div class="card" style="margin-bottom:14px">${
       proj.cats.map(function(cat){
@@ -2001,8 +2008,21 @@ async function renderProject(screenKey){
     <span style="color:var(--ash)">Page ${sessPage+1} of ${totalPages} · ${allPS.length} total sessions</span>
     <button class="btn btn-xs" onclick="sessPageChange('${proj.id}','${screenKey}',${sessPage+1})" ${sessPage>=totalPages-1?'disabled style="opacity:0.3"':''}>Next →</button>
   </div>`:'';
-  const sessHTML=recent.length>0?`<table class="dt"><thead><tr><th>Date</th><th>Amount</th><th>Category</th>${proj.hasLang?'<th>Language</th>':''}<th>Notes</th></tr></thead>
-    <tbody>${recent.map(s=>`<tr><td style="color:var(--ash)">${s.date}</td><td style="font-family:var(--fc);font-size:12px;color:var(--gold)">${s.tangible_logged} ${proj.unit}</td><td>${s.category||'—'}</td>${proj.hasLang?`<td>${s.language||'—'}</td>`:''}<td style="color:var(--ash)">${s.notes||'—'}</td></tr>`).join('')}</tbody></table>${paginationHTML}`
+  const sessRows=recent.map(function(s){
+    var langCell=proj.hasLang?('<td>'+(s.language||'—')+'</td>'):'';
+    var delBtn='<button class="btn btn-xs btn-danger" onclick="deleteSession(\''+s.id+'\',\''+proj.id+'\','+s.tangible_logged+')">✕</button>';
+    return '<tr>'
+      +'<td style="color:var(--ash)">'+s.date+'</td>'
+      +'<td style="font-family:var(--fc);font-size:12px;color:var(--gold)">'+s.tangible_logged+' '+proj.unit+'</td>'
+      +'<td>'+(s.category||'—')+'</td>'
+      +langCell
+      +'<td style="color:var(--ash)">'+(s.notes||'—')+'</td>'
+      +'<td>'+delBtn+'</td>'
+      +'</tr>';
+  }).join('');
+  var langHeader=proj.hasLang?'<th>Language</th>':'';
+  const sessHTML=recent.length>0
+    ?('<table class="dt"><thead><tr><th>Date</th><th>Amount</th><th>Category</th>'+langHeader+'<th>Notes</th><th></th></tr></thead><tbody>'+sessRows+'</tbody></table>'+paginationHTML)
     :'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:12px 0">No sessions logged yet.</div>';
 
   document.getElementById('screen-'+screenKey).innerHTML=`
@@ -2029,7 +2049,7 @@ async function renderProject(screenKey){
       <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.2em;color:var(--ash);margin-bottom:10px">Personal Best</div>
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
-          <div style="font-size:13px;color:var(--ash);margin-bottom:6px">${(()=>{const d=new Date(pb.date);return d.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});})()}</div>
+          <div style="font-size:13px;color:var(--ash);margin-bottom:6px">${ordinalDate(pb.date)}</div>
           ${pb.category?`<div style="font-family:var(--fc);font-size:11px;letter-spacing:0.1em;color:var(--parch);background:var(--card2);padding:4px 10px;border-radius:4px;display:inline-block">${pb.category}</div>`:''}
         </div>
         <div style="text-align:right">
@@ -2079,6 +2099,7 @@ async function renderProject(screenKey){
     S.chartsDrawn[screenKey]=true;
     setTimeout(function(){
       const ctx=document.getElementById('chart-'+screenKey);if(!ctx)return;
+      const existChart=Chart.getChart?Chart.getChart(ctx):null;if(existChart)existChart.destroy();
       const pUnit=proj.unit;
       const dateMap={};
       allPS.forEach(function(s){dateMap[s.date]=(dateMap[s.date]||0)+s.tangible_logged;});
@@ -2165,7 +2186,8 @@ function renderTemper(){
 
 // ── WILLMASTER ─────────────────────────────────────────
 function setWmDays(n){S.wmDays=n;renderWillmaster();}
-function renderWillmaster(){
+async function renderWillmaster(){
+  await loadAll();
   // Build heatmap — from N days ago to TODAY only (left=oldest, right=most recent)
   // Only past and today — no future boxes
   const heatDays=S.wmDays||30;
@@ -2286,7 +2308,8 @@ function renderWillmaster(){
 }
 
 // ── META ───────────────────────────────────────────────
-function renderMeta(){
+async function renderMeta(){
+  await loadAll();
   const metaCC=getCatCountsAll();const pLvls=PROJECTS.map(function(proj){const s=S.projects.find(p=>p.project===proj.id)||{};const total=s.total_tangible||0;return{proj,l:getLvl(proj.id,total,metaCC[proj.id]||{}),total};});
   const metaLvl=Math.min(...pLvls.map(p=>p.l));
   const weakest=pLvls.find(p=>p.l===metaLvl);
@@ -2617,7 +2640,17 @@ function buildDailyCard(){
       </div>
     </div>
     <div style="height:3px;background:#2a2010;border-radius:2px;margin-bottom:20px;overflow:hidden"><div style="height:100%;width:${pct}%;background:#D4A84C;border-radius:2px"></div></div>
-    ${completedProjs.length>0?`<div style="margin-bottom:16px">${completedProjs.map(function(s){const proj=PROJECTS.find(p=>p.id===s.project);return`<div style="display:flex;justify-content:space-between;margin-bottom:6px"><div style="font-size:10px;letter-spacing:0.08em;color:#8a6a1a">${s.project.replace('The ','').toUpperCase()}</div><div style="font-size:13px;color:#D4A84C;font-family:Cinzel,serif">${s.tangible_logged} ${proj?proj.unit:''}</div></div>`;}).join('')}</div>`:''}
+    ${(function(){
+      if(!completedProjs.length)return'';
+      var rows=completedProjs.map(function(s){
+        var proj=PROJECTS.find(function(p){return p.id===s.project;});
+        return '<div style="display:flex;justify-content:space-between;margin-bottom:6px">'
+          +'<div style="font-size:10px;letter-spacing:0.08em;color:#8a6a1a">'+s.project.replace('The ','').toUpperCase()+'</div>'
+          +'<div style="font-size:13px;color:#D4A84C;font-family:Cinzel,serif">'+s.tangible_logged+' '+(proj?proj.unit:'')+'</div>'
+          +'</div>';
+      }).join('');
+      return '<div style="margin-bottom:16px">'+rows+'</div>';
+    })()}
     <div class="sc-divider"></div>
     <div style="display:flex;justify-content:space-between;align-items:center">
       <div>
@@ -2734,43 +2767,31 @@ function renderSettings(){
     </div>
     <div class="st">Daily points per project</div>
     <div class="card" style="margin-bottom:20px">
-      ${PROJECTS.map(p=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:0.5px solid var(--border)"><span style="color:var(--ash)">${p.id}</span><span style="font-family:var(--fc);color:var(--gold)">${p.pts} pts/day</span></div>`).join('')}
+      ${PROJECTS.map(function(p){return '<div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:0.5px solid var(--border)"><span style="color:var(--ash)">'+p.id+'</span><span style="font-family:var(--fc);color:var(--gold)">'+p.pts+' pts/day</span></div>';}).join('')}
       <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0"><span style="color:var(--ash)">Clean Temper</span><span style="font-family:var(--fc);color:var(--gold)">20 pts/day</span></div>
     </div>
     <div class="st">Data</div>
-    <div class="card">
+    <div class="card" style="margin-bottom:20px">
       <div style="font-size:13px;color:var(--ash);margin-bottom:6px">All data stored in Supabase. Persistent across all devices.</div>
       <div style="font-size:11px;color:var(--border2)">fswqranekmivhaykfgzy.supabase.co</div>
+    </div>
+    <div class="st">Danger zone</div>
+    <div class="card">
+      <div style="margin-bottom:4px;font-family:var(--fc);font-size:13px;color:var(--parch)">Clean State</div>
+      <div style="font-size:12px;color:var(--ash);margin-bottom:10px">Wipe all campaign data. A local backup is saved first.</div>
+      <button class="btn btn-danger btn-sm" onclick="openCleanState()">Clean State</button>
     </div>
   `;
 }
 
- async function confirmStartDate(){
-  localStorage.setItem('qa_start',S._pendingStart||'');
-  closeModal('start-date-modal');
-  toast('Start date updated. Older data hidden (not deleted).','info',4000);
-  updateSidebarDates();
-  S.allSessions=[];S.allLogs=[];
-  await loadAll();
-  renderSettings();
-}
 async function saveStartDate(){
   const val=document.getElementById('start-date-input').value;
   if(!val){toast('Please enter a valid date.','error');return;}
   if(val>=getGameEnd()){toast('Start date must be before end date.','error');return;}
-  const{data:prior}=await db.from('sessions').select('id').lt('date',val).limit(1);
-  if(prior&&prior.length>0){
-    var lbl=document.getElementById('sdate-new-label');
-    if(lbl)lbl.textContent=ordinalDate(val);
-    document.getElementById('start-date-modal').classList.add('open');
-    S._pendingStart=val;
-    return;
-  }
   localStorage.setItem('qa_start',val);
   document.getElementById('sb-countdown').textContent=daysLeft()+' days';
   toast('Start date saved.','success');
   updateSidebarDates();
-  S.allSessions=[];S.allLogs=[];
   renderSettings();
 }
 
@@ -2897,11 +2918,14 @@ async function renderFood(){
   // Today's entries
   const todayLogs=logs.filter(l=>l.date===today());
   const todayHTML=todayLogs.length>0?todayLogs.map(function(l){
-    return`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">
-      <div style="font-family:var(--fc);font-size:10px;color:var(--gold);width:80px;flex-shrink:0">${l.meal_type}</div>
-      <div style="flex:1;color:var(--parch)">${l.description}</div>
-      <div style="font-size:11px;padding:3px 8px;border-radius:4px;background:${l.healthy?'var(--safe-dim)':'var(--ember-dim)'};color:${l.healthy?'var(--safe)':'var(--ember)'};flex-shrink:0">${l.healthy?'Healthy':'Unhealthy'}</div>
-    </div>`;
+    var bg=l.healthy?'var(--safe-dim)':'var(--ember-dim)';
+    var col=l.healthy?'var(--safe)':'var(--ember)';
+    var label=l.healthy?'Healthy':'Unhealthy';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">'
+      +'<div style="font-family:var(--fc);font-size:10px;color:var(--gold);width:80px;flex-shrink:0">'+l.meal_type+'</div>'
+      +'<div style="flex:1;color:var(--parch)">'+l.description+'</div>'
+      +'<div style="font-size:11px;padding:3px 8px;border-radius:4px;background:'+bg+';color:'+col+';flex-shrink:0">'+label+'</div>'
+      +'</div>';
   }).join(''):'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:8px 0">No meals logged today</div>';
 
   // Heatmap HTML
@@ -2919,10 +2943,14 @@ async function renderFood(){
       const data=dayMap[ds];const isFuture=ds>today();
       const color=isFuture?'var(--card2)':data?dayColor(data):'var(--border)';
       const meals=data?data.meals.length:0;
-      grid+=`<div style="background:${color};border-radius:4px;padding:4px;min-height:40px;opacity:${isFuture?0.3:1};cursor:${data?'pointer':'default'}" onclick="${data?'foodDayClick(\''+ds+'\')':''}">
-        <div style="font-family:var(--fc);font-size:9px;color:var(--parch)">${d}</div>
-        ${data?`<div style="font-size:9px;color:rgba(255,255,255,0.7)">${meals}m</div>`:''}
-      </div>`;
+      var gcursor=data?'pointer':'default';
+      var gopacity=isFuture?0.3:1;
+      var gonclick=data?'foodDayClick(\"'+ds+'\")':'';
+      var gmeal=data?'<div style="font-size:9px;color:rgba(255,255,255,0.7)">'+meals+'m</div>':'';
+      grid+='<div style="background:'+color+';border-radius:4px;padding:4px;min-height:40px;opacity:'+gopacity+';cursor:'+gcursor+'" onclick="'+gonclick+'">'
+        +'<div style="font-family:var(--fc);font-size:9px;color:var(--parch)">'+d+'</div>'
+        +gmeal
+        +'</div>';
     }
     heatHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <button class="cal-nav-btn" onclick="foodCalPrev()">← Prev</button>
@@ -2942,7 +2970,7 @@ async function renderFood(){
       const meals=data?data.meals:[];
       weekHTML+=`<div style="background:${color};border-radius:8px;padding:10px;opacity:${isFuture?0.3:1}">
         <div style="font-family:var(--fc);font-size:9px;color:var(--parch);margin-bottom:6px">${dayNames[i]} ${d.getDate()}</div>
-        ${meals.map(m=>`<div style="font-size:11px;margin-bottom:3px;color:var(--parch)"><span style="font-family:var(--fc);font-size:8px;color:${m.healthy?'var(--safe)':'var(--ember)'}">${m.meal_type.substring(0,1)}</span> ${m.description.substring(0,20)}${m.description.length>20?'...':''}</div>`).join('')||`<div style="font-size:11px;color:rgba(255,255,255,0.3)">—</div>`}
+        ${(function(){var ml=meals.map(function(m){return'<div style="font-size:11px;margin-bottom:3px;color:var(--parch)"><span style="font-family:var(--fc);font-size:8px;color:'+(m.healthy?'var(--safe)':'var(--ember)')+'">'+m.meal_type.substring(0,1)+'</span> '+m.description.substring(0,20)+(m.description.length>20?'...':'')+'</div>';}).join('');return ml||'<div style="font-size:11px;color:rgba(255,255,255,0.3)">—</div>';})()}
       </div>`;
     }
     weekHTML+='</div>';
@@ -3118,7 +3146,7 @@ async function renderMilestones(){
   }).join('')
   :'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:20px 0">No milestones yet.</div>';
 
-  const filterOptions=`<option value="all">All projects</option>${PROJECTS.map(p=>`<option value="${p.id}" ${milestoneFilter===p.id?'selected':''}>${p.id}</option>`).join('')}`;
+  const filterOptions='<option value="all">All projects</option>'+PROJECTS.map(function(p){return'<option value="'+p.id+'" '+(milestoneFilter===p.id?'selected':'')+'>'+p.id+'</option>';}).join('');
 
   document.getElementById('screen-milestones').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
@@ -3380,7 +3408,7 @@ async function renderCalendar(){
         </div>
         <div style="text-align:right">
           <div style="font-family:var(--fc);font-size:28px;color:var(--gold);line-height:1">${fmtPts(data.total||0)}</div>
-          <div style="font-size:11px;color:var(--ash)">of 80 pts</div>
+          <div style="font-size:11px;color:var(--ash)">of ${dailyMax()} pts</div>
         </div>
       </div>
       <div class="st">Sessions</div>
@@ -3447,7 +3475,7 @@ function calNext(){
   else S.calDate.setFullYear(S.calDate.getFullYear()+1);
   renderCalendar();
 }
-function calSelect(d){S.calSelected=S.calSelected===d?null:d;renderCalendar();}
+async function calSelect(d){S.calSelected=S.calSelected===d?null:d;await renderCalendar();}
 
 // ── SESSION PAGINATION HELPER ──────────────────────────
 function sessPageChange(pid, screenKey, newPage){
