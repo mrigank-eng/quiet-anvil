@@ -399,7 +399,7 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
   <div class="modal">
     <div class="modal-title" id="sm-title">Log session</div>
     <div class="modal-sub" id="sm-sub"></div>
-    <label>Tangibles</label><input type="number" id="sm-tangible" step="any" min="0">
+    <div id="sm-tangible-wrap"><label>Tangibles</label><input type="number" id="sm-tangible" step="any" min="0"></div>
     <div id="sm-cat-wrap"><label>Category</label><select id="sm-category"><option value="">Optional</option></select></div>
     <div id="sm-lang-wrap" style="display:none"><label>Language</label><select id="sm-language"><option value="">Select</option><option>Urdu</option><option>Hindi</option><option>English</option></select></div>
     <label>Notes</label><input type="text" id="sm-notes" placeholder="What you worked on...">
@@ -1458,14 +1458,25 @@ function openSession(pid){
   const proj=PROJECTS.find(p=>p.id===pid);
   S.pendingSessionPid=pid;
   document.getElementById('sm-title').textContent=proj.id;
-  document.getElementById('sm-sub').textContent=proj.unit+' · '+proj.pts+' points per session';
-  document.getElementById('sm-tangible').placeholder='Tangibles ('+proj.unit+')';
-  document.getElementById('sm-tangible').value='';
   document.getElementById('sm-notes').value='';
   const catSel=document.getElementById('sm-category');
   catSel.innerHTML='<option value="">Category (optional)</option>';
-  if(proj.cats.length>0){proj.cats.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;catSel.appendChild(o);});document.getElementById('sm-cat-wrap').style.display='block';}
-  else{document.getElementById('sm-cat-wrap').style.display='none';}
+  if(proj.uniqueDays){
+    // Iron Forge: tangible always 1, just log the muscle group session
+    document.getElementById('sm-tangible').value='1';
+    document.getElementById('sm-tangible-wrap').style.display='none';
+    document.getElementById('sm-sub').textContent='1 session · '+proj.pts+' points';
+    catSel.innerHTML='<option value="">Select muscle group</option>';
+    proj.cats.forEach(function(cat){const o=document.createElement('option');o.value=cat;o.textContent=cat;catSel.appendChild(o);});
+    document.getElementById('sm-cat-wrap').style.display='block';
+  } else {
+    document.getElementById('sm-tangible').value='';
+    document.getElementById('sm-tangible-wrap').style.display='block';
+    document.getElementById('sm-sub').textContent=proj.unit+' · '+proj.pts+' points per session';
+    catSel.innerHTML='<option value="">Category (optional)</option>';
+    if(proj.cats.length>0){proj.cats.forEach(function(cat){const o=document.createElement('option');o.value=cat;o.textContent=cat;catSel.appendChild(o);});document.getElementById('sm-cat-wrap').style.display='block';}
+    else{document.getElementById('sm-cat-wrap').style.display='none';}
+  }
   document.getElementById('sm-lang-wrap').style.display=proj.hasLang?'block':'none';
   document.getElementById('session-modal').classList.add('open');
 }
@@ -1484,8 +1495,9 @@ function distributePoints(total, n){
 
 async function submitSession(){
   const proj=PROJECTS.find(p=>p.id===S.pendingSessionPid);
-  const tangible=parseFloat(document.getElementById('sm-tangible').value);
-  if(!tangible||tangible<=0){toast('Please enter an amount.','error');return;}
+  const tangible=proj.uniqueDays?1:parseFloat(document.getElementById('sm-tangible').value);
+  if(!proj.uniqueDays&&(!tangible||tangible<=0)){toast('Please enter an amount.','error');return;}
+  if(proj.uniqueDays&&!document.getElementById('sm-category').value){toast('Please select a muscle group.','error');return;}
   const category=document.getElementById('sm-category').value;
   const notes=document.getElementById('sm-notes').value;
   const language=document.getElementById('sm-language').value;
@@ -1935,7 +1947,7 @@ async function renderProject(screenKey){
   const catCounts=(function(){
     const counts={};
     proj.cats.forEach(function(c){counts[c]=0;});
-    allPS.forEach(function(s){if(s.category&&counts[s.category]!==undefined)counts[s.category]+=(s.tangible_logged||1);});
+    allPS.forEach(function(s){if(s.category&&counts[s.category]!==undefined)counts[s.category]+=(proj.uniqueDays?1:(s.tangible_logged||1));});
     return counts;
   })();
   const l=getLvl(proj.id,total,catCounts);
