@@ -2488,7 +2488,7 @@ function renderTemper(){
         +'<div>'
         +'<div style="font-family:var(--ff);font-size:15px;color:var(--parch);font-weight:500;line-height:1.4;margin-bottom:10px">'+c.label+'</div>'
         +'<div style="font-size:10px;color:var(--ash);margin-bottom:8px">'
-        +(longest>0?'Best: '+longest+'d &nbsp;·&nbsp; '+ctTitleFn(c.key,longest):'No streak yet')
+        +(longest>0?'Best: '+longest+'d &nbsp;·&nbsp; '+ctTitleFn(c.key,longest):cur>0?'Streak started — '+cur+' day'+(cur===1?'':'s'):'No streak yet')
         +(streak.last_break_date?' &nbsp;·&nbsp; Last break: '+streak.last_break_date:'')
         +'</div>'
         +journeyHTML
@@ -2575,23 +2575,42 @@ async function submitMilestone(){
 async function renderShare(){
   await loadAll();
   document.getElementById('screen-share').innerHTML=`
-    <div class="pt">Share</div>
-    <div class="ps">Three card types · Download as PNG · Post to Instagram</div>
-
-    <div class="st">Card 1 — Daily Forge</div>
-    <div class="share-card-outer"><div id="card-daily">${buildDailyCard()}</div></div>
-    <button class="btn btn-block" style="margin-bottom:28px" onclick="dlCard('card-daily','forge-day-'+today())">Download daily card</button>
-
-    <div class="st">Card 2 — Campaign Snapshot</div>
-    <div class="share-card-outer"><div id="card-campaign">${buildCampaignCard()}</div></div>
-    <button class="btn btn-block" style="margin-bottom:28px" onclick="dlCard('card-campaign','forge-campaign-'+today())">Download campaign card</button>
-
-    <div class="st">Card 3 — Level Unlock</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-      ${PROJECTS.map(p=>`<button class="btn btn-sm" onclick="showUnlockCard('${p.id}')">${p.id}</button>`).join('')}
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px">
+      <div>
+        <div class="pt">Share</div>
+        <div class="ps">Download cards as PNG · Share your progress</div>
+      </div>
     </div>
-    <div class="share-card-outer"><div id="card-unlock">${buildUnlockCard(null)}</div></div>
-    <button class="btn btn-block" style="margin-bottom:8px" onclick="dlCard('card-unlock','forge-unlock-'+today())">Download unlock card</button>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start">
+
+      <div>
+        <div class="st" style="margin-bottom:12px">Daily Forge</div>
+        <div class="share-card-outer"><div id="card-daily">${buildDailyCard()}</div></div>
+        <button class="btn btn-block" style="margin-top:10px" onclick="dlCard('card-daily','forge-day-'+today())">↓ Download daily card</button>
+      </div>
+
+      <div>
+        <div class="st" style="margin-bottom:12px">Campaign Snapshot</div>
+        <div class="share-card-outer"><div id="card-campaign">${buildCampaignCard()}</div></div>
+        <button class="btn btn-block" style="margin-top:10px" onclick="dlCard('card-campaign','forge-campaign-'+today())">↓ Download campaign card</button>
+      </div>
+
+    </div>
+
+    <div style="margin-top:28px">
+      <div class="st" style="margin-bottom:12px">Level Milestone</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        ${PROJECTS.map(p=>`<button class="btn btn-sm" onclick="showUnlockCard('${p.id}')" style="font-size:11px">${p.id}</button>`).join('')}
+      </div>
+      <div style="display:flex;gap:24px;align-items:flex-start">
+        <div class="share-card-outer" style="flex-shrink:0"><div id="card-unlock">${buildUnlockCard(null)}</div></div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:10px;padding-top:4px">
+          <div style="font-size:12px;color:var(--ash);line-height:1.6">Select a project to generate a milestone card showing your current level, progress and unlock message.</div>
+          <button class="btn btn-block" onclick="dlCard('card-unlock','forge-unlock-'+today())">↓ Download milestone card</button>
+        </div>
+      </div>
+    </div>
   `;
 }
 
@@ -2686,29 +2705,41 @@ function buildCampaignCard(){
 }
 
 function buildUnlockCard(pid){
-  if(!pid)return`<div class="sc" style="min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center">
-    <div style="font-family:Cinzel,serif;font-size:14px;letter-spacing:0.15em;color:#8a6a1a">Select a project above</div>
-  </div>`;
-  const proj=PROJECTS.find(p=>p.id===pid);
-  const s=S.projects.find(p=>p.project===pid)||{};
-  const total=s.total_tangible||0;
-  const unlockCC=getCatCountsAll();
-  const l=getLvl(pid,total,unlockCC[pid]||{});
-  const title=getCurTitle(pid,total,unlockCC[pid]||{})||getTargetTitle(pid,total,unlockCC[pid]||{});
-  return`<div class="sc">
-    <div class="sc-eyebrow">The Quiet Anvil · Level Unlocked</div>
-    <div style="font-size:9px;letter-spacing:0.15em;color:#8a6a1a;margin-bottom:16px">${pid.toUpperCase()}</div>
-    <div style="font-family:Cinzel,serif;font-size:38px;color:#D4A84C;line-height:1.1;margin-bottom:8px">${title}</div>
-    <div style="font-family:Cinzel,serif;font-size:11px;letter-spacing:0.15em;color:#8a6a1a;margin-bottom:24px">Level ${l} of 10</div>
-    <div class="sc-divider"></div>
-    <div style="font-family:'EB Garamond',serif;font-size:14px;color:#F0E4CC;font-style:italic;line-height:1.7;margin:16px 0">${msg}</div>
-    <div class="sc-divider"></div>
-    <div style="display:flex;justify-content:space-between;margin-top:8px">
-      <div><div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:2px">TANGIBLE AT UNLOCK</div><div style="font-size:13px;color:#D4A84C;font-family:Cinzel,serif">${total.toLocaleString()} ${proj.unit}</div></div>
-      <div style="text-align:right"><div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:2px">DAY</div><div style="font-size:13px;color:#F0E4CC">${dayNum()} of ${totalCampaignDays()}</div></div>
-    </div>
-    <div class="sc-mark">quiet-anvil.vercel.app</div>
-  </div>`;
+  if(!pid)return '<div class="sc" style="min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center"><div style="font-family:Cinzel,serif;font-size:14px;letter-spacing:0.15em;color:#8a6a1a">Select a project above</div></div>';
+  var proj=getEffectiveProject(pid);
+  if(!proj)return '';
+  var s=S.projects.find(function(p){return p.project===pid;})||{};
+  var total=s.total_tangible||0;
+  var unlockCC=getCatCountsAll();
+  var l=getLvl(pid,total,unlockCC[pid]||{});
+  var curTitle=dispTitle(pid,total,unlockCC[pid]||{})||'';
+  var targetTitle=getTargetTitle(pid,total,unlockCC[pid]||{})||'';
+  var displayTitle=curTitle||targetTitle||proj.titles[0];
+  var msgs=UNLOCK_MSGS&&UNLOCK_MSGS[pid]?UNLOCK_MSGS[pid]:[];
+  var msg=msgs.length>0&&l>0?msgs[Math.min(l,msgs.length)-1]:'';
+  var pr=getProg(pid,total,unlockCC[pid]||{});
+  var html='<div class="sc">';
+  html+='<div class="sc-eyebrow">The Quiet Anvil · Level Milestone</div>';
+  html+='<div style="font-size:9px;letter-spacing:0.18em;color:#8a6a1a;margin-bottom:12px">'+pid.toUpperCase()+' · '+proj.pillar.toUpperCase()+'</div>';
+  html+='<div style="font-family:Cinzel,serif;font-size:36px;color:#D4A84C;line-height:1.1;margin-bottom:6px">'+displayTitle+'</div>';
+  html+='<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">';
+  html+='<div style="font-family:Cinzel,serif;font-size:11px;letter-spacing:0.15em;color:#8a6a1a">Level '+l+' of 10</div>';
+  html+='<div style="flex:1;height:2px;background:#2a2010;border-radius:1px"><div style="height:100%;width:'+pr+'%;background:#D4A84C;border-radius:1px"></div></div>';
+  html+='<div style="font-family:Cinzel,serif;font-size:11px;color:#D4A84C">'+Math.round(pr)+'%</div>';
+  html+='</div>';
+  html+='<div class="sc-divider"></div>';
+  if(msg){
+    html+='<div style="font-size:13px;color:#F0E4CC;font-style:italic;line-height:1.7;margin:16px 0;text-align:center">'+msg+'</div>';
+    html+='<div class="sc-divider"></div>';
+  }
+  html+='<div style="display:flex;justify-content:space-between;margin-top:16px">';
+  html+='<div><div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:4px">'+proj.unit.toUpperCase()+' LOGGED</div><div style="font-size:15px;color:#D4A84C;font-family:Cinzel,serif">'+total.toLocaleString()+'</div></div>';
+  html+='<div style="text-align:center"><div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:4px">DAY</div><div style="font-size:15px;color:#F0E4CC">'+dayNum()+' / '+totalCampaignDays()+'</div></div>';
+  html+='<div style="text-align:right"><div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:4px">REMAINING</div><div style="font-family:Cinzel,serif;font-size:15px;color:#D4A84C">'+daysLeft()+'d</div></div>';
+  html+='</div>';
+  html+='<div class="sc-mark">quiet-anvil.vercel.app</div>';
+  html+='</div>';
+  return html;
 }
 
 function showUnlockCard(pid){const el=document.getElementById('card-unlock');if(el)el.innerHTML=buildUnlockCard(pid);}
@@ -3315,32 +3346,69 @@ async function renderCalendar(){
     </div>${weekHTML}`;
 
   } else {
-    // Year heatmap
+    // Year heatmap — GitHub contribution style with correct month alignment
     const year=S.calDate.getFullYear();
-    const startDate=new Date(year,0,1);
-    const weeks=[];let week=[];
-    const firstDow=startDate.getDay();
-    for(let i=0;i<firstDow;i++)week.push(null);
-    let dd=new Date(startDate);
-    while(dd.getFullYear()===year){week.push(new Date(dd));if(week.length===7){weeks.push(week);week=[];}dd.setDate(dd.getDate()+1);}
-    if(week.length>0){while(week.length<7)week.push(null);weeks.push(week);}
-    const mPos={};weeks.forEach(function(w,wi){w.forEach(function(d){if(d&&d.getDate()===1)mPos[wi]=d.toLocaleDateString('en-GB',{month:'short'});});});
-    let yHTML='<div style="overflow-x:auto"><div style="display:flex;gap:2px">';
-    yHTML+='<div style="display:flex;flex-direction:column;gap:2px;margin-right:4px;padding-top:16px">';
-    ['','Mon','','Wed','','Fri',''].forEach(l=>yHTML+=`<div style="font-family:var(--fc);font-size:8px;color:var(--ash);height:12px;line-height:12px;width:24px">${l}</div>`);
-    yHTML+='</div>';
+    // Build all weeks of the year
+    // Start from the Sunday on or before Jan 1
+    const jan1=new Date(year,0,1);
+    const gridStart=new Date(jan1);
+    gridStart.setDate(jan1.getDate()-jan1.getDay()); // back to Sunday
+    const weeks=[];
+    let cur=new Date(gridStart);
+    // Build until we've passed Dec 31
+    const dec31=new Date(year,11,31);
+    while(cur<=dec31){
+      const week=[];
+      for(let d=0;d<7;d++){
+        week.push(new Date(cur));
+        cur.setDate(cur.getDate()+1);
+      }
+      weeks.push(week);
+    }
+    // Build month label positions: find first week where month changes
+    // Use a proportional approach: label at week index where 1st of month falls
+    const monthLabels={};
     weeks.forEach(function(w,wi){
-      yHTML+=`<div style="display:flex;flex-direction:column;gap:2px"><div style="font-family:var(--fc);font-size:8px;color:var(--ash);height:14px;line-height:14px">${mPos[wi]||''}</div>`;
       w.forEach(function(day){
-        if(!day){yHTML+=`<div style="width:12px;height:12px"></div>`;return;}
-        const ds=localDateStr(day);
-        const data=dayData[ds];const isFuture=ds>today();const t=data?.total||0;
-        const bg=isFuture?'var(--card2)':data?scoreColor(t,data.pen||0):'rgba(74,66,56,0.3)';
-        yHTML+=`<div style="width:12px;height:12px;border-radius:2px;background:${bg};cursor:${data?'pointer':'default'}" title="${ds}: ${t} pts" onclick="${data?'calSelect(\''+ds+'\')':''}"></div>`;
+        if(day.getFullYear()===year&&day.getDate()===1){
+          monthLabels[wi]=day.toLocaleDateString('en-GB',{month:'short'});
+        }
       });
-      yHTML+='</div>';
     });
-    yHTML+='</div></div>';
+    // Day labels: Mon, Wed, Fri in correct rows (0=Sun,1=Mon,...6=Sat)
+    const dayLabels=['','Mon','','Wed','','Fri',''];
+    let yHTML='<div style="overflow-x:auto;padding-bottom:4px"><table style="border-spacing:2px;border-collapse:separate">';
+    // Month header row
+    yHTML+='<tr><td style="width:28px"></td>';
+    weeks.forEach(function(w,wi){
+      const label=monthLabels[wi]||'';
+      yHTML+='<td style="font-family:var(--fc);font-size:9px;color:var(--ash);text-align:left;white-space:nowrap;vertical-align:bottom;padding-bottom:2px">'+label+'</td>';
+    });
+    yHTML+='</tr>';
+    // Day rows (7 rows: Sun=0 through Sat=6)
+    for(let dow=0;dow<7;dow++){
+      yHTML+='<tr>';
+      yHTML+='<td style="font-family:var(--fc);font-size:8px;color:var(--ash);text-align:right;padding-right:4px;vertical-align:middle">'+dayLabels[dow]+'</td>';
+      weeks.forEach(function(w){
+        const day=w[dow];
+        const ds=localDateStr(day);
+        const inYear=day.getFullYear()===year;
+        const data=inYear?dayData[ds]:null;
+        const isFuture=ds>localToday();
+        const t=data?data.total:0;
+        let bg;
+        if(!inYear)bg='transparent';
+        else if(isFuture)bg='var(--card2)';
+        else if(data)bg=scoreColor(t,data.pen||0);
+        else bg='rgba(74,66,56,0.3)';
+        const isLToday=ds===localToday()&&inYear;
+        const border=isLToday?'border:1px solid #4A9EBF;':'';
+        yHTML+='<td style="padding:0"><div style="width:12px;height:12px;border-radius:2px;background:'+bg+';'+border+'cursor:'+(data?'pointer':'default')+'" title="'+ds+(inYear?': '+t+' pts':'')+'" onclick="'+(data?'calSelect(\''+ds+'\')':'')+'"></div></td>';
+      });
+      yHTML+='</tr>';
+    }
+    yHTML+='</table></div>';
+
     contentHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <button class="cal-nav-btn" onclick="calPrev()">← ${year-1}</button>
       <div style="display:flex;align-items:center;gap:10px">
