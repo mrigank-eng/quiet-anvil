@@ -351,10 +351,10 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
   <div id="screen-proj-water" class="screen"><div class="loading">Loading...</div></div>
   <div id="screen-proj-giving" class="screen"><div class="loading">Loading...</div></div>
   <div id="screen-temper" class="screen"><div class="loading">Loading commandments...</div></div>
-  <div id="screen-willmaster" class="screen"><div class="loading">Loading Willmaster...</div></div>
+  </div>
   <div id="screen-meta" class="screen"><div class="loading">Loading meta rank...</div></div>
   <div id="screen-calendar" class="screen"><div class="loading">Loading calendar...</div></div>
-  <div id="screen-report" class="screen"><div class="loading">Building report...</div></div>
+  </div>
   <div id="screen-milestones" class="screen"><div class="loading">Loading milestones...</div></div>
   <div id="screen-share" class="screen"><div class="loading">Building share cards...</div></div>
   <div id="screen-food" class="screen"><div class="loading">Loading food log...</div></div>
@@ -1124,10 +1124,8 @@ function renderActive(){
   else if(id==='armoury')renderArmoury();
   else if(id.startsWith('proj-'))renderProject(id);
   else if(id==='temper')renderTemper();
-  else if(id==='willmaster')renderWillmaster();
   else if(id==='meta')renderMeta();
   else if(id==='calendar')renderCalendar();
-  else if(id==='report')renderReport();
   else if(id==='milestones')renderMilestones();
   else if(id==='share')renderShare();
   else if(id==='food')renderFood();
@@ -1887,9 +1885,13 @@ async function renderArmoury(){
     const armPendStr=(function(p){
       if(!p||p.type==='ceiling')return'';
       if(p.type==='unlocked')return'<span style="color:var(--safe)">✓ '+p.title+'</span>';
-      if(p.type==='total')return p.gap.toLocaleString()+' '+p.unit+' to <em>'+p.title+'</em>';
-      if(p.type==='floors')return'0 tangible gap · '+(Object.keys(p.gaps||{}).length)+' categories remaining';
-      if(p.type==='both')return p.totalGap+' '+p.unit+' to <em>'+p.title+'</em>';
+      // Case 1: tangible not met (floors may or may not be met — just show tangible gap)
+      if(p.type==='total'||p.type==='both')return(p.gap||p.totalGap).toLocaleString()+' '+p.unit+' to <em>'+p.title+'</em>';
+      // Case 2: tangible met, floors not met
+      if(p.type==='floors'){
+        var unmet=Object.keys(p.gaps||{}).length;
+        return unmet+' floor'+(unmet===1?'':'s')+' unmet for <em>'+p.title+'</em>';
+      }
       return'';
     })(armPend);
     cardsHTML+=`<div class="ac" onclick="nav('${proj.key}')">
@@ -2076,22 +2078,19 @@ async function renderProject(screenKey){
     const cls=done?'done':isCur?'current':floorBlocked?'blocked':'future';
     const pendingLine=(function(){
       if(!isCur&&!floorBlocked)return'';
-      if(floorBlocked){
-        const lockedCats=proj.floors?Object.keys(proj.floors).filter(function(cat){return(catCounts[cat]||0)<proj.floors[cat][i];}).length:0;
-        return lockedCats>0?'<div style="font-size:10px;color:var(--warn);font-style:italic;margin:2px 0 4px 20px">'+lockedCats+' categor'+(lockedCats===1?'y':'ies')+' remaining</div>':'';
-      }
-      const gap=threshold-total;
-      const floorUnit=proj.uniqueDays?'sessions':proj.unit;
+      const gap=floorBlocked?0:threshold-total;
+      const gapStr=gap.toLocaleString()+' '+proj.unit+' to go';
       if(proj.floors){
-        const lockedCats=Object.keys(proj.floors).filter(function(cat){return(catCounts[cat]||0)<proj.floors[cat][i];}).length;
         const totalCats=Object.keys(proj.floors).length;
+        const lockedCats=Object.keys(proj.floors).filter(function(cat){return(catCounts[cat]||0)<proj.floors[cat][i];}).length;
         const clearedCats=totalCats-lockedCats;
-        return'<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ash);font-style:italic;margin:2px 0 4px 20px">'
-          +'<span>'+gap.toLocaleString()+' '+proj.unit+' to go</span>'
-          +'<span>'+clearedCats+'/'+totalCats+' floors cleared</span>'
+        const floorColor=floorBlocked?'var(--warn)':'var(--ash)';
+        return'<div style="display:flex;justify-content:space-between;font-size:10px;font-style:italic;margin:2px 0 6px 0;padding:0 2px">'
+          +'<span style="color:var(--ash)">'+gapStr+'</span>'
+          +'<span style="color:'+floorColor+'">'+clearedCats+'/'+totalCats+' floors cleared</span>'
           +'</div>';
       }
-      return'<div style="font-size:10px;color:var(--ash);font-style:italic;margin:2px 0 4px 20px">'+gap.toLocaleString()+' '+proj.unit+' to go</div>';
+      return'<div style="font-size:10px;color:var(--ash);font-style:italic;margin:2px 0 6px 0">'+gapStr+'</div>';
     })();
     return`<div class="lj-row ${cls}">
       <div class="lj-dot" style="background:${dotColor}"></div>
@@ -2160,10 +2159,10 @@ async function renderProject(screenKey){
     </div>`:''}
 
     <div class="card" style="margin-bottom:14px;padding:20px 24px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <div>
-          <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.18em;color:var(--ash);margin-bottom:6px">PROGRESS TOWARD CEILING</div>
-          <div style="font-family:var(--fc);font-size:32px;color:var(--parch);line-height:1">${total.toLocaleString()} <span style="font-size:14px;color:var(--ash)">${proj.unit}</span></div>
+          <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.18em;color:var(--ash);margin-bottom:8px">PROGRESS TOWARD CEILING</div>
+          <div style="font-family:var(--fc);font-size:32px;color:var(--parch);line-height:1">${total.toLocaleString()} <span style="font-size:14px;color:var(--ash)">${proj.unit}</span>&nbsp;<span style="font-family:var(--fc);font-size:16px;color:var(--ash)">(${Math.round(total/proj.ceiling*100)}%)</span></div>
         </div>
       </div>
       <div style="display:flex;justify-content:flex-end;align-items:baseline;margin-bottom:4px">
@@ -2243,167 +2242,49 @@ function renderTemper(){
     ${CMDS.map(function(c){
       const streak=S.streaks.find(s=>s.commandment===c.short)||{};
       const cur=streak.current_streak||0;const longest=streak.longest_streak||0;
-      const title=ctTitleFn(c.key,cur);const next=ctNextFn(c.key,cur);
       const todayKept=S.todayLog?.[c.key]===true;const todayBroke=S.todayLog?.[c.key]===false;
       const statusColor=todayKept?'var(--safe)':todayBroke?'var(--ember)':'var(--border)';
-      const statusBg=todayKept?'var(--safe-dim)':todayBroke?'var(--ember-dim)':'transparent';
-      return`<div class="card" style="margin-bottom:8px;border-color:${statusColor}">
-        <div style="display:grid;grid-template-columns:1fr auto;gap:24px;align-items:start;padding:4px 0">
-
-          <!-- LEFT: commandment text large, then streak info below -->
-          <div>
-            <div style="font-family:var(--ff);font-size:16px;color:var(--parch);font-weight:500;line-height:1.5;margin-bottom:10px">${c.label}</div>
-            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
-              <div style="font-family:var(--fc);font-size:13px;color:${cur>0?'var(--gold)':'var(--ash)'}">${title}</div>
-              <div style="font-size:11px;color:var(--ash);background:var(--card2);padding:2px 10px;border-radius:4px;font-family:var(--fc)">${cur} day${cur!==1?'s':''}</div>
-              ${next?`<div style="font-size:11px;color:var(--ash)">→ <span style="color:var(--parch);font-family:var(--fc)">${next.title}</span> in <span style="color:var(--gold)">${next.rem}d</span></div>`:''}
-            </div>
-            <div style="font-size:11px;color:var(--border2)">
-              ${longest>0?'Best: '+longest+'d &nbsp;·&nbsp; '+ctTitleFn(c.key,longest):'No streak yet'}
-              ${streak.last_break_date?' &nbsp;·&nbsp; Last break: '+streak.last_break_date:''}
-            </div>
-          </div>
-
-          <!-- RIGHT: points large, today status, then buttons -->
-          <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:10px;min-width:100px">
-            <div>
-              <div style="font-family:var(--fc);font-size:32px;color:var(--gold);line-height:1">${todayKept?c.pts:0}</div>
-              <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.15em;color:var(--ash)">of ${c.pts} PT${c.pts>1?'S':''}</div>
-            </div>
-            <div style="font-family:var(--fc);font-size:11px;letter-spacing:0.1em;color:${todayKept?'var(--safe)':todayBroke?'var(--ember)':'var(--warn)'};min-height:16px">
-              ${todayKept?'✓ KEPT':todayBroke?'✗ BROKEN':'○ UNMARKED'}
-            </div>
-            <div style="display:flex;flex-direction:column;gap:6px;width:100%">
-              <button class="ct-btn-kept ${todayKept?'active':''}" onclick="handleCT('${c.key}','${c.label}',true)" style="width:100%">Kept</button>
-              <button class="ct-btn-broke ${todayBroke?'active':''}" onclick="handleCT('${c.key}','${c.label}',false)" style="width:100%">Broken</button>
-            </div>
-          </div>
-
-        </div>
-      </div>`;
-    }).join('')}
-  `;
-}
-
-// ── WILLMASTER ─────────────────────────────────────────
-function setWmDays(n){S.wmDays=n;renderWillmaster();}
-async function renderWillmaster(){
-  await loadAll();
-  // Build heatmap — from N days ago to TODAY only (left=oldest, right=most recent)
-  // Only past and today — no future boxes
-  const heatDays=S.wmDays||30;
-  const heatData={};
-  const now=new Date();
-  const todayStr=today();
-  const gameStartStr=getGameStart();
-  for(let i=heatDays-1;i>=0;i--){
-    const d=new Date(now);d.setDate(d.getDate()-i);
-    const ds=d.toISOString().split('T')[0];
-    // Only show days from game start onwards, and not future days
-    if(ds>=gameStartStr&&ds<=todayStr){
-      heatData[ds]={};
-      CMDS.forEach(c=>heatData[ds][c.key]=null);
-    }
-  }
-  S.allLogs.forEach(function(l){if(heatData[l.date])CMDS.forEach(c=>{heatData[l.date][c.key]=l[c.key];});});
-  const heatDates=Object.keys(heatData).sort(); // oldest first = left to right
-
-  // Month labels for heatmap
-  function getMonthLabels(dates){
-    const labels=[];let lastMonth=-1;
-    dates.forEach(function(ds,i){
-      const m=new Date(ds).getMonth();
-      if(m!==lastMonth){labels.push({i,label:new Date(ds).toLocaleDateString('en-GB',{month:'short'})});lastMonth=m;}
-    });
-    return labels;
-  }
-
-  document.getElementById('screen-willmaster').innerHTML=`
-    <div class="pt">The Willmaster</div>
-    <div class="ps">Streak progression · 11 titles per commandment · Select your window</div>
-    <div class="g4" style="margin-bottom:20px">
-      <div class="sb"><div class="sb-num" style="color:var(--gold)">${S.streaks.reduce((m,s)=>Math.max(m,s.current_streak||0),0)}</div><div class="sb-lbl">Best Streak</div></div>
-      <div class="sb"><div class="sb-num">${S.streaks.reduce((m,s)=>Math.max(m,s.longest_streak||0),0)}</div><div class="sb-lbl">All-Time Best</div></div>
-      <div class="sb"><div class="sb-num" style="color:var(--safe)">${S.streaks.filter(s=>(s.current_streak||0)>=7).length}</div><div class="sb-lbl">Active (7d+)</div></div>
-      <div class="sb"><div class="sb-num" style="color:var(--ember)">${S.streaks.reduce((t,s)=>t+(s.total_breaks||0),0)}</div><div class="sb-lbl">Total Breaks</div></div>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px">
-      <span style="font-family:var(--fc);font-size:10px;color:var(--ash);letter-spacing:0.1em">HEATMAP WINDOW</span>
-      ${[7,14,30,60,90].map(n=>`<button class="cal-nav-btn ${S.wmDays===n?'active':''}" onclick="setWmDays(${n})" style="padding:4px 10px">${n}d</button>`).join('')}
-    </div>
-    ${CMDS.map(function(c){
-      const streak=S.streaks.find(s=>s.commandment===c.short)||{};
-      const cur=streak.current_streak||0;const longest=streak.longest_streak||0;
-      const curTitle=ctTitleFn(c.key,cur);const next=ctNextFn(c.key,cur);
-      const todayKept=S.todayLog?.[c.key]===true;const todayBroke=S.todayLog?.[c.key]===false;
-
-      // 90-day heatmap — horizontal scrollable strip, left=oldest, right=newest
-      const monthLabels=getMonthLabels(heatDates);
-      // Build month label row
-      let monthLabelHTML='<div style="display:flex;gap:0;margin-bottom:3px;position:relative;height:14px">';
-      monthLabels.forEach(function(ml){
-        monthLabelHTML+=`<div style="position:absolute;left:${ml.i*12}px;font-family:var(--fc);font-size:8px;color:var(--ash);letter-spacing:0.06em">${ml.label}</div>`;
-      });
-      monthLabelHTML+='</div>';
-      const heatStrip=heatDates.map(function(ds){
-        const val=heatData[ds][c.key];
-        const bg=val===true?'var(--safe)':val===false?'var(--ember)':'rgba(74,66,56,0.4)';
-        const dayLabel=new Date(ds).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
-        return`<div title="${dayLabel}: ${val===true?'Kept':val===false?'Broke':'Not recorded'}" style="width:10px;height:10px;border-radius:2px;background:${bg};flex-shrink:0;cursor:default"></div>`;
+      // Current title index
+      const curTitleIdx=(function(){
+        for(var i=CT_THR.length-1;i>=0;i--)if(cur>=CT_THR[i])return i;
+        return-1;
+      })();
+      // Build streak journey rows
+      const journeyHTML=CT_THR.map(function(thr,i){
+        const title=CT_TITLES[c.key][i];
+        const prevThr=i===0?0:CT_THR[i-1];
+        const done=cur>=thr;
+        const isActive=!done&&(i===0?cur<thr:cur>=prevThr&&cur<thr);
+        const pct=done?100:isActive?Math.round(((cur-prevThr)/(thr-prevThr))*100):0;
+        const dotCol=done?'var(--safe)':isActive?'var(--gold)':'var(--border2)';
+        const titleCol=done?'var(--safe)':isActive?'var(--gold)':'var(--ash)';
+        const barCol=done?'var(--safe)':isActive?'var(--gold)':'var(--border)';
+        return'<div style="display:flex;align-items:center;gap:8px;margin-bottom:'+(isActive?'2px':'1px')+'">'
+          +'<div style="width:6px;height:6px;border-radius:50%;background:'+dotCol+';flex-shrink:0"></div>'
+          +'<div style="font-family:var(--fc);font-size:'+(isActive?'11px':'10px')+';color:'+titleCol+';width:160px;flex-shrink:0">'+title+'</div>'
+          +'<div style="flex:1;height:'+(isActive?'4px':'2px')+';background:var(--card2);border-radius:2px;overflow:hidden">'
+          +'<div style="height:100%;width:'+pct+'%;background:'+barCol+';border-radius:2px;transition:width 0.4s"></div></div>'
+          +(isActive?'<div style="font-family:var(--fc);font-size:10px;color:var(--gold);width:30px;text-align:right">'+pct+'%</div>':'<div style="width:30px"></div>')
+          +'<div style="font-family:var(--fc);font-size:9px;color:var(--ash);width:36px;text-align:right">'+thr+'d</div>'
+          +'</div>'
+          +(isActive?'<div style="font-size:10px;color:var(--ash);font-style:italic;margin:0 0 4px 14px">'+cur+' / '+thr+' days</div>':'');
       }).join('');
-
-      const heatHTML=`<div style="overflow-x:auto;padding-bottom:4px">
-        <div style="min-width:${heatDays*12}px">
-          ${monthLabelHTML}
-          <div style="display:flex;gap:2px">${heatStrip}</div>
-          <div style="display:flex;justify-content:space-between;margin-top:4px">
-            <span style="font-size:9px;color:var(--ash)">90 days ago</span>
-            <span style="font-size:9px;color:var(--ash)">Today</span>
-          </div>
-        </div>
-      </div>`;
-
-      // Level progress bars
-      const curLvlIdx=CT_THR.findIndex(function(t){return cur<t;});
-      const showUntil=curLvlIdx===-1?CT_THR.length:Math.min(CT_THR.length,curLvlIdx+3);
-      const rowsHTML=CT_THR.map(function(t,i){
-        if(i>=showUntil&&i<CT_THR.length-1)return'';
-        const prevT=i===0?0:CT_THR[i-1];
-        const done=cur>=t;const isCur=!done&&cur>=prevT;
-        const barPct=done?100:isCur?Math.max(0,Math.min(100,Math.round(((cur-prevT)/(t-prevT))*100))):0;
-        const barColor=done?'var(--safe)':isCur?'var(--gold)':'var(--border)';
-        const ellipsis=(i===showUntil&&showUntil<CT_THR.length-1)?'<div style="text-align:center;font-size:10px;color:var(--border2);padding:3px 0">· · · '+(CT_THR.length-1-showUntil)+' more titles</div>':'';
-        return ellipsis+`<div class="lj-row ${isCur?'current':done?'done':'future'}" style="padding:4px 8px;margin-bottom:3px">
-          <div class="lj-dot" style="background:${isCur?'var(--gold)':done?'var(--safe)':'var(--border2)'}"></div>
-          <div class="lj-title" style="color:${isCur?'var(--gold)':done?'var(--safe)':'var(--ash)'};font-size:11px">${CT_TITLES[c.key][i]}</div>
-          <div class="lj-bar-track"><div class="lj-bar-fill" style="width:${barPct}%;background:${barColor}"></div></div>
-          <div class="lj-threshold" style="font-size:10px">${t}d</div>
-          <div class="lj-tag" style="color:${isCur?'var(--gold)':done?'var(--safe)':'var(--border2)'}">${isCur?barPct+'%':done?'✓':''}</div>
-        </div>`;
-      }).join('');
-
-      return`<div class="card" style="margin-bottom:12px;border-color:${todayKept?'var(--safe)':todayBroke?'var(--ember)':'var(--border)'}">
-        <div style="margin-bottom:10px">
-          <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px">
-            <div style="font-size:14px;color:var(--parch);font-weight:500;flex:1">${c.label}</div>
-            <div style="font-family:var(--fc);font-size:10px;color:var(--gold);flex-shrink:0">${c.pts}pt${c.pts>1?'s':''}</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:10px">
-            <div style="font-family:var(--fc);font-size:13px;color:var(--gold)">${curTitle}</div>
-            <div style="font-size:12px;color:var(--ash)">${cur} day streak</div>
-            ${next?`<div style="font-size:12px;color:var(--ash)">→ <span style="color:var(--parch)">${next.title}</span> in ${next.rem}d</div>`:''}
-            ${longest>0?`<div style="font-size:12px;color:var(--ash)">Best: ${longest}d</div>`:''}
-          </div>
-          <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.1em;margin-bottom:6px">LAST 90 DAYS${cur>90?' · Streak extends beyond window':''}</div>
-          ${heatHTML}
-          <div style="display:flex;gap:10px;margin-top:6px;font-size:10px;align-items:center">
-            <span style="display:flex;align-items:center;gap:3px"><div style="width:8px;height:8px;border-radius:2px;background:var(--safe)"></div>Kept</span>
-            <span style="display:flex;align-items:center;gap:3px"><div style="width:8px;height:8px;border-radius:2px;background:var(--ember)"></div>Broke</span>
-            <span style="display:flex;align-items:center;gap:3px"><div style="width:8px;height:8px;border-radius:2px;background:rgba(74,66,56,0.4)"></div>Not recorded</span>
-          </div>
-        </div>
-        ${rowsHTML}
-      </div>`;
+      return '<div class="card" style="margin-bottom:8px;border-color:'+statusColor+'">'
+        +'<div style="display:grid;grid-template-columns:1fr auto;gap:16px;align-items:start;padding:4px 0">'
+        +'<div>'
+        +'<div style="font-family:var(--ff);font-size:15px;color:var(--parch);font-weight:500;line-height:1.4;margin-bottom:10px">'+c.label+'</div>'
+        +'<div style="font-size:10px;color:var(--ash);margin-bottom:8px">'
+        +(longest>0?'Best: '+longest+'d &nbsp;·&nbsp; '+ctTitleFn(c.key,longest):'No streak yet')
+        +(streak.last_break_date?' &nbsp;·&nbsp; Last break: '+streak.last_break_date:'')
+        +'</div>'
+        +journeyHTML
+        +'</div>'
+        +'<div style="text-align:right;min-width:80px">'
+        +'<div style="font-family:var(--fc);font-size:28px;color:var(--gold);line-height:1">'+(todayKept?c.pts:0)+'</div>'
+        +'<div style="font-family:var(--fc);font-size:9px;letter-spacing:0.15em;color:var(--ash)">of '+c.pts+' PT'+(c.pts>1?'S':'')+'</div>'
+        +'<div style="font-family:var(--fc);font-size:10px;letter-spacing:0.1em;color:'+(todayKept?'var(--safe)':todayBroke?'var(--ember)':'var(--warn)')+';margin-top:8px">'
+        +(todayKept?'✓ KEPT':todayBroke?'✗ BROKEN':'○ UNMARKED')
+        +'</div></div></div></div>';
     }).join('')}
   `;
 }
@@ -2463,231 +2344,6 @@ async function renderMeta(){
 }
 
 // ── CALENDAR ───────────────────────────────────────────
-// ── REPORT ─────────────────────────────────────────────
-async function renderReport(){
-  document.getElementById('screen-report').innerHTML='<div class="loading">Building Anvil Report...</div>';
-  await loadAll();
-  const gNCT=S.allSessions.reduce((s,r)=>s+(r.points_earned||0),0);
-  const gCT=S.allLogs.reduce((s,r)=>s+ctPts(r),0);
-  const gTotal=gNCT+gCT;
-  const tPen=S.allSessions.reduce((s,r)=>s+(r.penalty||0),0);
-  const net=gTotal+tPen;
-  const pct=((net/maxPoints())*100).toFixed(1);
-  const dLogged=S.allLogs.length;
-  const avg=dLogged>0?Math.round(net/dLogged):0;
-  const perfDays=S.allLogs.filter(l=>ctPts(l)===20).length;
-
-  const repCC=getCatCountsAll();
-  const projHTML=PROJECTS.map(function(proj){
-    const s=S.projects.find(p=>p.project===proj.id)||{};
-    const total=s.total_tangible||0;
-    const l=getLvl(proj.id,total,repCC[proj.id]||{});const pr=getProg(proj.id,total,repCC[proj.id]||{});
-    const sc=S.allSessions.filter(x=>x.project===proj.id&&x.tangible_logged>0).length;
-    const ceilPct=Math.round(total/proj.ceiling*100);
-    return`<tr>
-      <td style="font-size:13px">${proj.id}</td>
-      <td style="font-family:var(--fc);font-size:11px;color:var(--gold)">${dispTitle(proj.id,total,repCC[proj.id]||{})}</td>
-      <td style="text-align:center;font-family:var(--fc);font-size:12px">${l}/10</td>
-      <td style="text-align:center;font-size:12px">${total.toLocaleString()} ${proj.unit}</td>
-      <td style="text-align:center;font-size:12px">${sc}</td>
-      <td style="text-align:center;font-size:12px">${ceilPct}%</td>
-      <td style="width:80px"><div class="prog-track" style="margin:0"><div class="prog-fill" style="width:${Math.min(100,ceilPct)}%"></div></div></td>
-    </tr>`;
-  }).join('');
-
-  const ctHTML=CMDS.map(function(c){
-    const streak=S.streaks.find(s=>s.commandment===c.short)||{};
-    const cur=streak.current_streak||0;
-    return`<tr>
-      <td style="font-size:12px">${c.label}</td>
-      <td style="font-family:var(--fc);font-size:11px;color:var(--gold)">${ctTitleFn(c.key,cur)}</td>
-      <td style="text-align:center;font-family:var(--fc);font-size:12px">${cur}</td>
-      <td style="text-align:center;font-size:12px">${streak.longest_streak||0}</td>
-      <td style="text-align:center;font-size:12px;color:var(--ember)">${streak.total_breaks||0}</td>
-    </tr>`;
-  }).join('');
-
-  const weeklyRows=[];
-  for(let w=weekNum();w>=Math.max(1,weekNum()-3);w--){
-    const wLogs=S.allLogs.filter(l=>Math.ceil((new Date(l.date)-GSTART())/864e5/7)===w);
-    const wSess=S.allSessions.filter(s=>Math.ceil((new Date(s.date)-GSTART())/864e5/7)===w);
-    const wPts=wSess.reduce((s,r)=>s+(r.points_earned||0),0)+wLogs.reduce((s,r)=>s+ctPts(r),0)+wSess.reduce((s,r)=>s+(r.penalty||0),0);
-    const wBest=wLogs.length?Math.max(...wLogs.map(l=>{const ds=wSess.filter(s=>s.date===l.date);return ctPts(l)+ds.reduce((a,x)=>a+(x.points_earned||0),0)+ds.reduce((a,x)=>a+(x.penalty||0),0);})):0;
-    weeklyRows.push({w,days:wLogs.length,pts:wPts,best:wBest});
-  }
-  const weeklyHTML=weeklyRows.map(r=>`<tr><td style="font-family:var(--fc);font-size:11px">Week ${r.w}</td><td style="text-align:center;font-size:12px">${r.days}</td><td style="text-align:center;font-family:var(--fc);color:var(--gold)">${r.pts}</td><td style="text-align:center;font-size:12px">${r.best}</td></tr>`).join('');
-
-  const activeDecls=S.declarations.filter(d=>d.end_date>=today());
-  const declHTML=activeDecls.length>0?activeDecls.map(d=>{
-    let projs='All';try{projs=JSON.parse(d.projects).join(', ');}catch(e){}
-    const isActive=d.start_date<=today()&&d.end_date>=today();
-    return`<div style="padding:8px 0;border-bottom:0.5px solid var(--border);display:flex;gap:12px;flex-wrap:wrap;align-items:center">
-      <span style="font-family:var(--fc);font-size:11px;color:var(--warn);width:90px;flex-shrink:0">${d.type}</span>
-      <span style="font-size:12px;color:var(--ash)">${ordinalDate(d.start_date)} → ${ordinalDate(d.end_date)}</span>
-      <span style="flex:1;font-size:12px;color:var(--parch)">${projs}</span>
-      ${isActive?'<span style="font-family:var(--fc);font-size:9px;color:var(--warn);padding:2px 6px;border:0.5px solid var(--warn);border-radius:3px">ACTIVE</span>':''}
-    </div>`;
-  }).join(''):'<div style="font-size:12px;color:var(--ash);font-style:italic">No declarations</div>';
-
-  // Build per-project canvas IDs
-  const projCanvases=PROJECTS.map(p=>`
-    <div style="margin-bottom:28px">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
-        <div style="font-family:var(--fc);font-size:12px;color:var(--gold);letter-spacing:0.08em">${p.id.toUpperCase()}</div>
-        <div style="font-size:11px;color:var(--ash)">${p.pillar}</div>
-      </div>
-      <div class="g2" style="align-items:start">
-        <div>
-          <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.12em;margin-bottom:6px">DAILY ${p.unit.toUpperCase()}</div>
-          <div style="position:relative;height:130px"><canvas id="proj-daily-${p.key}"></canvas></div>
-        </div>
-        <div>
-          <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.12em;margin-bottom:6px">CUMULATIVE ${p.unit.toUpperCase()}</div>
-          <div style="position:relative;height:130px"><canvas id="proj-cum-${p.key}"></canvas></div>
-        </div>
-      </div>
-    </div>
-  `).join('');
-
-  document.getElementById('screen-report').innerHTML=`
-    <div class="pt">The Anvil Report</div><div class="ps">Campaign biography · Every number tells a truth</div>
-    <div class="g4" style="margin-bottom:20px">
-      <div class="sb"><div class="sb-num" style="color:var(--gold)">${net.toLocaleString()}</div><div class="sb-lbl">Net Score</div></div>
-      <div class="sb"><div class="sb-num">${gTotal.toLocaleString()}</div><div class="sb-lbl">Gross Earned</div></div>
-      <div class="sb"><div class="sb-num" style="color:var(--ember)">${tPen}</div><div class="sb-lbl">Penalties</div></div>
-      <div class="sb"><div class="sb-num">${pct}%</div><div class="sb-lbl">Of Max</div></div>
-    </div>
-    <div class="g4" style="margin-bottom:24px">
-      <div class="sb"><div class="sb-num">${dLogged}</div><div class="sb-lbl">Days Logged</div></div>
-      <div class="sb"><div class="sb-num">${avg}</div><div class="sb-lbl">Avg / Day</div></div>
-      <div class="sb"><div class="sb-num" style="color:var(--safe)">${perfDays}</div><div class="sb-lbl">Perfect CT</div></div>
-      <div class="sb"><div class="sb-num">${daysLeft()}</div><div class="sb-lbl">Days Left</div></div>
-    </div>
-
-    <div class="st">Composite score over time</div>
-    <div class="card" style="margin-bottom:20px">
-      <div style="font-size:11px;color:var(--ash);margin-bottom:8px">Total points per day · All projects + CT in distinct colours</div>
-      <div style="position:relative;height:200px"><canvas id="report-chart"></canvas></div>
-    </div>
-
-    <div class="g2" style="align-items:start;margin-bottom:20px">
-      <div>
-        <div class="st">Weekly digest — last 4 weeks</div>
-        <div class="card"><table class="dt"><thead><tr><th style="text-align:left">Week</th><th style="text-align:center">Days</th><th style="text-align:center">Total</th><th style="text-align:center">Best day</th></tr></thead><tbody>${weeklyHTML}</tbody></table></div>
-      </div>
-      <div>
-        <div class="st">Declarations</div>
-        <div class="card">${declHTML}</div>
-      </div>
-    </div>
-
-    <div class="st">Project standings</div>
-    <div class="card" style="margin-bottom:20px;overflow-x:auto">
-      <table class="dt"><thead><tr>
-        <th style="text-align:left">Project</th>
-        <th style="text-align:left">Title</th>
-        <th style="text-align:center">Level</th>
-        <th style="text-align:center">Total</th>
-        <th style="text-align:center">Sessions</th>
-        <th style="text-align:center">Ceiling</th>
-        <th style="text-align:left;width:80px">Progress</th>
-      </tr></thead><tbody>${projHTML}</tbody></table>
-    </div>
-
-    <div class="st">Per-project graphs</div>
-    <div class="card" style="margin-bottom:20px">${projCanvases}</div>
-
-    <div class="st">Clean Temper — commandment streaks</div>
-    <div class="card" style="overflow-x:auto">
-      <table class="dt"><thead><tr>
-        <th style="text-align:left">Commandment</th>
-        <th style="text-align:left">Title</th>
-        <th style="text-align:center">Streak</th>
-        <th style="text-align:center">Longest</th>
-        <th style="text-align:center">Breaks</th>
-      </tr></thead><tbody>${ctHTML}</tbody></table>
-    </div>
-  `;
-
-  setTimeout(function(){
-    if(!S.allLogs.length)return;
-
-    // Composite chart — total per day with per-project breakdown
-    const allDates=[...new Set(S.allLogs.map(l=>l.date))].sort();
-    const projColors=['#D4A84C','#2A8060','#D04030','#D08820','#6B4FA0','#4A90A0'];
-    const ctColor='rgba(160,130,80,0.6)';
-
-    const projDatasets=PROJECTS.map(function(proj,i){
-      const data=allDates.map(function(date){
-        const sessions=S.allSessions.filter(s=>s.date===date&&s.project===proj.id);
-        return sessions.reduce((s,x)=>s+(x.points_earned||0),0);
-      });
-      return{label:proj.id,data,backgroundColor:projColors[i]+'44',borderColor:projColors[i],borderWidth:1.5,fill:true,tension:0.3,pointRadius:0};
-    });
-    const ctDataset={label:'CT',data:allDates.map(d=>{const l=S.allLogs.find(x=>x.date===d);return l?ctPts(l):0;}),backgroundColor:ctColor,borderColor:'#A08050',borderWidth:1,fill:true,tension:0.3,pointRadius:0};
-
-    const ctx=document.getElementById('report-chart');
-    if(ctx){var ec=Chart.getChart?Chart.getChart(ctx):null;if(ec)ec.destroy();}
-    if(ctx)new Chart(ctx,{type:'line',data:{labels:allDates,datasets:[...projDatasets,ctDataset]},options:{responsive:true,maintainAspectRatio:false,animation:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:true,labels:{color:'#A09080',font:{size:9},boxWidth:10}}},scales:{x:{stacked:true,ticks:{color:'#A09080',font:{size:9},maxTicksLimit:12},grid:{color:'rgba(74,66,56,0.4)'}},y:{stacked:true,ticks:{color:'#A09080',font:{size:9}},grid:{color:'rgba(74,66,56,0.4)'}}}}});
-
-    // Per-project individual charts
-    PROJECTS.forEach(function(proj,i){
-      const projSess=S.allSessions.filter(s=>s.project===proj.id&&s.tangible_logged>0);
-      if(!projSess.length)return;
-
-      // Aggregate by date
-      const dateMap={};
-      projSess.forEach(function(s){
-        if(proj.uniqueDays){dateMap[s.date]=1;}// Iron Forge: 1 day per date
-        else{dateMap[s.date]=(dateMap[s.date]||0)+s.tangible_logged;}
-      });
-      const dates=Object.keys(dateMap).sort();
-      const dailyVals=dates.map(d=>dateMap[d]);
-
-      // Cumulative
-      let cum=0;const cumVals=dailyVals.map(v=>{cum+=v;return cum;});
-
-      // Milestone annotations (vertical lines)
-      const projMilestones=S.milestones.filter(m=>m.project===proj.id);
-
-      // Level change annotations
-      const levelAnnotations={};
-      let runningTotal=0;
-      dates.forEach(function(date,idx){
-        const prev=runningTotal;runningTotal+=dailyVals[idx];
-        const repCC=getCatCountsAll();
-      const prevCC=Object.assign({},repCC[proj.id]||{});
-      const newCC=Object.assign({},repCC[proj.id]||{});
-      const prevLvl=getLvl(proj.id,prev,prevCC);const newLvl=getLvl(proj.id,runningTotal,newCC);
-        if(newLvl>prevLvl){levelAnnotations[idx]={lvl:newLvl,title:proj.titles[newLvl-1]};}
-      });
-
-      const color=projColors[i];
-      const pointBg=dates.map(function(d,idx){
-        if(projMilestones.some(m=>m.date===d))return'#FFD700';
-        if(levelAnnotations[idx])return color;
-        return color+'88';
-      });
-      const pointR=dates.map(function(d,idx){
-        if(projMilestones.some(m=>m.date===d))return 6;
-        if(levelAnnotations[idx])return 5;
-        return 0;
-      });
-
-      // Daily chart
-      const dCtx=document.getElementById('proj-daily-'+proj.key);
-      if(dCtx){var _edc=Chart.getChart?Chart.getChart(dCtx):null;if(_edc)_edc.destroy();}
-      if(dCtx)new Chart(dCtx,{type:'bar',data:{labels:dates,datasets:[{data:dailyVals,backgroundColor:color+'55',borderColor:color,borderWidth:1,pointBackgroundColor:pointBg,pointRadius:pointR}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{afterBody:function(items){const idx=items[0].dataIndex;const date=dates[idx];const ms=projMilestones.find(m=>m.date===date);const lvlAnn=levelAnnotations[idx];const lines=[];if(ms)lines.push('★ '+ms.description.substring(0,40));if(lvlAnn)lines.push('↑ Level '+lvlAnn.lvl+': '+lvlAnn.title);return lines;}}}},scales:{x:{ticks:{color:'#A09080',font:{size:8},maxTicksLimit:8},grid:{color:'rgba(74,66,56,0.3)'}},y:{ticks:{color:'#A09080',font:{size:8},callback:v=>v+' '+proj.unit},grid:{color:'rgba(74,66,56,0.3)'}}}}});
-
-      // Cumulative chart
-      const cCtx=document.getElementById('proj-cum-'+proj.key);
-      if(cCtx){var ecc=Chart.getChart?Chart.getChart(cCtx):null;if(ecc)ecc.destroy();}
-      if(cCtx){const pUnit=proj.unit;new Chart(cCtx,{type:'line',data:{labels:dates,datasets:[{data:cumVals,borderColor:color,backgroundColor:color+'18',borderWidth:2,fill:true,tension:0.4,pointBackgroundColor:pointBg,pointRadius:Math.max(3,pointR[0]||3)}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{afterBody:function(items){const idx=items[0].dataIndex;const date=dates[idx];const ms=projMilestones.find(function(m){return m.date===date;});const lvlAnn=levelAnnotations[idx];const lines=[];if(ms)lines.push('★ '+ms.description.substring(0,40));if(lvlAnn)lines.push('↑ Level '+lvlAnn.lvl+': '+lvlAnn.title);return lines;}}}},scales:{x:{ticks:{color:'#A09080',font:{size:8},maxTicksLimit:8},grid:{color:'rgba(74,66,56,0.3)'}},y:{beginAtZero:true,ticks:{color:'#A09080',font:{size:8},callback:function(v){return v+' '+pUnit;}},grid:{color:'rgba(74,66,56,0.3)'}}}}});};
-    });
-  
-  },150);
-
-}
 // ── MILESTONES ─────────────────────────────────────────
 function openMilestone(){document.getElementById('ms-modal').classList.add('open');}
 async function submitMilestone(){
@@ -3008,7 +2664,6 @@ async function renderFood(){
   const{data:foodLogs}=await db.from('food_log').select('*').order('date',{ascending:false});
   const logs=foodLogs||[];
 
-  // Build day lookup
   const dayMap={};
   logs.forEach(function(l){
     if(!dayMap[l.date])dayMap[l.date]={meals:[],hasUnhealthy:false,hasHealthy:false};
@@ -3024,218 +2679,57 @@ async function renderFood(){
     return'var(--safe)';
   }
 
-  // Today's entries
+  // Sort dates descending
+  const sortedDates=Object.keys(dayMap).sort().reverse();
+
+  // Today summary
   const todayLogs=logs.filter(l=>l.date===today());
   const todayHTML=todayLogs.length>0?todayLogs.map(function(l){
     var bg=l.healthy?'var(--safe-dim)':'var(--ember-dim)';
     var col=l.healthy?'var(--safe)':'var(--ember)';
-    var label=l.healthy?'Healthy':'Unhealthy';
-    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">'
+    return'<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:13px">'
       +'<div style="font-family:var(--fc);font-size:10px;color:var(--gold);width:80px;flex-shrink:0">'+l.meal_type+'</div>'
       +'<div style="flex:1;color:var(--parch)">'+l.description+'</div>'
-      +'<div style="font-size:11px;padding:3px 8px;border-radius:4px;background:'+bg+';color:'+col+';flex-shrink:0">'+label+'</div>'
+      +'<div style="font-size:11px;padding:2px 8px;border-radius:4px;background:'+bg+';color:'+col+';flex-shrink:0">'+(l.healthy?'Healthy':'Unhealthy')+'</div>'
       +'</div>';
   }).join(''):'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:8px 0">No meals logged today</div>';
 
-  // Heatmap HTML
-  let heatHTML='';
-  if(foodView==='month'){
-    const year=foodCalDate.getFullYear();const month=foodCalDate.getMonth();
-    const firstDay=new Date(year,month,1).getDay();
-    const daysInMonth=new Date(year,month+1,0).getDate();
-    const monthName=foodCalDate.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
-    let grid='';
-    ['S','M','T','W','T','F','S'].forEach(d=>grid+=`<div style="font-family:var(--fc);font-size:9px;color:var(--ash);text-align:center;padding:4px 0">${d}</div>`);
-    for(let i=0;i<firstDay;i++)grid+=`<div></div>`;
-    for(let d=1;d<=daysInMonth;d++){
-      const ds=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-      const data=dayMap[ds];const isFuture=ds>today();
-      const color=isFuture?'var(--card2)':data?dayColor(data):'var(--border)';
-      const meals=data?data.meals.length:0;
-      var gcursor=data?'pointer':'default';
-      var gopacity=isFuture?0.3:1;
-      var gonclick=data?'foodDayClick(\"'+ds+'\")':'';
-      var gmeal=data?'<div style="font-size:9px;color:rgba(255,255,255,0.7)">'+meals+'m</div>':'';
-      grid+='<div style="background:'+color+';border-radius:4px;padding:4px;min-height:40px;opacity:'+gopacity+';cursor:'+gcursor+'" onclick="'+gonclick+'">'
-        +'<div style="font-family:var(--fc);font-size:9px;color:var(--parch)">'+d+'</div>'
-        +gmeal
+  // Past days cards
+  const pastHTML=sortedDates.filter(d=>d!==today()).map(function(dt){
+    const day=dayMap[dt];
+    const col=dayColor(day);
+    const d=new Date(dt+'T00:00:00');
+    const dateLabel=d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+    const mealsHTML=day.meals.map(function(l){
+      var bg=l.healthy?'var(--safe-dim)':'var(--ember-dim)';
+      var col=l.healthy?'var(--safe)':'var(--ember)';
+      return'<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--border2);font-size:12px">'
+        +'<div style="font-family:var(--fc);font-size:9px;color:var(--gold);width:72px;flex-shrink:0">'+l.meal_type+'</div>'
+        +'<div style="flex:1;color:var(--parch)">'+l.description+'</div>'
+        +'<div style="font-size:10px;padding:2px 7px;border-radius:3px;background:'+bg+';color:'+col+';flex-shrink:0">'+(l.healthy?'Healthy':'Unhealthy')+'</div>'
         +'</div>';
-    }
-    heatHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <button class="cal-nav-btn" onclick="foodCalPrev()">← Prev</button>
-      <div style="font-family:var(--fc);font-size:14px;color:var(--parch)">${monthName}</div>
-      <button class="cal-nav-btn" onclick="foodCalNext()">Next →</button>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${grid}</div>`;
-  } else if(foodView==='week'){
-    const startOfWeek=new Date();startOfWeek.setDate(startOfWeek.getDate()-startOfWeek.getDay());
-    let weekHTML='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">';
-    const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    for(let i=0;i<7;i++){
-      const d=new Date(startOfWeek);d.setDate(d.getDate()+i);
-      const ds=d.toISOString().split('T')[0];
-      const data=dayMap[ds];const isFuture=ds>today();
-      const color=isFuture?'var(--card2)':data?dayColor(data):'var(--card2)';
-      const meals=data?data.meals:[];
-      weekHTML+=`<div style="background:${color};border-radius:8px;padding:10px;opacity:${isFuture?0.3:1}">
-        <div style="font-family:var(--fc);font-size:9px;color:var(--parch);margin-bottom:6px">${dayNames[i]} ${d.getDate()}</div>
-        ${(function(){var ml=meals.map(function(m){return'<div style="font-size:11px;margin-bottom:3px;color:var(--parch)"><span style="font-family:var(--fc);font-size:8px;color:'+(m.healthy?'var(--safe)':'var(--ember)')+'">'+m.meal_type.substring(0,1)+'</span> '+m.description.substring(0,20)+(m.description.length>20?'...':'')+'</div>';}).join('');return ml||'<div style="font-size:11px;color:rgba(255,255,255,0.3)">—</div>';})()}
-      </div>`;
-    }
-    weekHTML+='</div>';
-    heatHTML=weekHTML;
-  } else {
-    // Year heatmap
-    const year=foodCalDate.getFullYear();
-    const startDate=new Date(year,0,1);
-    const weeks=[];let week=[];
-    const firstDow=startDate.getDay();
-    for(let i=0;i<firstDow;i++)week.push(null);
-    let dd=new Date(startDate);
-    while(dd.getFullYear()===year){week.push(new Date(dd));if(week.length===7){weeks.push(week);week=[];}dd.setDate(dd.getDate()+1);}
-    if(week.length>0){while(week.length<7)week.push(null);weeks.push(week);}
-    let yHTML='<div style="overflow-x:auto"><div style="display:flex;gap:2px">';
-    const mPos={};weeks.forEach(function(w,wi){w.forEach(function(day){if(day&&day.getDate()===1)mPos[wi]=day.toLocaleDateString('en-GB',{month:'short'});});});
-    weeks.forEach(function(w,wi){
-      yHTML+=`<div style="display:flex;flex-direction:column;gap:2px"><div style="font-family:var(--fc);font-size:8px;color:var(--ash);height:14px;line-height:14px">${mPos[wi]||''}</div>`;
-      w.forEach(function(day){
-        if(!day){yHTML+=`<div style="width:12px;height:12px"></div>`;return;}
-        const ds=day.toISOString().split('T')[0];
-        const data=dayMap[ds];const isFuture=ds>today();
-        const color=isFuture?'var(--card2)':data?dayColor(data):'rgba(74,66,56,0.4)';
-        yHTML+=`<div style="width:12px;height:12px;border-radius:2px;background:${color}" title="${ds}"></div>`;
-      });
-      yHTML+='</div>';
-    });
-    yHTML+='</div></div>';
-    yHTML+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
-      <button class="cal-nav-btn" onclick="foodCalPrev()">← ${year-1}</button>
-      <div style="font-family:var(--fc);font-size:13px;color:var(--parch)">${year}</div>
-      <button class="cal-nav-btn" onclick="foodCalNext()">${year+1} →</button>
-    </div>`;
-    heatHTML=yHTML;
-  }
-
-  // Selected day detail panel
-  let foodDayDetail='';
-  if(foodSelectedDay){
-    const dayMeals=logs.filter(l=>l.date===foodSelectedDay);
-    const hCount=dayMeals.filter(l=>l.healthy).length;
-    const uCount=dayMeals.filter(l=>!l.healthy).length;
-    const mealRows=dayMeals.length>0?dayMeals.map(function(l){
-      return`<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:0.5px solid var(--border)">
-        <div style="font-family:var(--fc);font-size:10px;color:var(--gold);width:70px;flex-shrink:0;padding-top:2px">${l.meal_type}</div>
-        <div style="flex:1;font-size:13px;color:var(--parch)">${l.description}</div>
-        <div style="font-size:11px;padding:3px 8px;border-radius:4px;flex-shrink:0;background:${l.healthy?'var(--safe-dim)':'var(--ember-dim)'};color:${l.healthy?'var(--safe)':'var(--ember)'}">${l.healthy?'Healthy':'Unhealthy'}</div>
-      </div>`;
-    }).join('')
-    :'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:8px 0">No meals logged this day.</div>';
-    foodDayDetail=`<div class="card" style="margin-top:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div style="font-family:var(--fc);font-size:14px;color:var(--gold)">${foodSelectedDay}</div>
-        <div style="display:flex;gap:12px;font-size:12px">
-          <span style="color:var(--safe)">${hCount} healthy</span>
-          ${uCount>0?`<span style="color:var(--ember)">${uCount} unhealthy</span>`:''}
-        </div>
-      </div>
-      ${mealRows}
-    </div>`;
-  }
+    }).join('');
+    return'<div class="card" style="margin-bottom:10px;border-left:2px solid '+col+'">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+      +'<div style="font-family:var(--fc);font-size:11px;color:var(--parch);letter-spacing:0.08em">'+dateLabel+'</div>'
+      +'<div style="font-size:11px;color:var(--ash)">'+day.meals.length+' meal'+(day.meals.length===1?'':'s')+'</div>'
+      +'</div>'
+      +mealsHTML
+      +'</div>';
+  }).join('');
 
   document.getElementById('screen-food').innerHTML=`
     <div class="pt">Food Log</div>
-    <div class="ps">Personal record · Healthy or unhealthy · No game impact</div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <div class="st" style="margin-bottom:0">Today's meals</div>
+      <div class="st" style="margin:0">Today</div>
       <button class="btn btn-sm" onclick="openFoodModal()">+ Log meal</button>
     </div>
-    <div class="card" style="margin-bottom:24px">${todayHTML}</div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-      <button class="cal-nav-btn ${foodView==='week'?'active':''}" onclick="setFoodView('week')">Week</button>
-      <button class="cal-nav-btn ${foodView==='month'?'active':''}" onclick="setFoodView('month')">Month</button>
-      <button class="cal-nav-btn ${foodView==='year'?'active':''}" onclick="setFoodView('year')">Year</button>
-      <div style="margin-left:auto;display:flex;gap:10px;font-size:11px;align-items:center">
-        <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--safe)"></div>All healthy</span>
-        <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--warn)"></div>Mixed</span>
-        <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--ember)"></div>Unhealthy</span>
-      </div>
-    </div>
-    <div class="card">${heatHTML}</div>
-    ${foodDayDetail}
-    <div class="st" style="margin-top:20px">All entries</div>
-    <div class="card">${(function(){
-      var allByDay={};
-      logs.forEach(function(l){if(!allByDay[l.date])allByDay[l.date]=[];allByDay[l.date].push(l);});
-      var days=Object.keys(allByDay).sort(function(a,b){return b.localeCompare(a);});
-      var total=Math.max(1,Math.ceil(days.length/FOOD_PER_PAGE));
-      var pg=Math.min(foodPage,total-1);
-      var pg_days=days.slice(pg*FOOD_PER_PAGE,(pg+1)*FOOD_PER_PAGE);
-      var rows=pg_days.map(function(date){
-        var meals=allByDay[date];
-        var h=meals.filter(function(m){return m.healthy;}).length;
-        var u=meals.filter(function(m){return !m.healthy;}).length;
-        var ds=new Date(date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
-        return'<div style="padding:10px 0;border-bottom:0.5px solid var(--border)">'
-          +'<div style="display:flex;justify-content:space-between;margin-bottom:5px">'
-          +'<span style="font-family:var(--fc);font-size:12px;color:var(--gold)">'+ds+'</span>'
-          +'<span style="font-size:11px;color:var(--ash)">'+h+' healthy'+(u?' · <span style="color:var(--ember)">'+u+' unhealthy</span>':'')+'</span>'
-          +'</div>'
-          +meals.map(function(m){
-            return'<div style="display:flex;gap:10px;padding:2px 0;font-size:12px">'
-              +'<span style="font-family:var(--fc);color:var(--ash);width:70px;flex-shrink:0">'+m.meal_type+'</span>'
-              +'<span style="flex:1;color:var(--parch)">'+m.description+'</span>'
-              +'<span style="color:'+(m.healthy?'var(--safe)':'var(--ember)')+';">'+(m.healthy?'✓':'✗')+'</span>'
-              +'</div>';
-          }).join('')+'</div>';
-      }).join('')||'<div style="font-size:13px;color:var(--ash);font-style:italic">No entries yet.</div>';
-      var nav=total>1?'<div style="display:flex;justify-content:space-between;margin-top:12px">'
-        +'<button class="btn btn-xs" onclick="foodPageChange('+(pg-1)+')" '+(pg===0?'disabled':'')+'">← Prev</button>'
-        +'<span style="font-size:12px;color:var(--ash)">Page '+(pg+1)+' of '+total+'</span>'
-        +'<button class="btn btn-xs" onclick="foodPageChange('+(pg+1)+')" '+(pg>=total-1?'disabled':'')+'">Next →</button></div>':'';
-      return rows+nav;
-    })()}</div>
+    <div class="card" style="margin-bottom:20px">${todayHTML}</div>
+    <div class="st" style="margin-bottom:12px">Past days</div>
+    ${pastHTML||'<div style="font-size:13px;color:var(--ash);font-style:italic">No past entries</div>'}
   `;
 }
 
-
-function setFoodView(v){foodView=v;renderFood();}
-function foodPageChange(p){S._foodNavStay=true;foodPage=Math.max(0,p);renderFood();}
-function foodCalPrev(){
-  if(foodView==='year')foodCalDate.setFullYear(foodCalDate.getFullYear()-1);
-  else foodCalDate.setMonth(foodCalDate.getMonth()-1);
-  renderFood();
-}
-function foodCalNext(){
-  if(foodView==='year')foodCalDate.setFullYear(foodCalDate.getFullYear()+1);
-  else foodCalDate.setMonth(foodCalDate.getMonth()+1);
-  renderFood();
-}
-
-function openFoodModal(){
-  document.getElementById('food-modal').classList.add('open');
-  document.getElementById('food-desc').value='';
-  document.getElementById('food-healthy').checked=true;
-}
-
-async function submitFoodLog(){
-  const mealType=document.getElementById('food-meal-type').value;
-  const desc=document.getElementById('food-desc').value.trim();
-  const healthy=document.getElementById('food-healthy').checked;
-  if(!desc){toast('Please describe your meal.','error');return;}
-  await db.from('food_log').insert({date:today(),meal_type:mealType,description:desc,healthy});
-  closeModal('food-modal');
-  renderFood();
-}
-
-let foodSelectedDay=null;
-
-function foodDayClick(dateStr){
-  foodSelectedDay=foodSelectedDay===dateStr?null:dateStr;
-  S._foodNavStay=true;renderFood();
-}
-
-// ── MILESTONES WITH FILTER ─────────────────────────────
-let milestoneFilter='all';
 
 async function renderMilestones(){
   await loadAll();
