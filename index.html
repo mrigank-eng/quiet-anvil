@@ -1203,7 +1203,7 @@ function renderForge(){
         }
       } else {
         if(cp.hasSession){
-          footHTML+=`<span style="font-size:11px;color:var(--safe);font-family:var(--fc)">✓ Submitted · ${tangToday} ${proj.unit}</span>`;
+          footHTML+=`<span style="font-size:11px;color:var(--safe);font-family:var(--fc)">✓ Submitted · ${proj.uniqueDays?(sessions.filter(s=>s.tangible_logged>0).length+' session'+(sessions.filter(s=>s.tangible_logged>0).length!==1?'s':'')):(tangToday+' '+proj.unit)}</span>`;
           footHTML+=`<button class="btn btn-xs" onclick="openSession('${proj.id}')">+ Add more</button>`;
         } else {
           footHTML+=`<span style="font-size:11px;color:var(--ember);font-family:var(--fc)">✗ Skipped${declared?' (declaration active)':''}</span>`;
@@ -2068,7 +2068,7 @@ async function renderProject(screenKey){
           ${!proj.uniqueDays&&pb.category?`<div style="font-family:var(--fc);font-size:11px;letter-spacing:0.1em;color:var(--parch);background:var(--card2);padding:4px 10px;border-radius:4px;display:inline-block">${pb.category}</div>`:''}
         </div>
         <div style="text-align:right">
-          <div style="font-family:var(--fc);font-size:32px;color:var(--gold);line-height:1">${fmtT(pb.tangible_logged,proj.unit)}</div>
+          <div style="font-family:var(--fc);font-size:32px;color:var(--gold);line-height:1">${proj.uniqueDays?pb.sessionCount:fmtT(pb.tangible_logged,proj.unit)}</div>
           <div style="font-family:var(--fc);font-size:11px;color:var(--ash);letter-spacing:0.08em;margin-top:2px">${proj.uniqueDays?(pb.sessionCount===1?'SESSION':'SESSIONS'):proj.unit.toUpperCase()}</div>
         </div>
       </div>
