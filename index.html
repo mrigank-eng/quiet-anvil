@@ -1939,7 +1939,7 @@ async function renderProject(screenKey){
           return '<div style="padding:7px 0;border-bottom:0.5px solid var(--border)">'
             +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
             +'<div style="font-size:13px;color:'+(met?'var(--safe)':'var(--parch)')+'">'+cat+'</div>'
-            +'<div style="font-family:var(--fc);font-size:11px;color:'+(met?'var(--safe)':'var(--warn)')+'">'+cnt+'/'+req+' '+proj.unit+'</div>'
+            +'<div style="font-family:var(--fc);font-size:11px;color:'+(met?'var(--safe)':'var(--warn)')+'">'+cnt+'/'+req+' '+(proj.uniqueDays?'sessions':proj.unit)+'</div>'
             +'</div>'
             +'<div style="height:4px;background:var(--card2);border-radius:2px;overflow:hidden">'
             +'<div style="height:100%;width:'+fpct+'%;background:'+(met?'var(--safe)':'var(--warn)')+';border-radius:2px"></div></div>'
@@ -2393,7 +2393,7 @@ async function renderReport(){
     const ceilPct=Math.round(total/proj.ceiling*100);
     return`<tr>
       <td style="font-size:13px">${proj.id}</td>
-      <td style="font-family:var(--fc);font-size:11px;color:var(--gold)">${dispTitle(proj.id,total,shareCC[proj.id]||{})}</td>
+      <td style="font-family:var(--fc);font-size:11px;color:var(--gold)">${dispTitle(proj.id,total,repCC[proj.id]||{})}</td>
       <td style="text-align:center;font-family:var(--fc);font-size:12px">${l}/10</td>
       <td style="text-align:center;font-size:12px">${total.toLocaleString()} ${proj.unit}</td>
       <td style="text-align:center;font-size:12px">${sc}</td>
@@ -2591,9 +2591,10 @@ async function renderReport(){
       if(cCtx){var ecc=Chart.getChart?Chart.getChart(cCtx):null;if(ecc)ecc.destroy();}
       if(cCtx){const pUnit=proj.unit;new Chart(cCtx,{type:'line',data:{labels:dates,datasets:[{data:cumVals,borderColor:color,backgroundColor:color+'18',borderWidth:2,fill:true,tension:0.4,pointBackgroundColor:pointBg,pointRadius:Math.max(3,pointR[0]||3)}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{afterBody:function(items){const idx=items[0].dataIndex;const date=dates[idx];const ms=projMilestones.find(function(m){return m.date===date;});const lvlAnn=levelAnnotations[idx];const lines=[];if(ms)lines.push('★ '+ms.description.substring(0,40));if(lvlAnn)lines.push('↑ Level '+lvlAnn.lvl+': '+lvlAnn.title);return lines;}}}},scales:{x:{ticks:{color:'#A09080',font:{size:8},maxTicksLimit:8},grid:{color:'rgba(74,66,56,0.3)'}},y:{beginAtZero:true,ticks:{color:'#A09080',font:{size:8},callback:function(v){return v+' '+pUnit;}},grid:{color:'rgba(74,66,56,0.3)'}}}}});};
     });
+  
   },150);
-}
 
+}
 // ── MILESTONES ─────────────────────────────────────────
 function openMilestone(){document.getElementById('ms-modal').classList.add('open');}
 async function submitMilestone(){
@@ -2669,7 +2670,7 @@ function buildDailyCard(){
     <div style="display:flex;justify-content:space-between;align-items:center">
       <div>
         <div style="font-size:9px;letter-spacing:0.15em;color:#8a6a1a;margin-bottom:4px">CLEAN TEMPER</div>
-        <div style="display:flex;gap:4px">${CMDS.map(function(c){const v=S.todayLog?.[c.key];return`<div style="width:14px;height:14px;border-radius:3px;background:${v===true?'#2A8060':v===false?'#D04030':'#2a2010'};display:flex;align-items:center;justify-content:center;font-size:8px;color:#fff">${v===true?'✓':v===false?'✗':''}</div>`;}).join('')}</div>
+        <div style="display:flex;gap:4px">${(function(){return CMDS.map(function(c){var v=S.todayLog?S.todayLog[c.key]:undefined;var bg=v===true?'#2A8060':v===false?'#D04030':'#2a2010';var icon=v===true?'✓':v===false?'✗':'';return'<div style="width:14px;height:14px;border-radius:3px;background:'+bg+';display:flex;align-items:center;justify-content:center;font-size:8px;color:#fff">'+icon+'</div>';}).join('');})()}</div>
       </div>
       <div style="text-align:right">
         <div style="font-family:Cinzel,serif;font-size:22px;color:#D4A84C">${ct}<span style="font-size:12px;color:#8a6a1a">/20</span></div>
@@ -2698,17 +2699,18 @@ function buildCampaignCard(){
     <div class="sc-divider"></div>
     <div style="margin-bottom:16px">
       ${PROJECTS.map(function(proj){
-        const s=S.projects.find(p=>p.project===proj.id)||{};
-        const total=s.total_tangible||0;
-        const l=getLvl(proj.id,total,shareCC[proj.id]||{});
-        const pr=getProg(proj.id,total,shareCC[proj.id]||{});
-        return`<div class="sc-prog-row">
-          <div class="sc-prog-label">
-            <div class="sc-prog-name">${proj.id.toUpperCase()}</div>
-            <div class="sc-prog-val">${curT} · L${l}</div>
-          </div>
-          <div class="sc-prog-track"><div class="sc-prog-fill" style="width:${pr}%"></div></div>
-        </div>`;
+        var s=S.projects.find(function(p){return p.project===proj.id;})||{};
+        var total=s.total_tangible||0;
+        var l=getLvl(proj.id,total,shareCC[proj.id]||{});
+        var pr=getProg(proj.id,total,shareCC[proj.id]||{});
+        var curTitle=dispTitle(proj.id,total,shareCC[proj.id]||{})||proj.titles[Math.max(0,l-1)]||'';
+        return '<div class="sc-prog-row">'
+          +'<div class="sc-prog-label">'
+          +'<div class="sc-prog-name">'+proj.id.toUpperCase()+'</div>'
+          +'<div class="sc-prog-val">'+curTitle+' · L'+l+'</div>'
+          +'</div>'
+          +'<div class="sc-prog-track"><div class="sc-prog-fill" style="width:'+pr+'%"></div></div>'
+          +'</div>';
       }).join('')}
     </div>
     <div class="sc-divider"></div>
