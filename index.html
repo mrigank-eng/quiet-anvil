@@ -2102,7 +2102,10 @@ async function renderProject(screenKey){
       const existChart=Chart.getChart?Chart.getChart(ctx):null;if(existChart)existChart.destroy();
       const pUnit=proj.unit;
       const dateMap={};
-      allPS.forEach(function(s){dateMap[s.date]=(dateMap[s.date]||0)+s.tangible_logged;});
+      allPS.forEach(function(s){
+        if(proj.uniqueDays){dateMap[s.date]=1;}// Iron Forge: 1 day per date
+        else{dateMap[s.date]=(dateMap[s.date]||0)+s.tangible_logged;}
+      });
       const sortedDates=Object.keys(dateMap).sort();
       const chartData=sortedDates.map(function(d){return dateMap[d];});
       const yTickCb=(function(u){return function(v){return Number.isInteger(v)?v+' '+u:null;};})(pUnit);
@@ -2526,6 +2529,7 @@ async function renderReport(){
     const ctDataset={label:'CT',data:allDates.map(d=>{const l=S.allLogs.find(x=>x.date===d);return l?ctPts(l):0;}),backgroundColor:ctColor,borderColor:'#A08050',borderWidth:1,fill:true,tension:0.3,pointRadius:0};
 
     const ctx=document.getElementById('report-chart');
+    if(ctx){var ec=Chart.getChart?Chart.getChart(ctx):null;if(ec)ec.destroy();}
     if(ctx)new Chart(ctx,{type:'line',data:{labels:allDates,datasets:[...projDatasets,ctDataset]},options:{responsive:true,maintainAspectRatio:false,animation:false,interaction:{mode:'index',intersect:false},plugins:{legend:{display:true,labels:{color:'#A09080',font:{size:9},boxWidth:10}}},scales:{x:{stacked:true,ticks:{color:'#A09080',font:{size:9},maxTicksLimit:12},grid:{color:'rgba(74,66,56,0.4)'}},y:{stacked:true,ticks:{color:'#A09080',font:{size:9}},grid:{color:'rgba(74,66,56,0.4)'}}}}});
 
     // Per-project individual charts
@@ -2535,7 +2539,10 @@ async function renderReport(){
 
       // Aggregate by date
       const dateMap={};
-      projSess.forEach(s=>{dateMap[s.date]=(dateMap[s.date]||0)+s.tangible_logged;});
+      projSess.forEach(function(s){
+        if(proj.uniqueDays){dateMap[s.date]=1;}// Iron Forge: 1 day per date
+        else{dateMap[s.date]=(dateMap[s.date]||0)+s.tangible_logged;}
+      });
       const dates=Object.keys(dateMap).sort();
       const dailyVals=dates.map(d=>dateMap[d]);
 
@@ -2571,10 +2578,12 @@ async function renderReport(){
 
       // Daily chart
       const dCtx=document.getElementById('proj-daily-'+proj.key);
+      if(dCtx){var _edc=Chart.getChart?Chart.getChart(dCtx):null;if(_edc)_edc.destroy();}
       if(dCtx)new Chart(dCtx,{type:'bar',data:{labels:dates,datasets:[{data:dailyVals,backgroundColor:color+'55',borderColor:color,borderWidth:1,pointBackgroundColor:pointBg,pointRadius:pointR}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{afterBody:function(items){const idx=items[0].dataIndex;const date=dates[idx];const ms=projMilestones.find(m=>m.date===date);const lvlAnn=levelAnnotations[idx];const lines=[];if(ms)lines.push('★ '+ms.description.substring(0,40));if(lvlAnn)lines.push('↑ Level '+lvlAnn.lvl+': '+lvlAnn.title);return lines;}}}},scales:{x:{ticks:{color:'#A09080',font:{size:8},maxTicksLimit:8},grid:{color:'rgba(74,66,56,0.3)'}},y:{ticks:{color:'#A09080',font:{size:8},callback:v=>v+' '+proj.unit},grid:{color:'rgba(74,66,56,0.3)'}}}}});
 
       // Cumulative chart
       const cCtx=document.getElementById('proj-cum-'+proj.key);
+      if(cCtx){var ecc=Chart.getChart?Chart.getChart(cCtx):null;if(ecc)ecc.destroy();}
       if(cCtx){const pUnit=proj.unit;new Chart(cCtx,{type:'line',data:{labels:dates,datasets:[{data:cumVals,borderColor:color,backgroundColor:color+'18',borderWidth:2,fill:true,tension:0.4,pointBackgroundColor:pointBg,pointRadius:Math.max(3,pointR[0]||3)}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{afterBody:function(items){const idx=items[0].dataIndex;const date=dates[idx];const ms=projMilestones.find(function(m){return m.date===date;});const lvlAnn=levelAnnotations[idx];const lines=[];if(ms)lines.push('★ '+ms.description.substring(0,40));if(lvlAnn)lines.push('↑ Level '+lvlAnn.lvl+': '+lvlAnn.title);return lines;}}}},scales:{x:{ticks:{color:'#A09080',font:{size:8},maxTicksLimit:8},grid:{color:'rgba(74,66,56,0.3)'}},y:{beginAtZero:true,ticks:{color:'#A09080',font:{size:8},callback:function(v){return v+' '+pUnit;}},grid:{color:'rgba(74,66,56,0.3)'}}}}});};
     });
   },150);
