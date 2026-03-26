@@ -807,11 +807,8 @@ function pillarBalance(){
     var p=activeP.find(function(x){return x.id===s.project;});
     if(p)pillars[p.pillar]=(pillars[p.pillar]||0)+(s.points_earned||0);
   });
-  // Apply penalties from committed+skipped
-  activeP.forEach(function(p){
-    var cp=S.committedProjects[p.id];
-    if(cp&&cp.submitted&&!cp.hasSession)pillars[p.pillar]=(pillars[p.pillar]||0)-p.pts;
-  });
+  // Penalties are already in session.penalty column
+  // pillarBalance only tracks earned points from points_earned column
   return{pillars,maxPts};
 }
 
