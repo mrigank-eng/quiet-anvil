@@ -351,7 +351,6 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
   <div id="screen-proj-water" class="screen"><div class="loading">Loading...</div></div>
   <div id="screen-proj-giving" class="screen"><div class="loading">Loading...</div></div>
   <div id="screen-temper" class="screen"><div class="loading">Loading commandments...</div></div>
-  </div>
   <div id="screen-meta" class="screen"><div class="loading">Loading meta rank...</div></div>
   <div id="screen-calendar" class="screen"><div class="loading">Loading calendar...</div></div>
   </div>
@@ -2664,6 +2663,7 @@ async function renderFood(){
   const{data:foodLogs}=await db.from('food_log').select('*').order('date',{ascending:false});
   const logs=foodLogs||[];
 
+  // Build day lookup
   const dayMap={};
   logs.forEach(function(l){
     if(!dayMap[l.date])dayMap[l.date]={meals:[],hasUnhealthy:false,hasHealthy:false};
@@ -2679,56 +2679,211 @@ async function renderFood(){
     return'var(--safe)';
   }
 
-  // Sort dates descending
-  const sortedDates=Object.keys(dayMap).sort().reverse();
-
-  // Today summary
+  // Today's entries
   const todayLogs=logs.filter(l=>l.date===today());
   const todayHTML=todayLogs.length>0?todayLogs.map(function(l){
-    var bg=l.healthy?'var(--safe-dim)':'var(--ember-dim)';
-    var col=l.healthy?'var(--safe)':'var(--ember)';
-    return'<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border);font-size:13px">'
-      +'<div style="font-family:var(--fc);font-size:10px;color:var(--gold);width:80px;flex-shrink:0">'+l.meal_type+'</div>'
-      +'<div style="flex:1;color:var(--parch)">'+l.description+'</div>'
-      +'<div style="font-size:11px;padding:2px 8px;border-radius:4px;background:'+bg+';color:'+col+';flex-shrink:0">'+(l.healthy?'Healthy':'Unhealthy')+'</div>'
-      +'</div>';
+    return`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">
+      <div style="font-family:var(--fc);font-size:10px;color:var(--gold);width:80px;flex-shrink:0">${l.meal_type}</div>
+      <div style="flex:1;color:var(--parch)">${l.description}</div>
+      <div style="font-size:11px;padding:3px 8px;border-radius:4px;background:${l.healthy?'var(--safe-dim)':'var(--ember-dim)'};color:${l.healthy?'var(--safe)':'var(--ember)'};flex-shrink:0">${l.healthy?'Healthy':'Unhealthy'}</div>
+    </div>`;
   }).join(''):'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:8px 0">No meals logged today</div>';
 
-  // Past days cards
-  const pastHTML=sortedDates.filter(d=>d!==today()).map(function(dt){
-    const day=dayMap[dt];
-    const col=dayColor(day);
-    const d=new Date(dt+'T00:00:00');
-    const dateLabel=d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
-    const mealsHTML=day.meals.map(function(l){
-      var bg=l.healthy?'var(--safe-dim)':'var(--ember-dim)';
-      var col=l.healthy?'var(--safe)':'var(--ember)';
-      return'<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--border2);font-size:12px">'
-        +'<div style="font-family:var(--fc);font-size:9px;color:var(--gold);width:72px;flex-shrink:0">'+l.meal_type+'</div>'
-        +'<div style="flex:1;color:var(--parch)">'+l.description+'</div>'
-        +'<div style="font-size:10px;padding:2px 7px;border-radius:3px;background:'+bg+';color:'+col+';flex-shrink:0">'+(l.healthy?'Healthy':'Unhealthy')+'</div>'
-        +'</div>';
-    }).join('');
-    return'<div class="card" style="margin-bottom:10px;border-left:2px solid '+col+'">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-      +'<div style="font-family:var(--fc);font-size:11px;color:var(--parch);letter-spacing:0.08em">'+dateLabel+'</div>'
-      +'<div style="font-size:11px;color:var(--ash)">'+day.meals.length+' meal'+(day.meals.length===1?'':'s')+'</div>'
-      +'</div>'
-      +mealsHTML
-      +'</div>';
-  }).join('');
+  // Heatmap HTML
+  let heatHTML='';
+  if(foodView==='month'){
+    const year=foodCalDate.getFullYear();const month=foodCalDate.getMonth();
+    const firstDay=new Date(year,month,1).getDay();
+    const daysInMonth=new Date(year,month+1,0).getDate();
+    const monthName=foodCalDate.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+    let grid='';
+    ['S','M','T','W','T','F','S'].forEach(d=>grid+=`<div style="font-family:var(--fc);font-size:9px;color:var(--ash);text-align:center;padding:4px 0">${d}</div>`);
+    for(let i=0;i<firstDay;i++)grid+=`<div></div>`;
+    for(let d=1;d<=daysInMonth;d++){
+      const ds=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      const data=dayMap[ds];const isFuture=ds>today();
+      const color=isFuture?'var(--card2)':data?dayColor(data):'var(--border)';
+      const meals=data?data.meals.length:0;
+      grid+=`<div style="background:${color};border-radius:4px;padding:4px;min-height:40px;opacity:${isFuture?0.3:1};cursor:${data?'pointer':'default'}" onclick="${data?'foodDayClick(\''+ds+'\')':''}">
+        <div style="font-family:var(--fc);font-size:9px;color:var(--parch)">${d}</div>
+        ${data?`<div style="font-size:9px;color:rgba(255,255,255,0.7)">${meals}m</div>`:''}
+      </div>`;
+    }
+    heatHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <button class="cal-nav-btn" onclick="foodCalPrev()">← Prev</button>
+      <div style="font-family:var(--fc);font-size:14px;color:var(--parch)">${monthName}</div>
+      <button class="cal-nav-btn" onclick="foodCalNext()">Next →</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${grid}</div>`;
+  } else if(foodView==='week'){
+    const startOfWeek=new Date();startOfWeek.setDate(startOfWeek.getDate()-startOfWeek.getDay());
+    let weekHTML='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px">';
+    const dayNames=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    for(let i=0;i<7;i++){
+      const d=new Date(startOfWeek);d.setDate(d.getDate()+i);
+      const ds=d.toISOString().split('T')[0];
+      const data=dayMap[ds];const isFuture=ds>today();
+      const color=isFuture?'var(--card2)':data?dayColor(data):'var(--card2)';
+      const meals=data?data.meals:[];
+      weekHTML+=`<div style="background:${color};border-radius:8px;padding:10px;opacity:${isFuture?0.3:1}">
+        <div style="font-family:var(--fc);font-size:9px;color:var(--parch);margin-bottom:6px">${dayNames[i]} ${d.getDate()}</div>
+        ${meals.map(m=>`<div style="font-size:11px;margin-bottom:3px;color:var(--parch)"><span style="font-family:var(--fc);font-size:8px;color:${m.healthy?'var(--safe)':'var(--ember)'}">${m.meal_type.substring(0,1)}</span> ${m.description.substring(0,20)}${m.description.length>20?'...':''}</div>`).join('')||`<div style="font-size:11px;color:rgba(255,255,255,0.3)">—</div>`}
+      </div>`;
+    }
+    weekHTML+='</div>';
+    heatHTML=weekHTML;
+  } else {
+    // Year heatmap
+    const year=foodCalDate.getFullYear();
+    const startDate=new Date(year,0,1);
+    const weeks=[];let week=[];
+    const firstDow=startDate.getDay();
+    for(let i=0;i<firstDow;i++)week.push(null);
+    let dd=new Date(startDate);
+    while(dd.getFullYear()===year){week.push(new Date(dd));if(week.length===7){weeks.push(week);week=[];}dd.setDate(dd.getDate()+1);}
+    if(week.length>0){while(week.length<7)week.push(null);weeks.push(week);}
+    let yHTML='<div style="overflow-x:auto"><div style="display:flex;gap:2px">';
+    const mPos={};weeks.forEach(function(w,wi){w.forEach(function(day){if(day&&day.getDate()===1)mPos[wi]=day.toLocaleDateString('en-GB',{month:'short'});});});
+    weeks.forEach(function(w,wi){
+      yHTML+=`<div style="display:flex;flex-direction:column;gap:2px"><div style="font-family:var(--fc);font-size:8px;color:var(--ash);height:14px;line-height:14px">${mPos[wi]||''}</div>`;
+      w.forEach(function(day){
+        if(!day){yHTML+=`<div style="width:12px;height:12px"></div>`;return;}
+        const ds=day.toISOString().split('T')[0];
+        const data=dayMap[ds];const isFuture=ds>today();
+        const color=isFuture?'var(--card2)':data?dayColor(data):'rgba(74,66,56,0.4)';
+        yHTML+=`<div style="width:12px;height:12px;border-radius:2px;background:${color}" title="${ds}"></div>`;
+      });
+      yHTML+='</div>';
+    });
+    yHTML+='</div></div>';
+    yHTML+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+      <button class="cal-nav-btn" onclick="foodCalPrev()">← ${year-1}</button>
+      <div style="font-family:var(--fc);font-size:13px;color:var(--parch)">${year}</div>
+      <button class="cal-nav-btn" onclick="foodCalNext()">${year+1} →</button>
+    </div>`;
+    heatHTML=yHTML;
+  }
+
+  // Selected day detail panel
+  let foodDayDetail='';
+  if(foodSelectedDay){
+    const dayMeals=logs.filter(l=>l.date===foodSelectedDay);
+    const hCount=dayMeals.filter(l=>l.healthy).length;
+    const uCount=dayMeals.filter(l=>!l.healthy).length;
+    const mealRows=dayMeals.length>0?dayMeals.map(function(l){
+      return`<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:0.5px solid var(--border)">
+        <div style="font-family:var(--fc);font-size:10px;color:var(--gold);width:70px;flex-shrink:0;padding-top:2px">${l.meal_type}</div>
+        <div style="flex:1;font-size:13px;color:var(--parch)">${l.description}</div>
+        <div style="font-size:11px;padding:3px 8px;border-radius:4px;flex-shrink:0;background:${l.healthy?'var(--safe-dim)':'var(--ember-dim)'};color:${l.healthy?'var(--safe)':'var(--ember)'}">${l.healthy?'Healthy':'Unhealthy'}</div>
+      </div>`;
+    }).join('')
+    :'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:8px 0">No meals logged this day.</div>';
+    foodDayDetail=`<div class="card" style="margin-top:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-family:var(--fc);font-size:14px;color:var(--gold)">${foodSelectedDay}</div>
+        <div style="display:flex;gap:12px;font-size:12px">
+          <span style="color:var(--safe)">${hCount} healthy</span>
+          ${uCount>0?`<span style="color:var(--ember)">${uCount} unhealthy</span>`:''}
+        </div>
+      </div>
+      ${mealRows}
+    </div>`;
+  }
 
   document.getElementById('screen-food').innerHTML=`
     <div class="pt">Food Log</div>
+    <div class="ps">Personal record · Healthy or unhealthy · No game impact</div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <div class="st" style="margin:0">Today</div>
+      <div class="st" style="margin-bottom:0">Today's meals</div>
       <button class="btn btn-sm" onclick="openFoodModal()">+ Log meal</button>
     </div>
-    <div class="card" style="margin-bottom:20px">${todayHTML}</div>
-    <div class="st" style="margin-bottom:12px">Past days</div>
-    ${pastHTML||'<div style="font-size:13px;color:var(--ash);font-style:italic">No past entries</div>'}
+    <div class="card" style="margin-bottom:24px">${todayHTML}</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <button class="cal-nav-btn ${foodView==='week'?'active':''}" onclick="setFoodView('week')">Week</button>
+      <button class="cal-nav-btn ${foodView==='month'?'active':''}" onclick="setFoodView('month')">Month</button>
+      <button class="cal-nav-btn ${foodView==='year'?'active':''}" onclick="setFoodView('year')">Year</button>
+      <div style="margin-left:auto;display:flex;gap:10px;font-size:11px;align-items:center">
+        <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--safe)"></div>All healthy</span>
+        <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--warn)"></div>Mixed</span>
+        <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--ember)"></div>Unhealthy</span>
+      </div>
+    </div>
+    <div class="card">${heatHTML}</div>
+    ${foodDayDetail}
+    <div class="st" style="margin-top:20px">All entries</div>
+    <div class="card">${(function(){
+      var allByDay={};
+      logs.forEach(function(l){if(!allByDay[l.date])allByDay[l.date]=[];allByDay[l.date].push(l);});
+      var days=Object.keys(allByDay).sort(function(a,b){return b.localeCompare(a);});
+      var total=Math.max(1,Math.ceil(days.length/FOOD_PER_PAGE));
+      var pg=Math.min(foodPage,total-1);
+      var pg_days=days.slice(pg*FOOD_PER_PAGE,(pg+1)*FOOD_PER_PAGE);
+      var rows=pg_days.map(function(date){
+        var meals=allByDay[date];
+        var h=meals.filter(function(m){return m.healthy;}).length;
+        var u=meals.filter(function(m){return !m.healthy;}).length;
+        var ds=new Date(date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+        return'<div style="padding:10px 0;border-bottom:0.5px solid var(--border)">'
+          +'<div style="display:flex;justify-content:space-between;margin-bottom:5px">'
+          +'<span style="font-family:var(--fc);font-size:12px;color:var(--gold)">'+ds+'</span>'
+          +'<span style="font-size:11px;color:var(--ash)">'+h+' healthy'+(u?' · <span style="color:var(--ember)">'+u+' unhealthy</span>':'')+'</span>'
+          +'</div>'
+          +meals.map(function(m){
+            return'<div style="display:flex;gap:10px;padding:2px 0;font-size:12px">'
+              +'<span style="font-family:var(--fc);color:var(--ash);width:70px;flex-shrink:0">'+m.meal_type+'</span>'
+              +'<span style="flex:1;color:var(--parch)">'+m.description+'</span>'
+              +'<span style="color:'+(m.healthy?'var(--safe)':'var(--ember)')+';">'+(m.healthy?'✓':'✗')+'</span>'
+              +'</div>';
+          }).join('')+'</div>';
+      }).join('')||'<div style="font-size:13px;color:var(--ash);font-style:italic">No entries yet.</div>';
+      var nav=total>1?'<div style="display:flex;justify-content:space-between;margin-top:12px">'
+        +'<button class="btn btn-xs" onclick="foodPageChange('+(pg-1)+')" '+(pg===0?'disabled':'')+'">← Prev</button>'
+        +'<span style="font-size:12px;color:var(--ash)">Page '+(pg+1)+' of '+total+'</span>'
+        +'<button class="btn btn-xs" onclick="foodPageChange('+(pg+1)+')" '+(pg>=total-1?'disabled':'')+'">Next →</button></div>':'';
+      return rows+nav;
+    })()}</div>
   `;
 }
+
+
+function setFoodView(v){foodView=v;renderFood();}
+function foodPageChange(p){S._foodNavStay=true;foodPage=Math.max(0,p);renderFood();}
+function foodCalPrev(){
+  if(foodView==='year')foodCalDate.setFullYear(foodCalDate.getFullYear()-1);
+  else foodCalDate.setMonth(foodCalDate.getMonth()-1);
+  renderFood();
+}
+function foodCalNext(){
+  if(foodView==='year')foodCalDate.setFullYear(foodCalDate.getFullYear()+1);
+  else foodCalDate.setMonth(foodCalDate.getMonth()+1);
+  renderFood();
+}
+
+function openFoodModal(){
+  document.getElementById('food-modal').classList.add('open');
+  document.getElementById('food-desc').value='';
+  document.getElementById('food-healthy').checked=true;
+}
+
+async function submitFoodLog(){
+  const mealType=document.getElementById('food-meal-type').value;
+  const desc=document.getElementById('food-desc').value.trim();
+  const healthy=document.getElementById('food-healthy').checked;
+  if(!desc){toast('Please describe your meal.','error');return;}
+  await db.from('food_log').insert({date:today(),meal_type:mealType,description:desc,healthy});
+  closeModal('food-modal');
+  renderFood();
+}
+
+let foodSelectedDay=null;
+
+function foodDayClick(dateStr){
+  foodSelectedDay=foodSelectedDay===dateStr?null:dateStr;
+  S._foodNavStay=true;renderFood();
+}
+
+// ── MILESTONES WITH FILTER ─────────────────────────────
+let milestoneFilter='all';
 
 
 async function renderMilestones(){
