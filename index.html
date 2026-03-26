@@ -1116,10 +1116,6 @@ function nav(screen){
   document.getElementById('screen-'+screen).classList.add('active');
   document.querySelectorAll('.sb-item').forEach(i=>{if(i.getAttribute('onclick')===`nav('${screen}')`)i.classList.add('active');});
   S.chartsDrawn[screen]=false;
-  // Clear allSessions cache when navigating to screens that use loadAll
-  // so they always fetch fresh data
-  var allScreens=['armoury','calendar','report','share','willmaster','meta','milestones','food'];
-  if(allScreens.indexOf(screen)>=0||screen.startsWith('proj-')){S.allSessions=[];S.allLogs=[];}
   closeSidebar();
   renderActive();
 }
