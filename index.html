@@ -677,7 +677,7 @@ let S={
 const localToday=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
 // activeDate: the date the forge is operating on
 // Advances only when: forge closed for activeDate AND localToday > activeDate
-function getActiveDate(){return localStorage.getItem('qa_activeDate')||localToday();}
+function getActiveDate(){return localStorage.getItem('qa_activeDate')||null;}
 function setActiveDate(d){localStorage.setItem('qa_activeDate',d);S.activeDate=d;}
 const today=()=>S.activeDate||getActiveDate();
 const daysLeft=()=>Math.max(0,Math.ceil((GEND()-new Date())/864e5));
@@ -936,8 +936,26 @@ async function advanceDayIfReady(){
 }
 
 async function loadData(){
-  // Initialize activeDate from localStorage on every load
-  if(!S.activeDate)S.activeDate=getActiveDate();
+  // Initialize activeDate — discover from DB if not set
+  if(!S.activeDate){
+    var stored=getActiveDate();
+    if(!stored){
+      // First run of new code — find the most recent unclosed or closed date
+      try{
+        var recent=await db.from('daily_log').select('date,day_closed').order('date',{ascending:false}).limit(5);
+        var recentLogs=recent.data||[];
+        if(recentLogs.length>0){
+          // Use most recent log date as activeDate starting point
+          var lastLog=recentLogs[0];
+          stored=lastLog.date;
+        } else {
+          stored=localToday();
+        }
+      }catch(e){stored=localToday();}
+      setActiveDate(stored);
+    }
+    S.activeDate=stored;
+  }
   // Check if day should advance
   await advanceDayIfReady();
   const[pR,lR,sR,stR,dR]=await Promise.all([
@@ -3191,7 +3209,7 @@ async function renderCalendar(){
     for(let i=0;i<7;i++){
       const d=new Date(sow);d.setDate(d.getDate()+i);
       const ds=d.toISOString().split('T')[0];
-      const data=dayData[ds];const isFuture=ds>today();const isSel=S.calSelected===ds;
+      const data=dayData[ds];const localNowCal=localToday();const isFuture=ds>localNowCal;const isLocalToday=ds===localNowCal;const isSel=S.calSelected===ds;
       const t=data?.total||0;
       // Aggregate sessions by project for clean display
       const projTotals={};
@@ -3213,7 +3231,7 @@ async function renderCalendar(){
         </div>`;
       }).join('');
       const ctHTML=data?.ct?CMDS.map(c=>`<div style="width:7px;height:7px;border-radius:2px;background:${data.ct[c.key]===true?'var(--safe)':data.ct[c.key]===false?'var(--ember)':'var(--border)'}"></div>`).join(''):'';
-      weekHTML+=`<div style="background:${isSel?'var(--gold-dim)':data&&!isFuture?scoreColor(data.total,data.pen||0)+'22':'var(--card2)'};border:0.5px solid ${isSel?'var(--gold)':data&&!isFuture?scoreColor(data.total,data.pen||0):'var(--border)'};border-radius:8px;padding:10px;opacity:${isFuture?0.3:1};cursor:${!isFuture&&data?'pointer':'default'}" onclick="${!isFuture&&data?'calSelect(\''+ds+'\')':''}">
+      weekHTML+=`<div style="background:${isSel?'var(--gold-dim)':data&&!isFuture?scoreColor(data.total,data.pen||0)+'22':'var(--card2)'};border:${isSel?'1.5px solid var(--gold)':isLocalToday?'1.5px solid #4A9EBF':data&&!isFuture?'0.5px solid '+scoreColor(data.total,data.pen||0):'0.5px solid var(--border)'};border-radius:8px;padding:10px;opacity:${isFuture?0.3:1};cursor:${!isFuture?'pointer':'default'}" onclick="${!isFuture?'calSelect(\''+ds+'\')':''}">
         <div style="font-family:var(--fc);font-size:9px;color:var(--ash);letter-spacing:0.1em;margin-bottom:2px">${dayNames[i]}</div>
         <div style="font-family:var(--fc);font-size:12px;color:var(--ash);margin-bottom:6px">${d.getDate()}</div>
         ${data&&!isFuture?`
