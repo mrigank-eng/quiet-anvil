@@ -221,7 +221,7 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
 
 /* ── SHARE CARDS ── */
 .share-card-outer{background:#111008;border-radius:12px;padding:20px;margin-bottom:16px;display:flex;justify-content:center;align-items:center}
-.sc{width:380px;min-height:380px;background:#111008;border:1px solid #8a6a1a;border-radius:16px;padding:28px;font-family:'Cinzel',serif;position:relative;overflow:hidden}
+.sc{width:380px;min-height:380px;background:#111008;border:1px solid #8a6a1a;border-radius:16px;padding:28px;font-family:'Cinzel',serif;position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;display:flex;flex-direction:column;justify-content:space-between}
 .sc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#D4A84C,transparent)}
 .sc-eyebrow{font-size:8px;letter-spacing:0.3em;color:#8a6a1a;margin-bottom:20px;text-transform:uppercase}
 .sc-hero{font-size:42px;color:#D4A84C;line-height:1;margin-bottom:6px;letter-spacing:0.02em}
@@ -1341,16 +1341,11 @@ document.getElementById('screen-forge').innerHTML=`
   // Pillar balance — with dividers between pillars
   const bal=pillarBalance();
   const pillarsHTML=Object.keys(bal.pillars).map(function(pillar,i){
-    const earned=bal.pillars[pillar];const max=bal.maxPts[pillar];const pct=Math.round(earned/max*100);
-    const pColor=earned===0?'var(--warn)':earned===max?'var(--safe)':'var(--gold)';
-    return'<div style="flex:1;padding:0 16px;'+(i>0?'border-left:0.5px solid var(--border)':'')+'">'
-      +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">'
-      +'<span style="font-family:var(--fc);font-size:13px;letter-spacing:0.15em;color:var(--ash)">'+pillar.toUpperCase()+'</span>'
-      +'<span style="font-family:var(--fc);font-size:18px;color:'+pColor+'">'+earned+'<span style="font-size:14px;color:var(--ash)">/'+max+'</span></span>'
-      +'</div>'
-      +'<div style="height:6px;background:var(--card2);border-radius:3px;overflow:hidden">'
-      +'<div style="height:100%;width:'+pct+'%;background:'+pColor+';border-radius:3px"></div></div>'
-      +'</div>';
+    const earned=bal.pillars[pillar];const max=bal.maxPts[pillar];
+    const isNeg=earned<0;
+    const barPct=Math.min(100,Math.round(Math.abs(earned)/max*100));
+    const pColor=isNeg?'var(--ember)':earned===0?'var(--ash)':earned===max?'var(--safe)':'var(--gold)';
+    return'<div style="flex:1;padding:0 16px;'+(i>0?'border-left:0.5px solid var(--border)':'')+'">'      +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">'      +'<span style="font-family:var(--fc);font-size:13px;letter-spacing:0.15em;color:var(--ash)">'+pillar.toUpperCase()+'</span>'      +'<span style="font-family:var(--fc);font-size:18px;color:'+pColor+'">'+earned+'<span style="font-size:14px;color:var(--ash)">/'+max+'</span></span>'      +'</div>'      +'<div style="height:6px;background:var(--card2);border-radius:3px;overflow:hidden">'      +'<div style="height:100%;width:'+barPct+'%;background:'+pColor+';border-radius:3px"></div></div>'      +'</div>';
   }).join('');
 
   // ALL active declarations — support multiple simultaneously
@@ -2398,14 +2393,12 @@ async function renderProject(screenKey){
     </div>`:''}
 
     <div class="card" style="margin-bottom:14px;padding:20px 24px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-        <div>
-          <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.18em;color:var(--ash);margin-bottom:8px">PROGRESS TOWARD CEILING</div>
-          <div style="font-family:var(--fc);font-size:32px;color:var(--parch);line-height:1">${total.toLocaleString()} <span style="font-size:14px;color:var(--ash)">${proj.unit}</span>&nbsp;<span style="font-family:var(--fc);font-size:16px;color:var(--ash)">(${Math.round(total/proj.ceiling*100)}%)</span></div>
-        </div>
+      <div style="display:flex;flex-direction:column;align-items:center;text-align:center;margin-bottom:14px">
+        <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.18em;color:var(--ash);margin-bottom:10px">PROGRESS TOWARD CEILING</div>
+        <div style="font-family:var(--fc);font-size:36px;color:var(--parch);line-height:1;margin-bottom:4px">${total.toLocaleString()} <span style="font-size:14px;color:var(--ash)">${proj.unit}</span></div>
+        <div style="font-size:13px;color:var(--ash);margin-bottom:6px">${Math.round(total/proj.ceiling*100)}% &nbsp;&middot;&nbsp; ${total.toLocaleString()} / ${proj.ceiling.toLocaleString()}</div>
       </div>
-      <div style="display:flex;justify-content:flex-end;align-items:baseline;margin-bottom:4px">
-        <span style="font-family:var(--fc);font-size:14px;color:var(--ash)">${total.toLocaleString()} / ${proj.ceiling.toLocaleString()}</span>
+      <div style="display:none">
       </div>
       <div style="height:8px;background:var(--card2);border-radius:4px;overflow:hidden" title="${Math.round(total/proj.ceiling*100)}%">
         <div style="height:100%;width:${Math.min(100,Math.round(total/proj.ceiling*100))}%;background:var(--safe);border-radius:4px;transition:width 0.6s"></div>
@@ -2559,12 +2552,16 @@ async function renderMeta(){
   const weakest=pLvls.find(p=>p.l===metaLvl);
   const metaTitle=metaLvl>0?META_T[metaLvl-1]:'Working toward '+META_T[0];
   const metaDesc=metaLvl>0?META_D[metaLvl-1]:META_D[0];
+  // For current meta level: count projects that have already reached next level (i+1)
+  const projectsAtNextLvl=pLvls.filter(p=>p.l>metaLvl).length;
+  const curLvlPct=PROJECTS.length>0?Math.round(projectsAtNextLvl/PROJECTS.length*100):0;
   const ljHTML=META_T.map(function(t,i){
     const done=metaLvl>i;const cur=metaLvl===i;
+    const barPct=done?100:cur?curLvlPct:0;
     return`<div class="lj-row ${cur?'current':done?'done':'future'}">
       <div class="lj-dot" style="background:${cur?'var(--gold)':done?'var(--safe)':'var(--border2)'}"></div>
       <div class="lj-title" style="color:${cur?'var(--gold)':done?'var(--safe)':'var(--ash)'}">${t}</div>
-      <div class="lj-bar-track"><div class="lj-bar-fill" style="width:${done?100:cur?40:0}%;background:${cur?'var(--gold)':'var(--safe)'}"></div></div>
+      <div class="lj-bar-track"><div class="lj-bar-fill" style="width:${barPct}%;background:${cur?'var(--gold)':'var(--safe)'}"></div></div>
       <div class="lj-tag" style="color:${cur?'var(--gold)':done?'var(--safe)':'var(--border2)'}">${cur?'current':done?'✓':''}</div>
     </div>`;
   }).join('');
@@ -2659,7 +2656,7 @@ function buildDailyCard(){
   const completedProjs=S.todaySessions.filter(s=>s.tangible_logged>0);
   const pct=Math.round((total+pen)/80*100);
 
-  return`<div class="sc">
+  return`<div class="sc" style="display:flex;flex-direction:column;justify-content:center">
     <div class="sc-eyebrow">The Quiet Anvil</div>
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
       <div>
@@ -2722,7 +2719,7 @@ function buildCampaignCard(){
   html+='<div>';
   html+='<div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:4px">BEST STREAK</div>';
   html+='<div style="font-size:14px;color:#F0E4CC;font-family:Cinzel,serif">'+bestStreak+' days</div>';
-  if(bestCmdLabel)html+='<div style="font-size:11px;color:#8a6a1a;margin-top:4px;max-width:200px;line-height:1.4">'+bestCmdLabel+'</div>';
+  if(bestCmdLabel)html+='<div style="font-size:10px;color:#8a6a1a;margin-top:4px;max-width:190px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+bestCmdLabel+'</div>';
   html+='</div>';
   html+='<div style="text-align:right">';
   html+='<div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:4px">DAYS REMAINING</div>';
@@ -2743,7 +2740,7 @@ function buildUnlockCard(pid){
   const total=s.total_tangible||0;
   const unlockCC=getCatCountsAll();
   const l=getLvl(pid,total,unlockCC[pid]||{});
-  const title=getCurTitle(pid,total,unlockCC[pid]||{})||getTargetTitle(pid,total,unlockCC[pid]||{})||proj.titles[0];
+  const title=dispTitle(pid,total,unlockCC[pid]||{});
   const msgs=UNLOCK_MSGS&&UNLOCK_MSGS[pid]?UNLOCK_MSGS[pid]:[];
   const msg=msgs.length>0&&l>0?msgs[Math.min(l,msgs.length)-1]:'';
   var html='<div class="sc">';
@@ -2764,11 +2761,11 @@ function buildUnlockCard(pid){
 function showUnlockCard(pid){const el=document.getElementById('card-unlock');if(el)el.innerHTML=buildUnlockCard(pid);}
 
 async function dlCard(elId,filename){
-  const el=document.getElementById(elId);if(!el){alert('Card not found.');return;}
+  const el=document.getElementById(elId);if(!el){await gameAlert('Card not found. Try navigating away and back to Share.','Card Error');return;}
   try{
     const canvas=await html2canvas(el,{backgroundColor:'#111008',scale:2,useCORS:true,logging:false});
     const link=document.createElement('a');link.download=filename+'.png';link.href=canvas.toDataURL('image/png');link.click();
-  }catch(e){alert('Could not generate image.');console.error(e);}
+  }catch(e){await gameAlert('Could not generate image. Try again.','Download Error');console.error(e);}
 }
 
 // ── BACKUP SYSTEM ───────────────────────────────────────
@@ -2841,7 +2838,7 @@ async function downloadBackup(id){
 }
 
 async function confirmDeleteBackup(id){
-  if(!confirm('Delete this backup? This cannot be undone.'))return;
+  if(!(await gameConfirm('Delete this backup? This cannot be undone.','Delete Backup','Delete','Cancel')))return;
   try{
     await db.from('backups').delete().eq('id',id);
     toast('Backup deleted','info',2000);
@@ -2865,7 +2862,7 @@ function loadFromLocalFile(input){
       }
       const dt=backup.created_at?new Date(backup.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'unknown date';
       const type=backup.type||'unknown';
-      if(!confirm('Load backup from file? Type: '+type+' | Date: '+dt+' | Coverage: '+(backup.date_from||'?')+' to '+(backup.date_to||'?')+' | This will wipe ALL current data. Cannot be undone.'))return;
+      if(!(await gameConfirm('Load backup from file? Type: '+type+' | Date: '+dt+' | Coverage: '+(backup.date_from||'?')+' to '+(backup.date_to||'?')+'. This will wipe ALL current data.','Load Backup File','Load & Restore','Cancel')))return;
       // Save to Supabase first so it appears in the table
       toast('Importing backup...','info',2000);
       const payload=backup.payload;
@@ -2953,11 +2950,11 @@ async function takeRegularBackup(){
   renderBackup();
 }
 
-function confirmLoadBackup(id,type){
+async function confirmLoadBackup(id,type){
   const msg = type==='clean-slate'
     ? 'This is a CLEAN SLATE backup. Restoring will wipe ALL current data and replace it with this snapshot. This cannot be undone. Continue?'
     : 'Restore this backup? ALL current data will be replaced with this snapshot. This cannot be undone. Continue?';
-  if(!confirm(msg))return;
+  if(!(await gameConfirm(msg,type==='clean-slate'?'Restore Clean Slate Backup':'Restore Backup','Restore','Cancel')))return;
   loadBackup(id);
 }
 
@@ -3268,7 +3265,7 @@ async function saveBodyProfile(){
 }
 
 async function resetBodyProfile(){
-  if(!confirm('Update body profile? This only changes your height/DOB/gender — no entries are affected.'))return;
+  if(!(await gameConfirm('Update body profile? This only changes your height, date of birth and gender — no entries are affected.','Update Profile','Update','Cancel')))return;
   bodyProfile=null;
   await db.from('body_profile').delete().neq('id','00000000-0000-0000-0000-000000000000');
   renderBody();
@@ -3293,7 +3290,7 @@ async function submitBodyEntry(){
 }
 
 async function deleteBodyEntry(id){
-  if(!confirm('Delete this entry?'))return;
+  if(!(await gameConfirm('Delete this body composition entry? This cannot be undone.','Delete Entry','Delete','Cancel')))return;
   await db.from('body_composition').delete().eq('id',id);
   toast('Entry deleted','info',1500);
   await loadBodyData();
@@ -3311,25 +3308,23 @@ async function renderTodos(){
   const pending=(todos||[]).filter(t=>!t.completed);
   const completed=(todos||[]).filter(t=>t.completed);
 
-  const pendingRows=pending.map(function(t,i){
+  const pendingRows=pending.map(function(t){
     return'<div class="todo-row" draggable="true" data-id="'+t.id+'" data-order="'+t.sort_order+'"'
-      +' ondragstart="todoDragStart(event)" ondragover="todoDragOver(event)" ondrop="todoDrop(event)">'
-      +'<div style="display:flex;align-items:center;gap:10px;flex:1">'
-      +'<div style="cursor:grab;color:var(--ash);font-size:14px;padding:0 4px">⠿</div>'
+      +' ondragstart="todoDragStart(event)" ondragover="todoDragOver(event)" ondrop="todoDrop(event)"'
+      +' style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:0.5px solid var(--border)">'
+      +'<div style="width:20px;flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:grab;color:var(--ash);font-size:12px">⠿</div>'
       +'<input type="checkbox" style="width:16px;height:16px;flex-shrink:0;cursor:pointer" data-tid="'+t.id+'" onchange="completeTodo(this.dataset.tid)">'
-      +'<span style="font-size:14px;color:var(--parch);line-height:1.4">'+escHtml(t.text)+'</span>'
-      +'</div>'
-      +'<button class="btn btn-sm" style="color:var(--ember);border-color:var(--ember);flex-shrink:0" data-did="'+t.id+'" onclick="deleteTodo(this.dataset.did)">✕</button>'
+      +'<span style="flex:1;font-size:13px;color:var(--parch);line-height:1.4">'+escHtml(t.text)+'</span>'
+      +'<button class="btn btn-sm" style="color:var(--ember);border-color:var(--ember);flex-shrink:0;padding:2px 6px" data-did="'+t.id+'" onclick="deleteTodo(this.dataset.did)">✕</button>'
       +'</div>';
   }).join('');
 
   const completedRows=completed.map(function(t){
-    return'<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border);gap:10px">'
-      +'<div style="display:flex;align-items:center;gap:10px;flex:1">'
+    return'<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:0.5px solid var(--border)">'
+      +'<div style="width:20px;flex-shrink:0;text-align:center"><span style="color:var(--safe);font-size:14px">✓</span></div>'
       +'<input type="checkbox" checked style="width:16px;height:16px;flex-shrink:0;cursor:pointer" data-tid="'+t.id+'" onchange="uncompleteTodo(this.dataset.tid)">'
-      +'<span style="font-size:13px;color:var(--ash);text-decoration:line-through;line-height:1.4">'+escHtml(t.text)+'</span>'
-      +'</div>'
-      +'<button class="btn btn-sm" style="color:var(--ember);border-color:var(--ember);flex-shrink:0" data-did="'+t.id+'" onclick="deleteTodo(this.dataset.did)">✕</button>'
+      +'<span style="flex:1;font-size:13px;color:var(--ash);text-decoration:line-through;line-height:1.4">'+escHtml(t.text)+'</span>'
+      +'<button class="btn btn-sm" style="color:var(--ember);border-color:var(--ember);flex-shrink:0;padding:2px 6px" data-did="'+t.id+'" onclick="deleteTodo(this.dataset.did)">✕</button>'
       +'</div>';
   }).join('');
 
@@ -3401,7 +3396,7 @@ async function deleteTodo(id){
 }
 
 async function deleteAllCompleted(){
-  if(!confirm('Delete all completed tasks?'))return;
+  if(!(await gameConfirm('Delete all completed tasks? This cannot be undone.','Delete Completed','Delete All','Cancel')))return;
   await db.from('todos').delete().eq('completed',true);
   await renderTodos();
 }
@@ -3963,7 +3958,8 @@ async function renderCalendar(){
         if(Object.keys(byProj).length>3)projLines+=`<div style="font-size:8px;color:var(--border2)">+${Object.keys(byProj).length-3} more</div>`;
         projLines+='</div>';
       }
-      grid+=`<div style="background:${isSel?'var(--gold-dim)':data&&!isFuture?scoreColor(data.total,data.pen||0)+'22':'var(--card2)'};border:0.5px solid ${isSel?'var(--gold)':data&&!isFuture?scoreColor(data.total,data.pen||0):'var(--border)'};border-radius:8px;padding:7px 5px;min-height:80px;cursor:${!isFuture&&data?'pointer':'default'};opacity:${isFuture?0.3:1};transition:border-color 0.2s" onclick="${!isFuture&&data?'calSelect(\''+ds+'\')':''}">
+      const isToday=ds===localToday();
+      grid+=`<div style="background:${isSel?'var(--gold-dim)':data&&!isFuture?scoreColor(data.total,data.pen||0)+'22':'var(--card2)'};border:${isToday?'1.5px solid #4A9EBF':isSel?'0.5px solid var(--gold)':data&&!isFuture?'0.5px solid '+scoreColor(data.total,data.pen||0):'0.5px solid var(--border)'};border-radius:8px;padding:7px 5px;min-height:80px;cursor:${!isFuture&&data?'pointer':'default'};opacity:${isFuture?0.3:1};transition:border-color 0.2s" onclick="${!isFuture&&data?'calSelect(\''+ds+'\')':''}">
         <div style="font-family:var(--fc);font-size:10px;color:var(--ash);margin-bottom:2px">${d}</div>
         ${data&&!isFuture?`
           <div style="font-family:var(--fc);font-size:13px;color:${scoreColor(t,data.pen||0)};line-height:1;margin-bottom:3px">${t}</div>
@@ -4110,7 +4106,7 @@ async function renderCalendar(){
         (function(){
           var style='width:12px;height:12px;border-radius:2px;background:'+bg+(isLToday?';outline:1.5px solid #4A9EBF;outline-offset:-1px':'')+';cursor:'+(data?'pointer':'default');
           var title=ds+(inYear?': '+t+' pts':'');
-          var click=data?'calSelect('+JSON.stringify(ds)+')':'';
+          var click=data?'calSelect(\"'+ds+'\")':"";
           yHTML+='<td style="padding:1px"><div style="'+style+'" title="'+title+'" onclick="'+click+'"></div></td>';
         })();
       });
@@ -4281,7 +4277,60 @@ function closeUnlock(){document.getElementById('unlock').classList.remove('open'
 
 // ── INIT ───────────────────────────────────────────────
 document.getElementById('pin-screen').classList.add('active');
+
+// ── GAME CONFIRM MODAL ──────────────────────────────────────────────
+let _confirmResolve = null;
+
+function gameConfirm(message, title, okLabel, cancelLabel) {
+  return new Promise(function(resolve) {
+    _confirmResolve = resolve;
+    document.getElementById('confirm-title').textContent = title || 'Confirm';
+    document.getElementById('confirm-message').textContent = message;
+    document.getElementById('confirm-ok-btn').textContent = okLabel || 'Confirm';
+    document.getElementById('confirm-cancel-btn').textContent = cancelLabel || 'Cancel';
+    // Style ok button based on danger keywords
+    var isDanger = /delete|wipe|clear|remove|restore|overwrite/i.test(message + (okLabel||''));
+    document.getElementById('confirm-ok-btn').style.borderColor = isDanger ? 'var(--ember)' : 'var(--gold)';
+    document.getElementById('confirm-ok-btn').style.color = isDanger ? 'var(--ember)' : 'var(--gold)';
+    document.getElementById('confirm-modal').classList.add('open');
+  });
+}
+
+function confirmAccept() {
+  document.getElementById('confirm-modal').classList.remove('open');
+  if (_confirmResolve) { _confirmResolve(true); _confirmResolve = null; }
+}
+
+function confirmReject() {
+  document.getElementById('confirm-modal').classList.remove('open');
+  if (_confirmResolve) { _confirmResolve(false); _confirmResolve = null; }
+}
+
+function gameAlert(message, title) {
+  return new Promise(function(resolve) {
+    _confirmResolve = resolve;
+    document.getElementById('confirm-title').textContent = title || 'Notice';
+    document.getElementById('confirm-message').textContent = message;
+    document.getElementById('confirm-ok-btn').textContent = 'OK';
+    document.getElementById('confirm-ok-btn').style.borderColor = 'var(--gold)';
+    document.getElementById('confirm-ok-btn').style.color = 'var(--gold)';
+    document.getElementById('confirm-cancel-btn').style.display = 'none';
+    document.getElementById('confirm-modal').classList.add('open');
+  });
+}
+
 </script>
+
+<!-- CUSTOM CONFIRM MODAL -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-title" id="confirm-title">Confirm</div>
+    <div style="font-size:13px;color:var(--parch);line-height:1.6;margin-bottom:20px" id="confirm-message"></div>
+    <div class="modal-btns">
+      <button class="btn btn-sm" id="confirm-cancel-btn" onclick="confirmReject()">Cancel</button>
+      <button class="btn btn-sm btn-danger" id="confirm-ok-btn" onclick="confirmAccept()">Confirm</button>
+    </div>
+  </div>
+</div>
 </body>
-</html
-  >
+</html>
