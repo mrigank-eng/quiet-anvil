@@ -2670,75 +2670,82 @@ function buildDailyCard(){
         <div style="font-size:9px;letter-spacing:0.1em;color:#8a6a1a">CT POINTS</div>
       </div>
     </div>
-    <div class="sc-mark">quiet-anvil.vercel.app</div>
   </div>`;
 }
 
 function buildCampaignCard(){
   const shareCC=getCatCountsAll();
-  const repMetaCC=getCatCountsAll();
-  const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,s?s.total_tangible:0,repMetaCC[p.id]||{});})):0;
+  const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,s?s.total_tangible:0,shareCC[p.id]||{});})):0;
   const metaTitle=metaLvl>0?META_T[metaLvl-1]:'Working toward '+META_T[0];
   const bestStreak=S.streaks.reduce((m,s)=>Math.max(m,s.current_streak||0),0);
   const bestStreakCmd=S.streaks.find(s=>(s.current_streak||0)===bestStreak);
-
-  return`<div class="sc">
-    <div class="sc-eyebrow">The Quiet Anvil · Campaign Snapshot</div>
-    <div style="margin-bottom:6px">
-      <div style="font-size:9px;letter-spacing:0.15em;color:#8a6a1a;margin-bottom:6px">META RANK</div>
-      <div style="font-family:Cinzel,serif;font-size:32px;color:#D4A84C;line-height:1;margin-bottom:4px">${metaTitle}</div>
-      <div style="font-size:10px;letter-spacing:0.1em;color:#8a6a1a">Level ${metaLvl} of 10 · Day ${dayNum()} of ${totalCampaignDays()}</div>
-    </div>
-    <div class="sc-divider"></div>
-    <div style="margin-bottom:16px">
-      ${PROJECTS.map(function(proj){
-        const s=S.projects.find(p=>p.project===proj.id)||{};
-        const total=s.total_tangible||0;
-        const l=getLvl(proj.id,total,shareCC[proj.id]||{});
-        const pr=getProg(proj.id,total,shareCC[proj.id]||{});
-        return`<div class="sc-prog-row">
-          <div class="sc-prog-label">
-            <div class="sc-prog-name">${proj.id.toUpperCase()}</div>
-            <div class="sc-prog-val">${dispTitle(proj.id,total,shareCC[proj.id]||{})||proj.titles[0]} · L${l}</div>
-          </div>
-          <div class="sc-prog-track"><div class="sc-prog-fill" style="width:${pr}%"></div></div>
-        </div>`;
-      }).join('')}
-    </div>
-    <div class="sc-divider"></div>
-    <div style="display:flex;justify-content:space-between">
-      <div><div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:2px">BEST STREAK</div><div style="font-size:12px;color:#F0E4CC">${bestStreak} days${bestStreakCmd?' · '+bestStreakCmd.commandment:''}</div></div>
-      <div style="text-align:right"><div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:2px">DAYS REMAINING</div><div style="font-family:Cinzel,serif;font-size:20px;color:#D4A84C">${daysLeft()}</div></div>
-    </div>
-    <div class="sc-mark">quiet-anvil.vercel.app</div>
-  </div>`;
+  const bestCmdLabel=bestStreakCmd?CMDS.find(x=>x.short===bestStreakCmd.commandment)?.label||bestStreakCmd.commandment:'';
+  const projRows=PROJECTS.map(function(proj){
+    const s=S.projects.find(p=>p.project===proj.id)||{};
+    const total=s.total_tangible||0;
+    const l=getLvl(proj.id,total,shareCC[proj.id]||{});
+    const pr=getProg(proj.id,total,shareCC[proj.id]||{});
+    const title=dispTitle(proj.id,total,shareCC[proj.id]||{})||proj.titles[0];
+    return'<div class="sc-prog-row">'
+      +'<div class="sc-prog-label">'
+      +'<div class="sc-prog-name">'+proj.id.toUpperCase()+'</div>'
+      +'<div class="sc-prog-val">'+title+' · L'+l+'</div>'
+      +'</div>'
+      +'<div class="sc-prog-track"><div class="sc-prog-fill" style="width:'+pr+'%"></div></div>'
+      +'</div>';
+  }).join('');
+  var html='<div class="sc">';
+  html+='<div class="sc-eyebrow">The Quiet Anvil · Campaign Snapshot</div>';
+  html+='<div style="margin-bottom:8px">';
+  html+='<div style="font-size:9px;letter-spacing:0.15em;color:#8a6a1a;margin-bottom:6px">META RANK</div>';
+  html+='<div style="font-family:Cinzel,serif;font-size:18px;color:#D4A84C;line-height:1.3;margin-bottom:12px">'+metaTitle+'</div>';
+  html+='<div style="font-size:10px;letter-spacing:0.1em;color:#8a6a1a">Level '+metaLvl+' of 10 · Day '+dayNum()+' of '+totalCampaignDays()+'</div>';
+  html+='</div>';
+  html+='<div class="sc-divider"></div>';
+  html+='<div style="margin-bottom:16px">'+projRows+'</div>';
+  html+='<div class="sc-divider"></div>';
+  html+='<div style="display:flex;justify-content:space-between">';
+  html+='<div>';
+  html+='<div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:4px">BEST STREAK</div>';
+  html+='<div style="font-size:14px;color:#F0E4CC;font-family:Cinzel,serif">'+bestStreak+' days</div>';
+  if(bestCmdLabel)html+='<div style="font-size:11px;color:#8a6a1a;margin-top:4px;max-width:200px;line-height:1.4">'+bestCmdLabel+'</div>';
+  html+='</div>';
+  html+='<div style="text-align:right">';
+  html+='<div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:4px">DAYS REMAINING</div>';
+  html+='<div style="font-family:Cinzel,serif;font-size:20px;color:#D4A84C">'+daysLeft()+'</div>';
+  html+='</div></div></div>';
+  return html;
 }
 
+
+
+
+
 function buildUnlockCard(pid){
-  if(!pid)return`<div class="sc" style="min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center">
-    <div style="font-family:Cinzel,serif;font-size:14px;letter-spacing:0.15em;color:#8a6a1a">Select a project above</div>
-  </div>`;
+  if(!pid)return'<div class="sc" style="min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center"><div style="font-family:Cinzel,serif;font-size:14px;letter-spacing:0.15em;color:#8a6a1a">Select a project above</div></div>';
   const proj=PROJECTS.find(p=>p.id===pid);
+  if(!proj)return'';
   const s=S.projects.find(p=>p.project===pid)||{};
   const total=s.total_tangible||0;
   const unlockCC=getCatCountsAll();
   const l=getLvl(pid,total,unlockCC[pid]||{});
-  const title=getCurTitle(pid,total,unlockCC[pid]||{})||getTargetTitle(pid,total,unlockCC[pid]||{});
-  return`<div class="sc">
-    <div class="sc-eyebrow">The Quiet Anvil · Level Unlocked</div>
-    <div style="font-size:9px;letter-spacing:0.15em;color:#8a6a1a;margin-bottom:16px">${pid.toUpperCase()}</div>
-    <div style="font-family:Cinzel,serif;font-size:38px;color:#D4A84C;line-height:1.1;margin-bottom:8px">${title}</div>
-    <div style="font-family:Cinzel,serif;font-size:11px;letter-spacing:0.15em;color:#8a6a1a;margin-bottom:24px">Level ${l} of 10</div>
-    <div class="sc-divider"></div>
-    <div style="font-family:'EB Garamond',serif;font-size:14px;color:#F0E4CC;font-style:italic;line-height:1.7;margin:16px 0">${msg}</div>
-    <div class="sc-divider"></div>
-    <div style="display:flex;justify-content:space-between;margin-top:8px">
-      <div><div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:2px">TANGIBLE AT UNLOCK</div><div style="font-size:13px;color:#D4A84C;font-family:Cinzel,serif">${total.toLocaleString()} ${proj.unit}</div></div>
-      <div style="text-align:right"><div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:2px">DAY</div><div style="font-size:13px;color:#F0E4CC">${dayNum()} of ${totalCampaignDays()}</div></div>
-    </div>
-    <div class="sc-mark">quiet-anvil.vercel.app</div>
-  </div>`;
+  const title=getCurTitle(pid,total,unlockCC[pid]||{})||getTargetTitle(pid,total,unlockCC[pid]||{})||proj.titles[0];
+  const msgs=UNLOCK_MSGS&&UNLOCK_MSGS[pid]?UNLOCK_MSGS[pid]:[];
+  const msg=msgs.length>0&&l>0?msgs[Math.min(l,msgs.length)-1]:'';
+  var html='<div class="sc">';
+  html+='<div class="sc-eyebrow">The Quiet Anvil · Level Unlocked</div>';
+  html+='<div style="font-size:9px;letter-spacing:0.15em;color:#8a6a1a;margin-bottom:16px">'+pid.toUpperCase()+'</div>';
+  html+='<div style="font-family:Cinzel,serif;font-size:38px;color:#D4A84C;line-height:1.1;margin-bottom:8px">'+title+'</div>';
+  html+='<div style="font-family:Cinzel,serif;font-size:11px;letter-spacing:0.15em;color:#8a6a1a;margin-bottom:24px">Level '+l+' of 10</div>';
+  html+='<div class="sc-divider"></div>';
+  if(msg)html+='<div style="font-size:14px;color:#F0E4CC;font-style:italic;line-height:1.7;margin:16px 0">'+msg+'</div><div class="sc-divider"></div>';
+  html+='<div style="display:flex;justify-content:space-between;margin-top:8px">';
+  html+='<div><div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:2px">TANGIBLE AT UNLOCK</div><div style="font-size:13px;color:#D4A84C;font-family:Cinzel,serif">'+total.toLocaleString()+' '+proj.unit+'</div></div>';
+  html+='<div style="text-align:right"><div style="font-size:9px;letter-spacing:0.12em;color:#8a6a1a;margin-bottom:2px">DAY</div><div style="font-size:13px;color:#F0E4CC">'+dayNum()+' of '+totalCampaignDays()+'</div></div>';
+  html+='</div></div>';
+  return html;
 }
+
 
 function showUnlockCard(pid){const el=document.getElementById('card-unlock');if(el)el.innerHTML=buildUnlockCard(pid);}
 
