@@ -367,6 +367,8 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
   <div id="screen-backup" class="screen"><div class="loading">Loading backups...</div></div>
   <div id="screen-settings" class="screen"><div class="loading">Loading settings...</div></div>
   <div id="screen-projmgmt" class="screen"><div class="loading">Loading...</div></div>
+  <div id="screen-body" class="screen"><div class="loading">Loading body composition...</div></div>
+  <div id="screen-todos" class="screen"><div class="loading">Loading to-dos...</div></div>
 </div>
 
 
@@ -533,8 +535,6 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
   <div class="unlock-msg" id="ul-msg"></div>
   <button class="btn btn-sm" onclick="closeUnlock()">Carry this forward</button>
 </div>
-  <div id="screen-body" class="screen"><div class="loading">Loading body composition...</div></div>
-  <div id="screen-todos" class="screen"><div class="loading">Loading to-dos...</div></div>
 
 <script>
 const SURL='https://fswqranekmivhaykfgzy.supabase.co';
@@ -1278,17 +1278,6 @@ function renderForge(){
   // Pre-campaign guard
   if(isPreCampaign()){
     const ds=daysToStart();
-  var bodyReminderBanner=(function(){
-    var now=new Date();var day=now.getDate();
-    var lastDay=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
-    var ym=now.getFullYear()+'-'+(String(now.getMonth()+1).padStart(2,'0'));
-    var logged=typeof bodyEntries!=='undefined'&&bodyEntries.some(function(e){return e.date&&e.date.startsWith(ym);});
-    if(day<25||logged)return'';
-    return'<div style="background:rgba(74,158,191,0.1);border:0.5px solid #4A9EBF;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">'
-      +'<div style="font-size:12px;color:#4A9EBF">&#128202; Monthly body composition not yet logged &nbsp;&middot;&nbsp; Day '+day+' of '+lastDay+'</div>'
-      +'<button class="btn btn-sm" style="border-color:#4A9EBF;color:#4A9EBF;font-size:11px" onclick="nav(\'body\')">Log now</button>'
-      +'</div>';
-  })();
     document.getElementById('screen-forge').innerHTML=`
       <div style="text-align:center;padding:80px 40px">
         <div style="font-family:var(--fc);font-size:10px;letter-spacing:0.25em;color:var(--ash);margin-bottom:20px">PRE-CAMPAIGN</div>
@@ -1302,13 +1291,15 @@ function renderForge(){
   // ── DAY STATE CHECKS ──
   const localNow=localToday();
   const activeDay=today();
+
   const dayClosed=S.todayLog&&S.todayLog.day_closed===true;
   const dayAdvancePending=localNow>activeDay&&!dayClosed;
 
   // If forge is sealed AND day has already advanced — show sealed state
   if(dayClosed&&localNow===activeDay){
     // Day closed but local date hasn't changed yet — show sealed state
-    document.getElementById('screen-forge').innerHTML=`
+      
+document.getElementById('screen-forge').innerHTML=`
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
         <div>
           <div class="pt">Daily Forge</div>
@@ -1473,7 +1464,8 @@ function renderForge(){
     ?`<div style="background:var(--ember-dim);border:0.5px solid var(--ember);border-radius:8px;padding:12px 14px;font-size:13px;color:var(--ash)">${gateMsg||'Complete all tasks to unlock reflection.'}</div>`
     :`<div><textarea id="reflection-text" placeholder="What happened today. What the forge produced. What tomorrow needs." rows="4">${S.todayLog?.reflection||''}</textarea><button class="btn btn-block" onclick="closeDay()">Close the day — submit reflection</button><button class="btn btn-sm btn-warn" onclick="openClearForgeModal()" style="margin-top:8px;width:100%">⚠ Clear today's forge</button></div>`;
 
-  document.getElementById('screen-forge').innerHTML=`
+  document.
+  getElementById('screen-forge').innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px">
       <div>
         <div class="pt">Daily Forge</div>
@@ -1499,7 +1491,7 @@ function renderForge(){
       <div style="font-family:var(--fc);font-size:10px;letter-spacing:0.18em;color:var(--warn);margin-bottom:6px">⚠ THE DAY HAS TURNED — FORGE UNSEALED</div>
       <div style="font-size:13px;color:var(--parch)">The date has changed. Seal this forge with a nightly reflection before the new day begins.</div>
     </div>`:''}
-    ${bodyReminderBanner}
+    ${getBodyReminderBanner()}
     <div class="temp-indicator ${tempClass}" style="margin-bottom:14px">
       <div><div style="font-family:var(--fc);font-size:10px;letter-spacing:0.12em;color:var(--ash);margin-bottom:2px">Forge Temperature — 7-day average</div><div style="font-size:13px;color:${tempColor};font-style:italic">${temp.label}</div></div>
       <div style="font-family:var(--fc);font-size:28px;color:${tempColor}">${temp.avg}</div>
@@ -3056,6 +3048,19 @@ async function loadBackup(id){
 let bodyProfile=null;
 let bodyEntries=[];
 
+function getBodyReminderBanner(){
+  var now=new Date();
+  var day=now.getDate();
+  var lastDay=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  var ym=now.getFullYear()+'-'+(String(now.getMonth()+1).padStart(2,'0'));
+  var logged=typeof bodyEntries!=='undefined'&&Array.isArray(bodyEntries)&&bodyEntries.some(function(e){return e.date&&e.date.startsWith(ym);});
+  if(day<25||logged)return'';
+  return'<div style="background:rgba(74,158,191,0.1);border:0.5px solid #4A9EBF;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">'
+    +'<div style="font-size:12px;color:#4A9EBF">&#128202; Monthly body composition not yet logged &nbsp;&middot;&nbsp; Day '+day+' of '+lastDay+'</div>'
+    +'<button class="btn btn-sm" style="border-color:#4A9EBF;color:#4A9EBF;font-size:11px" onclick="nav(\'body\')">Log now</button>'
+    +'</div>';
+}
+
 async function loadBodyData(){
   const[pR,eR]=await Promise.all([
     db.from('body_profile').select('*').limit(1).maybeSingle(),
@@ -4278,4 +4283,5 @@ function closeUnlock(){document.getElementById('unlock').classList.remove('open'
 document.getElementById('pin-screen').classList.add('active');
 </script>
 </body>
-</html>
+</html
+  >
