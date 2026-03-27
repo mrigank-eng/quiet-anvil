@@ -394,8 +394,8 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
 <div class="modal-overlay" id="clean-state-modal">
   <div class="modal">
     <div class="modal-title">Clean State</div>
-    <div class="modal-sub">All campaign data will be wiped. A backup is saved to browser local storage first.</div>
-    <div style="background:var(--ember-dim);border:0.5px solid var(--ember);border-radius:6px;padding:10px 14px;margin:12px 0;font-size:12px;color:var(--ember)">⚠ Database data cannot be undone.</div>
+    <div class="modal-sub">All campaign data will be wiped. A full backup will be saved to your Supabase database first.</div>
+    <div style="background:var(--ember-dim);border:0.5px solid var(--ember);border-radius:6px;padding:10px 14px;margin:12px 0;font-size:12px;color:var(--ember)">⚠ This will permanently wipe all sessions, logs, and progress. The backup created before wiping can be restored from the Backup tab.</div>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--parch);cursor:pointer;margin-bottom:16px">
       <input type="checkbox" id="clean-reset-dates" style="width:16px;height:16px">
       Also reset campaign start and end dates
@@ -2812,6 +2812,74 @@ async function saveBackupToDb(type){
   }
 }
 
+async function downloadBackup(id){
+  try{
+    toast('Preparing download...','info',2000);
+    const{data:backup,error}=await db.from('backups').select('*').eq('id',id).single();
+    if(error||!backup)throw new Error('Backup not found');
+    const dt=new Date(backup.created_at);
+    const dateStr=dt.toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g,'-');
+    const filename='quiet-anvil-backup-'+backup.type+'-'+dateStr+'.json';
+    const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=filename;a.click();
+    URL.revokeObjectURL(url);
+    toast('Backup downloaded','success',2000);
+  }catch(e){toast('Download failed: '+e.message,'error');}
+}
+
+async function confirmDeleteBackup(id){
+  if(!confirm('Delete this backup? This cannot be undone.'))return;
+  try{
+    await db.from('backups').delete().eq('id',id);
+    toast('Backup deleted','info',2000);
+    renderBackup();
+  }catch(e){toast('Delete failed: '+e.message,'error');}
+}
+
+
+function loadFromLocalFile(input){
+  const file=input.files[0];
+  if(!file)return;
+  if(!file.name.endsWith('.json')){toast('Please select a .json backup file','error');return;}
+  const reader=new FileReader();
+  reader.onload=async function(e){
+    try{
+      const backup=JSON.parse(e.target.result);
+      // Validate it looks like a QA backup
+      if(!backup.payload||!backup.payload.sessions){
+        toast('Invalid backup file — not a Quiet Anvil backup','error');
+        return;
+      }
+      const dt=backup.created_at?new Date(backup.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'unknown date';
+      const type=backup.type||'unknown';
+      if(!confirm('Load backup from file? Type: '+type+' | Date: '+dt+' | Coverage: '+(backup.date_from||'?')+' to '+(backup.date_to||'?')+' | This will wipe ALL current data. Cannot be undone.'))return;
+      // Save to Supabase first so it appears in the table
+      toast('Importing backup...','info',2000);
+      const payload=backup.payload;
+      await db.from('backups').insert({
+        type:type+' (imported)',
+        date_from:backup.date_from||null,
+        date_to:backup.date_to||null,
+        payload:payload
+      });
+      // Now get the inserted backup id and restore it
+      const{data:newBackup}=await db.from('backups').select('id').order('created_at',{ascending:false}).limit(1).single();
+      if(newBackup){
+        await loadBackup(newBackup.id);
+      }
+    }catch(err){
+      toast('Failed to load backup file: '+err.message,'error');
+      console.error(err);
+    }
+  };
+  reader.readAsText(file);
+  // Reset input so same file can be selected again
+  input.value='';
+}
+
+
 async function renderBackup(){
   const el = document.getElementById('screen-backup');
   el.innerHTML = '<div class="loading">Loading backups...</div>';
@@ -2831,7 +2899,11 @@ async function renderBackup(){
         +'<td style="padding:12px 8px">'+typeBadge+'</td>'
         +'<td style="padding:12px 8px;font-family:var(--fc);font-size:11px;color:var(--ash)">'+coverage+'</td>'
         +'<td style="padding:12px 8px;text-align:right">'
+        +'<div style="display:flex;gap:6px;justify-content:flex-end">'
+        +'<button class="btn btn-sm" data-bid="'+b.id+'" onclick="downloadBackup(this.dataset.bid)" title="Download as JSON">↓</button>'
         +'<button class="btn btn-sm" data-bid="'+b.id+'" data-btype="'+b.type+'" onclick="confirmLoadBackup(this.dataset.bid,this.dataset.btype)">Restore</button>'
+        +'<button class="btn btn-sm btn-danger" data-bid="'+b.id+'" onclick="confirmDeleteBackup(this.dataset.bid)" title="Delete backup" style="color:var(--ember);border-color:var(--ember)">✕</button>'
+        +'</div>'
         +'</td>'
         +'</tr>';
     }).join('');
@@ -2840,7 +2912,11 @@ async function renderBackup(){
       +'<div class="ps">Full system restore points · All data restored exactly as saved</div>'
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'
       +'<div class="st" style="margin:0">Saved backups</div>'
+      +'<div style="display:flex;gap:8px">'
+      +'<button class="btn btn-sm" onclick="document.getElementById(\'backup-file-input\').click()">↑ Load from file</button>'
+      +'<input type="file" id="backup-file-input" accept=".json" style="display:none" onchange="loadFromLocalFile(this)">'
       +'<button class="btn" onclick="takeRegularBackup()">+ Take backup now</button>'
+      +'</div>'
       +'</div>'
       +'<div class="card" style="padding:0;overflow:hidden">'
       +(rows
