@@ -1904,19 +1904,14 @@ async function handleCT(key,label,keeping){
     // Check if broken today — if so, restore streak
     const wasBrokenToday=S.todayLog?.[key]===false;
     if(wasBrokenToday){
+      // Remove today's break entry from break_log (correction on same day)
       const streak=S.streaks.find(s=>s.commandment===CMDS.find(x=>x.key===key)?.short)||{};
-      const preBreak=streak.pre_break_streak||0;
-      // Remove today's break from break_log
-      const breakLog=(streak.break_log||'');
-      const lines=breakLog.split('\n').filter(l=>!l.startsWith(today()));
+      const lines=(streak.break_log||'').split('\n').filter(l=>!l.startsWith(today()));
       await db.from('commandment_streaks').update({
-        current_streak:preBreak,
-        pre_break_streak:0,
-        total_breaks:Math.max(0,(streak.total_breaks||1)-1),
-        last_break_date:lines.length>0?(lines[lines.length-1].split(' ')[0]||null):null,
+        last_break_date:lines.length>0?(lines[lines.length-1].split(' ')[0]||null):streak.last_break_date,
         break_log:lines.join('\n').trim()
       }).eq('commandment',streak.commandment);
-      toast('Break undone — streak restored to '+preBreak+' days','success');
+      toast('Commandment restored — streak intact','success');
     }
     await db.from('daily_log').update({[key]:true}).eq('date',today());
     const{data:newLog}=await db.from('daily_log').select('*').eq('date',today()).maybeSingle();
@@ -1932,17 +1927,17 @@ async function confirmCTBreak(){
   const reason=document.getElementById('ct-reason').value.trim();
   if(!reason){toast('Please record what happened.','error');return;}
   await ensureLog();
+  // Only mark broken in daily_log — streak updates happen at day close
+  // This allows same-day correction (mark kept again to undo the break)
   await db.from('daily_log').update({[S.pendingCT.key]:false}).eq('date',today());
-  const c=CMDS.find(x=>x.key===S.pendingCT.key);
-  const streak=S.streaks.find(s=>s.commandment===c.short)||{};
+  // Record the break reason for logging purposes only (no streak change yet)
+  const cmd=CMDS.find(x=>x.key===S.pendingCT.key);
+  const streak=S.streaks.find(s=>s.commandment===cmd.short)||{};
   const breakLog=(streak.break_log||'')+'\n'+today()+' — '+reason;
   await db.from('commandment_streaks').update({
-    current_streak:0,
-    pre_break_streak:(streak.current_streak||0),
-    last_break_date:today(),
-    total_breaks:(streak.total_breaks||0)+1,
-    break_log:breakLog.trim()
-  }).eq('commandment',c.short);
+    break_log:breakLog.trim(),
+    last_break_date:today()
+  }).eq('commandment',cmd.short);
   closeModal('ct-modal');S.pendingCT=null;await loadData();
 }
 
@@ -2608,25 +2603,31 @@ async function submitMilestone(){
 // ── SHARE ──────────────────────────────────────────────
 async function renderShare(){
   await loadAll();
-  document.getElementById('screen-share').innerHTML=`
-    <div class="pt">Share</div>
-    <div class="ps">Three card types · Download as PNG · Post to Instagram</div>
-
-    <div class="st">Card 1 — Daily Forge</div>
-    <div class="share-card-outer"><div id="card-daily">${buildDailyCard()}</div></div>
-    <button class="btn btn-block" style="margin-bottom:28px" onclick="dlCard('card-daily','forge-day-'+today())">Download daily card</button>
-
-    <div class="st">Card 2 — Campaign Snapshot</div>
-    <div class="share-card-outer"><div id="card-campaign">${buildCampaignCard()}</div></div>
-    <button class="btn btn-block" style="margin-bottom:28px" onclick="dlCard('card-campaign','forge-campaign-'+today())">Download campaign card</button>
-
-    <div class="st">Card 3 — Level Unlock</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-      ${PROJECTS.map(p=>'<button class="btn btn-sm" onclick="showUnlockCard(\'' + p.id + '\')">'+p.id.replace('The ','')+' </button>').join('')}
-    </div>
-    <div class="share-card-outer"><div id="card-unlock">${buildUnlockCard(null)}</div></div>
-    <button class="btn btn-block" style="margin-bottom:8px" onclick="dlCard('card-unlock','forge-unlock-'+today())">Download unlock card</button>
-  `;
+  var el=document.getElementById('screen-share');
+  var dCard='';var cCard='';var uCard='';
+  try{dCard=buildDailyCard();}catch(e){dCard='<div style="padding:20px;color:#8a6a1a">'+e.message+'</div>';}
+  try{cCard=buildCampaignCard();}catch(e){cCard='<div style="padding:20px;color:#8a6a1a">'+e.message+'</div>';}
+  try{uCard=buildUnlockCard(null);}catch(e){uCard='<div style="padding:20px;color:#8a6a1a">'+e.message+'</div>';}
+  var pBtns='';
+  PROJECTS.forEach(function(p){
+    pBtns+='<button class="btn btn-sm" onclick="showUnlockCard(this.dataset.pid)" data-pid="'+p.id+'">'+p.id.replace('The ','')+'</button> ';
+  });
+  el.innerHTML=''
+    +'<div class="pt">Share</div>'
+    +'<div class="ps">Three card types · Download as PNG · Post to Instagram</div>'
+    +'<div class="st">Card 1 — Daily Forge</div>'
+    +'<div class="share-card-outer"><div id="card-daily">'+dCard+'</div></div>'
+    +'<button class="btn btn-block" style="margin-bottom:28px" id="dl-daily">Download daily card</button>'
+    +'<div class="st">Card 2 — Campaign Snapshot</div>'
+    +'<div class="share-card-outer"><div id="card-campaign">'+cCard+'</div></div>'
+    +'<button class="btn btn-block" style="margin-bottom:28px" id="dl-campaign">Download campaign card</button>'
+    +'<div class="st">Card 3 — Level Unlock</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'+pBtns+'</div>'
+    +'<div class="share-card-outer"><div id="card-unlock">'+uCard+'</div></div>'
+    +'<button class="btn btn-block" style="margin-bottom:8px" id="dl-unlock">Download unlock card</button>';
+  document.getElementById('dl-daily').onclick=function(){dlCard('card-daily','forge-day-'+today());};
+  document.getElementById('dl-campaign').onclick=function(){dlCard('card-campaign','forge-campaign-'+today());};
+  document.getElementById('dl-unlock').onclick=function(){dlCard('card-unlock','forge-unlock-'+today());};
 }
 
 function buildDailyCard(){
