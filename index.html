@@ -508,13 +508,7 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
     <div class="modal-sub" id="missed-count" style="color:var(--ember)"></div>
     <div style="font-family:var(--fc);font-size:16px;color:var(--gold);margin-bottom:14px" id="missed-date"></div>
     <div class="st">Commandments — how did this day go?</div>
-    <div style="margin-bottom:14px">
-      ${CMDS.map(c=>`<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--border)">
-        <input type="checkbox" id="missed-ct-${c.key}" style="width:auto;margin:0">
-        <label for="missed-ct-${c.key}" style="flex:1;font-size:12px;color:var(--parch);font-family:var(--ff);cursor:pointer;margin:0">${c.label}</label>
-        <span style="font-family:var(--fc);font-size:10px;color:var(--gold)">${c.pts}pt</span>
-      </div>`).join('')}
-    </div>
+    <div style="margin-bottom:14px" id="missed-ct-list"></div>
     <label>Reflection</label>
     <textarea id="missed-reflection" placeholder="What happened that day..." style="min-height:60px"></textarea>
     <div class="modal-btns">
