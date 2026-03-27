@@ -331,6 +331,7 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
     <div class="sb-item" onclick="nav('milestones')"><span class="sb-icon">★</span>Milestones</div>
     <div class="sb-item" onclick="nav('share')"><span class="sb-icon">◈</span>Share</div>
     <div class="sb-item" onclick="nav('food')"><span class="sb-icon">🍽</span>Food Log</div>
+    <div class="sb-item" onclick="nav('backup')"><span class="sb-icon">💾</span>Backup</div>
     <div class="sb-item" onclick="nav('settings')"><span class="sb-icon">⚙</span>Settings</div>
     <div class="sb-item" onclick="nav('projmgmt')"><span class="sb-icon">◈</span>Projects</div>
   </div>
@@ -356,6 +357,7 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
   <div id="screen-milestones" class="screen"><div class="loading">Loading milestones...</div></div>
   <div id="screen-share" class="screen"><div class="loading">Building share cards...</div></div>
   <div id="screen-food" class="screen"><div class="loading">Loading food log...</div></div>
+  <div id="screen-backup" class="screen"><div class="loading">Loading backups...</div></div>
   <div id="screen-settings" class="screen"><div class="loading">Loading settings...</div></div>
   <div id="screen-projmgmt" class="screen"><div class="loading">Loading...</div></div>
 </div>
@@ -1260,6 +1262,8 @@ function renderActive(){
   else if(id==='milestones')renderMilestones();
   else if(id==='share')renderShare();
   else if(id==='food')renderFood();
+  else if(id==='backup')renderBackup();
+  else if(id==='backup')renderBackup();
   else if(id==='settings')renderSettings();
   else if(id==='projmgmt')renderProjectMgmt();
 }
@@ -1829,9 +1833,8 @@ document.addEventListener('click',function(e){
 function openCleanState(){document.getElementById('clean-state-modal').classList.add('open');}
 async function executeCleanState(){
   const resetDates=document.getElementById('clean-reset-dates').checked;
-  const backup={timestamp:new Date().toISOString(),start:getGameStart(),end:getGameEnd(),
-    sessions:S.allSessions,logs:S.allLogs,streaks:S.streaks,projects:S.projects};
-  localStorage.setItem('qa_backup_'+Date.now(),JSON.stringify(backup));
+  // Save full backup to Supabase before wiping
+  await saveBackupToDb('clean-slate');
   toast('Wiping data...','info',5000);
   const DUMMY='00000000-0000-0000-0000-000000000000';
   await Promise.all([
@@ -2757,6 +2760,203 @@ async function dlCard(elId,filename){
   }catch(e){alert('Could not generate image.');console.error(e);}
 }
 
+// ── BACKUP SYSTEM ───────────────────────────────────────
+const SCHEMA_VERSION = 1;
+
+async function saveBackupToDb(type){
+  try{
+    toast('Creating backup...','info',2000);
+    // Fetch ALL tables
+    const [sessR,logR,streakR,projR,cfgR,declR,msR,foodR] = await Promise.all([
+      db.from('sessions').select('*').order('date'),
+      db.from('daily_log').select('*').order('date'),
+      db.from('commandment_streaks').select('*'),
+      db.from('project_summary').select('*'),
+      db.from('project_config').select('*'),
+      db.from('declarations').select('*'),
+      db.from('milestones').select('*'),
+      db.from('food_log').select('*').order('date'),
+    ]);
+    const sessions = sessR.data||[];
+    const logs = logR.data||[];
+    // Calculate date range from sessions and logs
+    const allDates = [
+      ...sessions.map(s=>s.date),
+      ...logs.map(l=>l.date),
+    ].filter(Boolean).sort();
+    const dateFrom = allDates[0]||today();
+    const dateTo = allDates[allDates.length-1]||today();
+    const payload = {
+      schema_version: SCHEMA_VERSION,
+      sessions: sessions,
+      daily_log: logR.data||[],
+      commandment_streaks: streakR.data||[],
+      project_summary: projR.data||[],
+      project_config: cfgR.data||[],
+      declarations: declR.data||[],
+      milestones: msR.data||[],
+      food_log: foodR.data||[],
+      game_start: getGameStart(),
+      game_end: getGameEnd(),
+    };
+    await db.from('backups').insert({
+      type: type,
+      date_from: dateFrom,
+      date_to: dateTo,
+      payload: payload,
+    });
+    toast('Backup saved — '+dateFrom+' to '+dateTo,'success',3000);
+  }catch(e){
+    toast('Backup failed: '+e.message,'error');
+    console.error('Backup error:',e);
+  }
+}
+
+async function renderBackup(){
+  const el = document.getElementById('screen-backup');
+  el.innerHTML = '<div class="loading">Loading backups...</div>';
+  try{
+    const {data:backups,error} = await db.from('backups').select('id,created_at,type,date_from,date_to').order('created_at',{ascending:false});
+    if(error)throw error;
+    const rows = (backups||[]).map(function(b){
+      const dt = new Date(b.created_at);
+      const dateStr = dt.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+      const timeStr = dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+      const typeBadge = b.type==='clean-slate'
+        ?'<span style="font-family:var(--fc);font-size:9px;letter-spacing:0.1em;color:var(--ember);background:var(--ember-dim);padding:2px 8px;border-radius:4px">CLEAN SLATE</span>'
+        :'<span style="font-family:var(--fc);font-size:9px;letter-spacing:0.1em;color:var(--safe);background:var(--safe-dim);padding:2px 8px;border-radius:4px">REGULAR</span>';
+      const coverage = (b.date_from||'?')+' → '+(b.date_to||'?');
+      return'<tr>'
+        +'<td style="padding:12px 8px;font-size:13px;color:var(--parch)">'+dateStr+'<br><span style="font-size:11px;color:var(--ash)">'+timeStr+'</span></td>'
+        +'<td style="padding:12px 8px">'+typeBadge+'</td>'
+        +'<td style="padding:12px 8px;font-family:var(--fc);font-size:11px;color:var(--ash)">'+coverage+'</td>'
+        +'<td style="padding:12px 8px;text-align:right">'
+        +'<button class="btn btn-sm" data-bid="'+b.id+'" data-btype="'+b.type+'" onclick="confirmLoadBackup(this.dataset.bid,this.dataset.btype)">Restore</button>'
+        +'</td>'
+        +'</tr>';
+    }).join('');
+    el.innerHTML=''
+      +'<div class="pt">Backup</div>'
+      +'<div class="ps">Full system restore points · All data restored exactly as saved</div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'
+      +'<div class="st" style="margin:0">Saved backups</div>'
+      +'<button class="btn" onclick="takeRegularBackup()">+ Take backup now</button>'
+      +'</div>'
+      +'<div class="card" style="padding:0;overflow:hidden">'
+      +(rows
+        ?'<table style="width:100%;border-collapse:collapse">'
+          +'<thead><tr style="border-bottom:0.5px solid var(--border)">'
+          +'<th style="padding:10px 8px;text-align:left;font-family:var(--fc);font-size:9px;letter-spacing:0.12em;color:var(--ash)">DATE & TIME</th>'
+          +'<th style="padding:10px 8px;text-align:left;font-family:var(--fc);font-size:9px;letter-spacing:0.12em;color:var(--ash)">TYPE</th>'
+          +'<th style="padding:10px 8px;text-align:left;font-family:var(--fc);font-size:9px;letter-spacing:0.12em;color:var(--ash)">COVERAGE</th>'
+          +'<th style="padding:10px 8px;text-align:right;font-family:var(--fc);font-size:9px;letter-spacing:0.12em;color:var(--ash)">ACTION</th>'
+          +'</tr></thead>'
+          +'<tbody>'+rows+'</tbody>'
+          +'</table>'
+        :'<div style="padding:40px;text-align:center;font-size:13px;color:var(--ash);font-style:italic">No backups yet. Take your first backup above.</div>'
+      )
+      +'</div>';
+  }catch(e){
+    el.innerHTML='<div class="pt">Backup</div><div class="card"><div style="color:var(--ember);padding:20px">Error loading backups: '+e.message+'<br><br><small>You may need to create the backups table in Supabase. See Settings for SQL.</small></div></div>';
+  }
+}
+
+async function takeRegularBackup(){
+  await saveBackupToDb('regular');
+  renderBackup();
+}
+
+function confirmLoadBackup(id,type){
+  const msg = type==='clean-slate'
+    ? 'This is a CLEAN SLATE backup. Restoring will wipe ALL current data and replace it with this snapshot. This cannot be undone. Continue?'
+    : 'Restore this backup? ALL current data will be replaced with this snapshot. This cannot be undone. Continue?';
+  if(!confirm(msg))return;
+  loadBackup(id);
+}
+
+async function loadBackup(id){
+  try{
+    toast('Loading backup...','info',3000);
+    const {data:backup,error} = await db.from('backups').select('payload,type').eq('id',id).single();
+    if(error||!backup)throw new Error('Backup not found');
+    const p = backup.payload;
+    const DUMMY='00000000-0000-0000-0000-000000000000';
+    toast('Wiping current data...','info',3000);
+    // Wipe all tables
+    await Promise.all([
+      db.from('sessions').delete().neq('id',DUMMY),
+      db.from('daily_log').delete().neq('id',DUMMY),
+      db.from('milestones').delete().neq('id',DUMMY),
+      db.from('declarations').delete().neq('id',DUMMY),
+      db.from('food_log').delete().neq('id',DUMMY),
+    ]);
+    try{await db.from('project_config').delete().neq('id',DUMMY);}catch(e){}
+    // Reset streaks and project_summary
+    await db.from('commandment_streaks').update({
+      current_streak:0,longest_streak:0,total_breaks:0,
+      last_break_date:null,break_log:null,streak_last_updated:null,pre_break_streak:0
+    }).neq('id',DUMMY);
+    await db.from('project_summary').update({
+      total_tangible:0,penalty_balance:0,last_session:null
+    }).neq('id',DUMMY);
+    toast('Restoring data...','info',3000);
+    // Restore each table in chunks to avoid payload limits
+    const chunkInsert = async (table, rows) => {
+      if(!rows||!rows.length)return;
+      const size=100;
+      for(let i=0;i<rows.length;i+=size){
+        // Remove id fields to let DB auto-assign, keep all other fields
+        const chunk=rows.slice(i,i+size).map(function(r){
+          const row=Object.assign({},r);
+          delete row.id; // let Supabase generate new IDs
+          return row;
+        });
+        await db.from(table).insert(chunk);
+      }
+    };
+    await chunkInsert('sessions', p.sessions);
+    await chunkInsert('daily_log', p.daily_log);
+    await chunkInsert('milestones', p.milestones);
+    await chunkInsert('declarations', p.declarations);
+    await chunkInsert('food_log', p.food_log);
+    // Upsert project_config (has project as key)
+    if(p.project_config&&p.project_config.length){
+      for(const row of p.project_config){
+        const r=Object.assign({},row); delete r.id;
+        await db.from('project_config').upsert(r,{onConflict:'project'});
+      }
+    }
+    // Restore streaks by commandment key
+    if(p.commandment_streaks&&p.commandment_streaks.length){
+      for(const row of p.commandment_streaks){
+        const r=Object.assign({},row); delete r.id;
+        await db.from('commandment_streaks').update(r).eq('commandment',row.commandment);
+      }
+    }
+    // Restore project_summary by project key
+    if(p.project_summary&&p.project_summary.length){
+      for(const row of p.project_summary){
+        const r=Object.assign({},row); delete r.id;
+        await db.from('project_summary').update(r).eq('project',row.project);
+      }
+    }
+    // Restore game dates if present
+    if(p.game_start)localStorage.setItem('qa_start',p.game_start);
+    if(p.game_end)localStorage.setItem('qa_end',p.game_end);
+    // Reset local state
+    S.allSessions=[];S.allLogs=[];S.milestones=[];S.declarations=[];
+    S.streaks=[];S.projects=[];S.committedProjects={};S.projectConfig={};
+    S.todayLog=null;S.todaySessions=[];S.activeDate=null;S._milestonesLoaded=false;
+    localStorage.removeItem('qa_activeDate');
+    toast('Backup restored successfully. The forge remembers.','success',4000);
+    await loadData();await loadAll();nav('forge');
+  }catch(e){
+    toast('Restore failed: '+e.message,'error');
+    console.error('Restore error:',e);
+  }
+}
+
+
 // ── SETTINGS ───────────────────────────────────────────
 function renderSettings(){
   document.getElementById('screen-settings').innerHTML=`
@@ -2854,11 +3054,17 @@ function showMissedDayPrompt(){
   document.getElementById('missed-date').textContent=dateStr;
   document.getElementById('missed-count').textContent=remaining+' day'+(remaining>1?'s':'')+' need recording';
   document.getElementById('missed-reflection').value='';
-  // Reset CT checkboxes
-  CMDS.forEach(function(c){
-    const el=document.getElementById('missed-ct-'+c.key);
-    if(el)el.checked=false;
-  });
+  // Build CT checkboxes dynamically
+  var ctList=document.getElementById('missed-ct-list');
+  if(ctList){
+    ctList.innerHTML=CMDS.map(function(cmd){
+      return'<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--border)">'
+        +'<input type="checkbox" id="missed-ct-'+cmd.key+'" style="width:auto;margin:0">'
+        +'<label for="missed-ct-'+cmd.key+'" style="flex:1;font-size:12px;color:var(--parch);font-family:var(--ff);cursor:pointer;margin:0">'+cmd.label+'</label>'
+        +'<span style="font-family:var(--fc);font-size:10px;color:var(--gold)">'+cmd.pts+'pt</span>'
+        +'</div>';
+    }).join('');
+  }
   document.getElementById('missed-modal').classList.add('open');
 }
 
