@@ -2393,17 +2393,13 @@ async function renderProject(screenKey){
     </div>`:''}
 
     <div class="card" style="margin-bottom:14px;padding:20px 24px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-        <div>
-          <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.18em;color:var(--ash);margin-bottom:8px">PROGRESS TOWARD CEILING</div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <div style="font-family:var(--fc);font-size:32px;color:var(--parch);line-height:1">${total.toLocaleString()} <span style="font-size:14px;color:var(--ash)">${proj.unit}</span></div>
-            <div style="font-family:var(--fc);font-size:16px;color:var(--ash)">(${Math.round(total/proj.ceiling*100)}%)</div>
-          </div>
-        </div>
+      <div style="margin-bottom:12px">
+        <div style="font-family:var(--fc);font-size:9px;letter-spacing:0.18em;color:var(--ash);margin-bottom:8px">PROGRESS TOWARD CEILING</div>
+        <div style="font-family:var(--fc);font-size:32px;color:var(--parch);line-height:1;margin-bottom:10px">${total.toLocaleString()}</div>
       </div>
-      <div style="display:flex;justify-content:flex-end;align-items:baseline;margin-bottom:4px">
-        <span style="font-family:var(--fc);font-size:14px;color:var(--ash)">${total.toLocaleString()} / ${proj.ceiling.toLocaleString()}</span>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+        <span style="font-family:var(--fc);font-size:13px;color:var(--ash)">${proj.unit.toUpperCase()} &nbsp;(${Math.round(total/proj.ceiling*100)}%)</span>
+        <span style="font-family:var(--fc);font-size:13px;color:var(--ash)">${total.toLocaleString()} / ${proj.ceiling.toLocaleString()}</span>
       </div>
       <div style="height:8px;background:var(--card2);border-radius:4px;overflow:hidden" title="${Math.round(total/proj.ceiling*100)}%">
         <div style="height:100%;width:${Math.min(100,Math.round(total/proj.ceiling*100))}%;background:var(--safe);border-radius:4px;transition:width 0.6s"></div>
@@ -4046,78 +4042,44 @@ async function renderCalendar(){
     </div>${weekHTML}`;
 
   } else {
-    // Year heatmap — GitHub contribution style with proper month alignment
-    const year=S.calDate.getFullYear();
-    // Start grid from the Sunday on or before Jan 1
-    const jan1=new Date(year,0,1);
-    const gridStart=new Date(jan1);
-    gridStart.setDate(jan1.getDate()-jan1.getDay());
-    // Build all weeks
-    const weeks=[];
-    const cur2=new Date(gridStart);
-    const dec31=new Date(year,11,31);
-    while(cur2<=dec31){
-      const week=[];
-      for(let d=0;d<7;d++){week.push(new Date(cur2));cur2.setDate(cur2.getDate()+1);}
-      weeks.push(week);
-    }
-    // Find the week index where each month starts (1st of month)
-    // Month label should appear at the week column containing the 1st
-    const monthLabelAtWeek={};
-    weeks.forEach(function(w,wi){
-      w.forEach(function(day){
-        if(day.getFullYear()===year&&day.getDate()===1){
-          monthLabelAtWeek[wi]=day.toLocaleDateString('en-GB',{month:'short'});
+    // Year heatmap — per-month independent blocks
+    // Jan 1 = row 1 col 1 of its block. 7 rows per column (days 1-7, 8-14...)
+    // No day-of-week labels. 12 month blocks side by side.
+    (function(){
+      var CELL=12,GAP=2,MGAP=10;
+      var yr=S.calDate.getFullYear();
+      var monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      yHTML='<div style="overflow-x:auto;padding-bottom:8px">';
+      yHTML+='<div style="display:flex;gap:'+MGAP+'px;align-items:flex-start;flex-wrap:wrap">';
+      for(var mo=0;mo<12;mo++){
+        var daysInMonth=new Date(yr,mo+1,0).getDate();
+        var cols=[],col=[];
+        for(var d=1;d<=daysInMonth;d++){
+          col.push(d);
+          if(col.length===7||d===daysInMonth){cols.push(col);col=[];}
         }
-      });
-    });
-    // Day row labels (show Mon, Wed, Fri only for compactness)
-    const dayRowLabels=['','Mon','','Wed','','Fri',''];
-    // Build table
-    let yHTML='<div style="overflow-x:auto;padding-bottom:4px">';
-    yHTML+='<table style="border-spacing:0;border-collapse:separate;table-layout:fixed">';
-    // Month header row
-    yHTML+='<tr style="height:18px">';
-    yHTML+='<td style="width:30px;min-width:30px"></td>';
-    let lastLabelWeek=-4;
-    weeks.forEach(function(w,wi){
-      const label=monthLabelAtWeek[wi];
-      // Only show label if it won't overlap (needs at least 3 weeks gap)
-      if(label&&wi-lastLabelWeek>=3){
-        yHTML+='<td colspan="1" style="font-family:var(--fc);font-size:9px;color:var(--ash);white-space:nowrap;vertical-align:bottom;padding-bottom:3px;width:14px">'+label+'</td>';
-        lastLabelWeek=wi;
-      } else {
-        yHTML+='<td style="width:14px"></td>';
+        yHTML+='<div style="flex-shrink:0">';
+        yHTML+='<div style="font-family:var(--fc);font-size:9px;color:var(--ash);margin-bottom:4px;letter-spacing:0.08em">'+monthNames[mo]+'</div>';
+        yHTML+='<div style="display:flex;gap:'+GAP+'px">';
+        cols.forEach(function(colDays){
+          yHTML+='<div style="display:flex;flex-direction:column;gap:'+GAP+'px">';
+          colDays.forEach(function(day){
+            var ds=yr+'-'+String(mo+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+            var data=dayData[ds];
+            var isFuture=ds>localToday();
+            var isToday=ds===localToday();
+            var t=data?data.total:0;
+            var bg=isFuture?'var(--card2)':data?scoreColor(t,data.pen||0):'rgba(74,66,56,0.3)';
+            var extra=isToday?';outline:1.5px solid #4A9EBF;outline-offset:-1px':'';
+            var title=ds+': '+(isFuture?'future':t+' pts');
+            yHTML+='<div style="width:'+CELL+'px;height:'+CELL+'px;border-radius:2px;background:'+bg+extra+';cursor:'+(data?'pointer':'default')+';" title="'+title+'"'+(data?' data-ds="'+ds+'" onclick="calSelect(this.dataset.ds)"':'')+' ></div>';
+          });
+          yHTML+='</div>';
+        });
+        yHTML+='</div></div>';
       }
-    });
-    yHTML+='</tr>';
-    // 7 day rows
-    for(let dow=0;dow<7;dow++){
-      yHTML+='<tr>';
-      yHTML+='<td style="font-family:var(--fc);font-size:8px;color:var(--ash);text-align:right;padding-right:4px;vertical-align:middle;width:30px;height:14px">'+dayRowLabels[dow]+'</td>';
-      weeks.forEach(function(w){
-        const day=w[dow];
-        const ds=localDateStr(day);
-        const inYear=day.getFullYear()===year;
-        const data=inYear?dayData[ds]:null;
-        const isFuture=ds>localToday();
-        const t=data?data.total:0;
-        let bg;
-        if(!inYear)bg='transparent';
-        else if(isFuture)bg='var(--card2)';
-        else if(data)bg=scoreColor(t,data.pen||0);
-        else bg='rgba(74,66,56,0.3)';
-        const isLToday=inYear&&ds===localToday();
-        (function(){
-          var style='width:12px;height:12px;border-radius:2px;background:'+bg+(isLToday?';outline:1.5px solid #4A9EBF;outline-offset:-1px':'')+';cursor:'+(data?'pointer':'default');
-          var title=ds+(inYear?': '+t+' pts':'');
-          var click=data?"calSelect('"+ds+"')":"";
-          yHTML+='<td style="padding:1px"><div style="'+style+'" title="'+title+'" onclick="'+click+'"></div></td>';
-        })();
-      });
-      yHTML+='</tr>';
-    }
-    yHTML+='</table></div>';
+      yHTML+='</div></div>';
+    })();
 
     contentHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <button class="cal-nav-btn" onclick="calPrev()">← ${year-1}</button>
