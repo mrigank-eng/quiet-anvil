@@ -4041,42 +4041,40 @@ async function renderCalendar(){
     // Year heatmap — per-month independent blocks
     // Jan 1 = row 1 col 1 of its block. 7 rows per column (days 1-7, 8-14...)
     // No day-of-week labels. 12 month blocks side by side.
-    let yHTML='';
-    (function(){
-      var CELL=12,GAP=2,MGAP=10;
-      var yr=S.calDate.getFullYear();
-      var monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      yHTML='<div style="overflow-x:auto;padding-bottom:8px">';
-      yHTML+='<div style="display:flex;gap:'+MGAP+'px;align-items:flex-start;flex-wrap:wrap">';
-      for(var mo=0;mo<12;mo++){
-        var daysInMonth=new Date(yr,mo+1,0).getDate();
-        var cols=[],col=[];
-        for(var d=1;d<=daysInMonth;d++){
-          col.push(d);
-          if(col.length===7||d===daysInMonth){cols.push(col);col=[];}
+    const year=S.calDate.getFullYear();
+    const CELL=12,GAP=2,MGAP=10;
+    const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    let yHTML='<div style="overflow-x:auto;padding-bottom:8px">';
+    yHTML+='<div style="display:flex;gap:'+MGAP+'px;align-items:flex-start;flex-wrap:wrap">';
+    for(let mo=0;mo<12;mo++){
+      const daysInMonth=new Date(year,mo+1,0).getDate();
+      const cols=[];let col=[];
+      for(let d=1;d<=daysInMonth;d++){
+        col.push(d);
+        if(col.length===7||d===daysInMonth){cols.push(col);col=[];}
+      }
+      yHTML+='<div style="flex-shrink:0">';
+      yHTML+='<div style="font-family:var(--fc);font-size:9px;color:var(--ash);margin-bottom:4px;letter-spacing:0.08em">'+monthNames[mo]+'</div>';
+      yHTML+='<div style="display:flex;gap:'+GAP+'px">';
+      for(let ci=0;ci<cols.length;ci++){
+        yHTML+='<div style="display:flex;flex-direction:column;gap:'+GAP+'px">';
+        for(let di=0;di<cols[ci].length;di++){
+          const day=cols[ci][di];
+          const ds=year+'-'+String(mo+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+          const yrData=dayData[ds];
+          const isFuture=ds>localToday();
+          const isToday_y=ds===localToday();
+          const t=yrData?yrData.total:0;
+          const bg=isFuture?'var(--card2)':yrData?scoreColor(t,yrData.pen||0):'rgba(74,66,56,0.3)';
+          const extra=isToday_y?';outline:1.5px solid #4A9EBF;outline-offset:-1px':'';
+          const titleY=ds+': '+(isFuture?'future':t+' pts');
+          yHTML+='<div style="width:'+CELL+'px;height:'+CELL+'px;border-radius:2px;background:'+bg+extra+';cursor:'+(yrData?'pointer':'default')+'" title="'+titleY+'"'+(yrData?' data-ds="'+ds+'" onclick="calSelect(this.dataset.ds)"':'')+' ></div>';
         }
-        yHTML+='<div style="flex-shrink:0">';
-        yHTML+='<div style="font-family:var(--fc);font-size:9px;color:var(--ash);margin-bottom:4px;letter-spacing:0.08em">'+monthNames[mo]+'</div>';
-        yHTML+='<div style="display:flex;gap:'+GAP+'px">';
-        cols.forEach(function(colDays){
-          yHTML+='<div style="display:flex;flex-direction:column;gap:'+GAP+'px">';
-          colDays.forEach(function(day){
-            var ds=yr+'-'+String(mo+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
-            var data=dayData[ds];
-            var isFuture=ds>localToday();
-            var isToday=ds===localToday();
-            var t=data?data.total:0;
-            var bg=isFuture?'var(--card2)':data?scoreColor(t,data.pen||0):'rgba(74,66,56,0.3)';
-            var extra=isToday?';outline:1.5px solid #4A9EBF;outline-offset:-1px':'';
-            var title=ds+': '+(isFuture?'future':t+' pts');
-            yHTML+='<div style="width:'+CELL+'px;height:'+CELL+'px;border-radius:2px;background:'+bg+extra+';cursor:'+(data?'pointer':'default')+';" title="'+title+'"'+(data?' data-ds="'+ds+'" onclick="calSelect(this.dataset.ds)"':'')+' ></div>';
-          });
-          yHTML+='</div>';
-        });
-        yHTML+='</div></div>';
+        yHTML+='</div>';
       }
       yHTML+='</div></div>';
-    })();
+    }
+    yHTML+='</div></div>';
 
     contentHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <button class="cal-nav-btn" onclick="calPrev()">← ${year-1}</button>
