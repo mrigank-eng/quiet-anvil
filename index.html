@@ -405,10 +405,7 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
     <div class="modal-title">Clean State</div>
     <div class="modal-sub">All campaign data will be wiped. A full backup will be saved to your Supabase database first.</div>
     <div style="background:var(--ember-dim);border:0.5px solid var(--ember);border-radius:6px;padding:10px 14px;margin:12px 0;font-size:12px;color:var(--ember)">⚠ This will permanently wipe all sessions, logs, and progress. The backup created before wiping can be restored from the Backup tab.</div>
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--parch);cursor:pointer;margin-bottom:16px">
-      <input type="checkbox" id="clean-reset-dates" style="width:16px;height:16px">
-      Also reset campaign start and end dates
-    </label>
+
     <div class="modal-btns">
       <button class="btn btn-sm" onclick="closeModal('clean-state-modal')">Cancel</button>
       <button class="btn btn-danger btn-sm" onclick="executeCleanState()">Wipe all data</button>
@@ -1836,7 +1833,6 @@ document.addEventListener('click',function(e){
 // ── CLEAN STATE ───────────────────────────────────────────────
 function openCleanState(){document.getElementById('clean-state-modal').classList.add('open');}
 async function executeCleanState(){
-  const resetDates=document.getElementById('clean-reset-dates').checked;
   // Save full backup to Supabase before wiping
   await saveBackupToDb('clean-slate');
   toast('Wiping data...','info',5000);
@@ -1856,7 +1852,6 @@ async function executeCleanState(){
     current_streak:0,longest_streak:0,total_breaks:0,
     last_break_date:null,break_log:null,streak_last_updated:null,pre_break_streak:0
   }).neq('id',DUMMY);
-  if(resetDates){localStorage.removeItem('qa_start');localStorage.removeItem('qa_end');}
   S.allSessions=[];S.allLogs=[];S.milestones=[];S.declarations=[];
   S.streaks=[];S.projects=[];S.committedProjects={};S.projectConfig={};
   S.todayLog=null;S.todaySessions=[];
@@ -2487,7 +2482,7 @@ function renderTemper(){
   const kept=CMDS.filter(c=>S.todayLog?.[c.key]===true).length;
   document.getElementById('screen-temper').innerHTML=`
     <div class="pt">Clean Temper</div>
-    <div class="ps">Ten commandments · Each streak is independent · Every break is recorded</div>
+    <div class="ps">The Ten Commandments</div>
     <div class="g4" style="margin-bottom:24px">
       <div class="sb"><div class="sb-num" style="color:var(--gold)">${ct}<span style="font-size:14px;color:var(--ash)">/20</span></div><div class="sb-lbl">Today's CT Points</div></div>
       <div class="sb"><div class="sb-num">${kept}<span style="font-size:14px;color:var(--ash)">/10</span></div><div class="sb-lbl">Kept Today</div></div>
@@ -3660,7 +3655,8 @@ async function renderFood(){
       const data=dayMap[ds];const isFuture=ds>today();
       const color=isFuture?'var(--card2)':data?dayColor(data):'var(--border)';
       const meals=data?data.meals.length:0;
-      grid+=`<div style="background:${color};border-radius:4px;padding:4px;min-height:40px;opacity:${isFuture?0.3:1};cursor:${data?'pointer':'default'}" onclick="${data?'foodDayClick(\''+ds+'\')':''}">
+      const isToday_m=ds===localToday();
+      grid+=`<div style="background:${color};border-radius:4px;padding:4px;min-height:40px;opacity:${isFuture?0.3:1};cursor:${data?'pointer':'default'};border:${isToday_m?'1.5px solid #4A9EBF':'1px solid transparent'}" onclick="${data?'foodDayClick(\''+ds+'\')':''}">
         <div style="font-family:var(--fc);font-size:9px;color:var(--parch)">${d}</div>
         ${data?`<div style="font-size:9px;color:rgba(255,255,255,0.7)">${meals}m</div>`:''}
       </div>`;
@@ -3681,7 +3677,8 @@ async function renderFood(){
       const data=dayMap[ds];const isFuture=ds>today();
       const color=isFuture?'var(--card2)':data?dayColor(data):'var(--card2)';
       const meals=data?data.meals:[];
-      weekHTML+=`<div style="background:${color};border-radius:8px;padding:10px;opacity:${isFuture?0.3:1}">
+      const isToday_w=ds===localToday();
+      weekHTML+=`<div style="background:${color};border-radius:8px;padding:10px;opacity:${isFuture?0.3:1};border:${isToday_w?'1.5px solid #4A9EBF':'1px solid transparent'}">
         <div style="font-family:var(--fc);font-size:9px;color:var(--parch);margin-bottom:6px">${dayNames[i]} ${d.getDate()}</div>
         ${meals.map(m=>`<div style="font-size:11px;margin-bottom:3px;color:var(--parch)"><span style="font-family:var(--fc);font-size:8px;color:${m.healthy?'var(--safe)':'var(--ember)'}">${m.meal_type.substring(0,1)}</span> ${m.description.substring(0,20)}${m.description.length>20?'...':''}</div>`).join('')||`<div style="font-size:11px;color:rgba(255,255,255,0.3)">—</div>`}
       </div>`;
@@ -3707,7 +3704,7 @@ async function renderFood(){
         const ds=localDateStr(day);
         const data=dayMap[ds];const isFuture=ds>today();
         const color=isFuture?'var(--card2)':data?dayColor(data):'rgba(74,66,56,0.4)';
-        yHTML+=`<div style="width:12px;height:12px;border-radius:2px;background:${color}" title="${ds}"></div>`;
+        yHTML+=`<div style="width:12px;height:12px;border-radius:2px;background:${color};${ds===localToday()?'outline:1.5px solid #4A9EBF;outline-offset:-1px':''}" title="${ds}"></div>`;
       });
       yHTML+='</div>';
     });
@@ -3750,10 +3747,9 @@ async function renderFood(){
     <div class="pt">Food Log</div>
     <div class="ps">Personal record · Healthy or unhealthy · No game impact</div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <div class="st" style="margin-bottom:0">Today's meals</div>
+      <div class="st" style="margin-bottom:0">Food Log</div>
       <button class="btn btn-sm" onclick="openFoodModal()">+ Log meal</button>
     </div>
-    <div class="card" style="margin-bottom:24px">${todayHTML}</div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
       <button class="cal-nav-btn ${foodView==='week'?'active':''}" onclick="setFoodView('week')">Week</button>
       <button class="cal-nav-btn ${foodView==='month'?'active':''}" onclick="setFoodView('month')">Month</button>
@@ -4185,16 +4181,12 @@ async function renderCalendar(){
   }
 
   const legendHTML=`<div style="display:flex;align-items:center;gap:12px;margin-top:12px;font-size:11px;color:var(--ash);flex-wrap:wrap">
-    <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--gold)"></div>70+ pts</span>
-    <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--safe)"></div>50+ pts</span>
-    <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--warn)"></div>30+ pts</span>
     <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--ember)"></div>&lt;30 pts</span>
-    ${calView==='month'?'<span style="margin-left:8px">Dots: Soul · Body · Business · CT</span>':''}
-  </div>`;
-
-  el.innerHTML=`
-    <div class="pt">Calendar</div>
-    <div class="ps">Every day of the campaign — click any date to see full detail</div>
+    <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--warn)"></div>30+ pts</span>
+    <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--safe)"></div>50+ pts</span>
+    <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--gold)"></div>70+ pts</span>
+  </div>
+    
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
       <button class="cal-nav-btn ${calView==='week'?'active':''}" onclick="setCalView('week')">Week</button>
       <button class="cal-nav-btn ${calView==='month'?'active':''}" onclick="setCalView('month')">Month</button>
@@ -4203,6 +4195,7 @@ async function renderCalendar(){
     <div class="card">${contentHTML}${legendHTML}</div>
     ${detailHTML}
   `;
+  el.innerHTML = legendHTML;
 }
 
 function setCalView(v){calView=v;S.calSelected=null;renderCalendar();}
