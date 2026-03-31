@@ -4180,22 +4180,21 @@ async function renderCalendar(){
     </div>`;
   }
 
-  const legendHTML=`<div style="display:flex;align-items:center;gap:12px;margin-top:12px;font-size:11px;color:var(--ash);flex-wrap:wrap">
+  const legendDiv=`<div style="display:flex;align-items:center;gap:12px;margin-top:12px;font-size:11px;color:var(--ash);flex-wrap:wrap">
     <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--ember)"></div>&lt;30 pts</span>
     <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--warn)"></div>30+ pts</span>
     <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--safe)"></div>50+ pts</span>
     <span style="display:flex;align-items:center;gap:4px"><div style="width:10px;height:10px;border-radius:2px;background:var(--gold)"></div>70+ pts</span>
-  </div>
-    
+  </div>`;
+  el.innerHTML=`<div class="pt">Calendar</div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
       <button class="cal-nav-btn ${calView==='week'?'active':''}" onclick="setCalView('week')">Week</button>
       <button class="cal-nav-btn ${calView==='month'?'active':''}" onclick="setCalView('month')">Month</button>
       <button class="cal-nav-btn ${calView==='year'?'active':''}" onclick="setCalView('year')">Year</button>
     </div>
-    <div class="card">${contentHTML}${legendHTML}</div>
+    <div class="card">${contentHTML}${legendDiv}</div>
     ${detailHTML}
   `;
-  el.innerHTML = legendHTML;
 }
 
 function setCalView(v){calView=v;S.calSelected=null;renderCalendar();}
