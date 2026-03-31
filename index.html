@@ -4041,6 +4041,7 @@ async function renderCalendar(){
     // Year heatmap — per-month independent blocks
     // Jan 1 = row 1 col 1 of its block. 7 rows per column (days 1-7, 8-14...)
     // No day-of-week labels. 12 month blocks side by side.
+    let yHTML='';
     (function(){
       var CELL=12,GAP=2,MGAP=10;
       var yr=S.calDate.getFullYear();
