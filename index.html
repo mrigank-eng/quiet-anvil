@@ -1863,11 +1863,22 @@ async function executeCleanState(){
 // ── DELETE SESSION ─────────────────────────────────────
 async function deleteSession(sessionId, pid, tangible){
   const proj=PROJECTS.find(p=>p.id===pid);
+  // Find the date of this session before deleting
+  const delSess=S.allSessions.find(s=>s.id===sessionId)||S.todaySessions.find(s=>s.id===sessionId);
+  const delDate=delSess?delSess.date:today();
   // Remove from DB
   await db.from('sessions').delete().eq('id',sessionId);
   // Update project summary total
   const sum=S.projects.find(p=>p.project===pid)||{};
-  const newTotal=Math.max(0,(sum.total_tangible||0)-tangible);
+  let newTotal;
+  if(proj&&proj.uniqueDays){
+    // Iron Forge: only decrement if no other tangible sessions on that date remain
+    const{data:remaining}=await db.from('sessions').select('id').eq('project',pid).eq('date',delDate).gt('tangible_logged',0);
+    const stillHasDay=(remaining||[]).length>0;
+    newTotal=stillHasDay?(sum.total_tangible||0):Math.max(0,(sum.total_tangible||0)-1);
+  } else {
+    newTotal=Math.max(0,(sum.total_tangible||0)-tangible);
+  }
   await db.from('project_summary').update({total_tangible:newTotal}).eq('project',pid);
   // Recalculate points for remaining today's sessions
   const{data:remaining}=await db.from('sessions')
@@ -2052,10 +2063,21 @@ async function submitDeclaration(){
 }
 
 // ── ARMOURY ────────────────────────────────────────────
+// Returns correct total for a project — uses unique day count for Iron Forge
+function getProjectTotal(pid){
+  const proj=getEffectiveProject(pid)||PROJECTS.find(p=>p.id===pid);
+  if(proj&&proj.uniqueDays){
+    // Count unique dates from allSessions
+    return new Set(S.allSessions.filter(x=>x.project===pid&&x.tangible_logged>0).map(x=>x.date)).size;
+  }
+  const s=S.projects.find(p=>p.project===pid)||{};
+  return s.total_tangible||0;
+}
+
 async function renderArmoury(){
   await loadAll();
   const armCatCounts=getCatCountsAll();
-  const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,s?.total_tangible||0,armCatCounts[p.id]||{});})):0;
+  const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,getProjectTotal(p.id),armCatCounts[p.id]||{});})):0;
   const metaTitle=metaLvl>0?META_T[metaLvl-1]:'Working toward '+META_T[0];
 
   // Pillar summaries
@@ -2186,10 +2208,12 @@ async function renderProject(screenKey){
   const projBase=PROJECTS.find(p=>p.key===screenKey);if(!projBase)return;
   const proj=getEffectiveProject(projBase.id)||projBase;
   const s=S.projects.find(p=>p.project===proj.id)||{};
-  const total=s.total_tangible||0;
-
   await loadAll();
   const allPS=S.allSessions.filter(x=>x.project===proj.id&&x.tangible_logged>0);
+  // For uniqueDays projects (Iron Forge), calculate from sessions directly — never trust stored total
+  const total=proj.uniqueDays
+    ? new Set(allPS.map(x=>x.date)).size
+    : (s.total_tangible||0);
   const sessPage=S.sessionPages[proj.id]||0;const SESS_PER_PAGE=10;const sortedPS=[...allPS].reverse();const recent=sortedPS.slice(sessPage*SESS_PER_PAGE,(sessPage+1)*SESS_PER_PAGE);
   const totalPts=allPS.reduce((s,x)=>s+(x.points_earned||0),0);
   const totalPen=S.allSessions.filter(x=>x.project===proj.id).reduce((s,x)=>s+(x.penalty||0),0);
@@ -2543,7 +2567,7 @@ function renderTemper(){
 // ── META ───────────────────────────────────────────────
 async function renderMeta(){
   await loadAll();
-  const metaCC=getCatCountsAll();const pLvls=PROJECTS.map(function(proj){const s=S.projects.find(p=>p.project===proj.id)||{};const total=s.total_tangible||0;return{proj,l:getLvl(proj.id,total,metaCC[proj.id]||{}),total};});
+  const metaCC=getCatCountsAll();const pLvls=PROJECTS.map(function(proj){const s=S.projects.find(p=>p.project===proj.id)||{};const total=getProjectTotal(proj.id);return{proj,l:getLvl(proj.id,total,metaCC[proj.id]||{}),total};});
   const metaLvl=Math.min(...pLvls.map(p=>p.l));
   const weakest=pLvls.find(p=>p.l===metaLvl);
   const metaTitle=metaLvl>0?META_T[metaLvl-1]:'Working toward '+META_T[0];
@@ -3607,6 +3631,15 @@ let foodPage=0;
 let foodView='month';
 let foodCalDate=new Date();
 
+async function deleteFoodEntry(id){
+  if(!(await gameConfirm('Delete this food entry?','Delete Entry','Delete','Cancel')))return;
+  await db.from('food_log').delete().eq('id',id);
+  toast('Entry deleted','info',1500);
+  S._foodNavStay=true;
+  renderFood();
+}
+
+
 async function renderFood(){
   if(!S._foodNavStay){foodSelectedDay=null;foodPage=0;}
   S._foodNavStay=false;
@@ -3724,10 +3757,11 @@ async function renderFood(){
     const hCount=dayMeals.filter(l=>l.healthy).length;
     const uCount=dayMeals.filter(l=>!l.healthy).length;
     const mealRows=dayMeals.length>0?dayMeals.map(function(l){
-      return`<div style="display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:0.5px solid var(--border)">
-        <div style="font-family:var(--fc);font-size:10px;color:var(--gold);width:70px;flex-shrink:0;padding-top:2px">${l.meal_type}</div>
+      return`<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:0.5px solid var(--border)">
+        <div style="font-family:var(--fc);font-size:10px;color:var(--gold);width:70px;flex-shrink:0">${l.meal_type}</div>
         <div style="flex:1;font-size:13px;color:var(--parch)">${l.description}</div>
         <div style="font-size:11px;padding:3px 8px;border-radius:4px;flex-shrink:0;background:${l.healthy?'var(--safe-dim)':'var(--ember-dim)'};color:${l.healthy?'var(--safe)':'var(--ember)'}">${l.healthy?'Healthy':'Unhealthy'}</div>
+        <button class="btn btn-sm" style="color:var(--ember);border-color:var(--ember);padding:2px 8px;flex-shrink:0" data-fid="${l.id}" onclick="deleteFoodEntry(this.dataset.fid)">✕</button>
       </div>`;
     }).join('')
     :'<div style="font-size:13px;color:var(--ash);font-style:italic;padding:8px 0">No meals logged this day.</div>';
