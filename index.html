@@ -1246,6 +1246,8 @@ function nav(screen){
   document.getElementById('screen-'+screen).classList.add('active');
   document.querySelectorAll('.sb-item').forEach(i=>{if(i.getAttribute('onclick')===`nav('${screen}')`)i.classList.add('active');});
   S.chartsDrawn[screen]=false;
+  // Clear session cache so loadAll always fetches fresh data on tab switch
+  S.allSessions=[];S.allLogs=[];S._milestonesLoaded=false;
   closeSidebar();
   renderActive();
 }
@@ -1378,7 +1380,7 @@ document.getElementById('screen-forge').innerHTML=`
       const sessions=todaySessFor(proj.id);
       const tangToday=todayTangFor(proj.id);
       const sum=S.projects.find(p=>p.project===proj.id)||{};
-      const totalT=sum.total_tangible||0;
+      const totalT=getProjectTotal(proj.id);
       const projCC=forgeCatCounts[proj.id]||{};
       const declared=isProjectDeclared(proj.id);
       let sessListHTML='';
@@ -1704,8 +1706,10 @@ async function submitSession(){
   const priorTodaySessions=S.todaySessions.filter(function(s){return s.project===S.pendingSessionPid&&s.tangible_logged>0;}).length;
   var newTotal;
   if(effProjSubmit.uniqueDays){
-    // Iron Forge: count unique days — only increment if first session today
-    newTotal=priorTodaySessions===0?oldTotal+1:oldTotal;
+    // Iron Forge: recount unique days from DB to stay accurate
+    const{data:allIFSess}=await db.from('sessions').select('date').eq('project',S.pendingSessionPid).gt('tangible_logged',0);
+    const uniqueDates=new Set((allIFSess||[]).map(s=>s.date));
+    newTotal=uniqueDates.size;
   } else {
     newTotal=oldTotal+tangible;
   }
@@ -1743,7 +1747,7 @@ async function renderProjectMgmt(){
     var effCeil=ov.ceiling||defProj.ceiling;
     var eff=getEffectiveProject(defProj.id)||defProj;
     var sum=S.projects.find(function(p){return p.project===defProj.id;})||{};
-    var total=sum.total_tangible||0;
+    var total=getProjectTotal(defProj.id);
     var psafe=defProj.id.replace(/[^a-zA-Z0-9]/g,'_');
     var lvlRows=eff.levels.map(function(t,i){
       return'<div style="display:grid;grid-template-columns:30px 1fr auto;gap:8px;padding:4px 0;border-bottom:0.5px solid var(--border);font-size:12px">'
@@ -1872,10 +1876,9 @@ async function deleteSession(sessionId, pid, tangible){
   const sum=S.projects.find(p=>p.project===pid)||{};
   let newTotal;
   if(proj&&proj.uniqueDays){
-    // Iron Forge: only decrement if no other tangible sessions on that date remain
-    const{data:remaining}=await db.from('sessions').select('id').eq('project',pid).eq('date',delDate).gt('tangible_logged',0);
-    const stillHasDay=(remaining||[]).length>0;
-    newTotal=stillHasDay?(sum.total_tangible||0):Math.max(0,(sum.total_tangible||0)-1);
+    // Iron Forge: recount unique days from DB after deletion to stay accurate
+    const{data:allRemain}=await db.from('sessions').select('date').eq('project',pid).gt('tangible_logged',0);
+    newTotal=new Set((allRemain||[]).map(s=>s.date)).size;
   } else {
     newTotal=Math.max(0,(sum.total_tangible||0)-tangible);
   }
@@ -2084,7 +2087,7 @@ async function renderArmoury(){
   const pillarData={Soul:{pts:0,maxPts:20,projects:[]},Body:{pts:0,maxPts:20,projects:[]},Business:{pts:0,maxPts:20,projects:[]}};
   PROJECTS.forEach(function(proj){
     const s=S.projects.find(p=>p.project===proj.id)||{};
-    const total=s.total_tangible||0;
+    const total=getProjectTotal(proj.id);
     const l=getLvl(proj.id,total,armCatCounts[proj.id]||{});
     pillarData[proj.pillar].projects.push({proj,l,total});
   });
@@ -2124,7 +2127,7 @@ async function renderArmoury(){
   let cardsHTML='';
   PROJECTS.forEach(function(proj){
     const s=S.projects.find(p=>p.project===proj.id)||{};
-    const total=s.total_tangible||0;
+    const total=getProjectTotal(proj.id);
     const cc=armCatCounts[proj.id]||{};
     const l=getLvl(proj.id,total,cc);
     const curT=dispTitle(proj.id,total,cc);
@@ -2706,14 +2709,14 @@ function buildDailyCard(){
 
 function buildCampaignCard(){
   const shareCC=getCatCountsAll();
-  const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,s?s.total_tangible:0,shareCC[p.id]||{});})):0;
+  const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,getProjectTotal(p.id),shareCC[p.id]||{});})):0;
   const metaTitle=metaLvl>0?META_T[metaLvl-1]:'Working toward '+META_T[0];
   const bestStreak=S.streaks.reduce((m,s)=>Math.max(m,s.current_streak||0),0);
   const bestStreakCmd=S.streaks.find(s=>(s.current_streak||0)===bestStreak);
   const bestCmdLabel=bestStreakCmd?CMDS.find(x=>x.short===bestStreakCmd.commandment)?.label||bestStreakCmd.commandment:'';
   const projRows=PROJECTS.map(function(proj){
     const s=S.projects.find(p=>p.project===proj.id)||{};
-    const total=s.total_tangible||0;
+    const total=getProjectTotal(proj.id);
     const l=getLvl(proj.id,total,shareCC[proj.id]||{});
     const pr=getProg(proj.id,total,shareCC[proj.id]||{});
     const title=dispTitle(proj.id,total,shareCC[proj.id]||{})||proj.titles[0];
@@ -2757,7 +2760,7 @@ function buildUnlockCard(pid){
   const proj=PROJECTS.find(p=>p.id===pid);
   if(!proj)return'';
   const s=S.projects.find(p=>p.project===pid)||{};
-  const total=s.total_tangible||0;
+  const total=getProjectTotal(pid);
   const unlockCC=getCatCountsAll();
   const l=getLvl(pid,total,unlockCC[pid]||{});
   const title=dispTitle(pid,total,unlockCC[pid]||{});
