@@ -3894,11 +3894,13 @@ function setFoodView(v){foodView=v;renderFood();}
 function foodPageChange(p){S._foodNavStay=true;foodPage=Math.max(0,p);renderFood();}
 function foodCalPrev(){
   if(foodView==='year')foodCalDate.setFullYear(foodCalDate.getFullYear()-1);
+  else if(foodView==='week')foodCalDate.setDate(foodCalDate.getDate()-7);
   else foodCalDate.setMonth(foodCalDate.getMonth()-1);
   renderFood();
 }
 function foodCalNext(){
   if(foodView==='year')foodCalDate.setFullYear(foodCalDate.getFullYear()+1);
+  else if(foodView==='week')foodCalDate.setDate(foodCalDate.getDate()+7);
   else foodCalDate.setMonth(foodCalDate.getMonth()+1);
   renderFood();
 }
@@ -3916,10 +3918,17 @@ function editFoodEntry(btn){
   openFoodModal(date, prefill);
 }
 
-function openFoodModal(){
+function openFoodModal(date, prefill){
+  const d=date||localToday();
+  const dateEl=document.getElementById('food-modal-date');
+  const titleEl=document.getElementById('food-modal-title');
+  if(dateEl){dateEl.value=d;dateEl.max=localToday();}
+  if(titleEl)titleEl.textContent=prefill?'Edit meal':'Log a meal';
+  document.getElementById('food-desc').value=prefill?(prefill.description||''):'';
+  document.getElementById('food-healthy').checked=prefill?(prefill.healthy!==false):true;
+  document.getElementById('food-meal-type').value=(prefill&&prefill.meal_type)?prefill.meal_type:'Breakfast';
+  document.getElementById('food-modal').dataset.editId=prefill?(prefill.id||''):'';
   document.getElementById('food-modal').classList.add('open');
-  document.getElementById('food-desc').value='';
-  document.getElementById('food-healthy').checked=true;
 }
 
 async function submitFoodLog(){
