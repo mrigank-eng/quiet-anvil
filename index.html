@@ -4644,146 +4644,224 @@ async function renderTimeStudy() {
   el.innerHTML = '<div class="loading">Loading time study...</div>';
 
   const range = S.tsRange || '7';
+  const rangeN = parseInt(range);
   const endDate = localToday();
-  const startDate = (() => {
-    const d = new Date(endDate + 'T12:00:00');
-    d.setDate(d.getDate() - parseInt(range) + 1);
+  function shiftDate(base, days) {
+    const d = new Date(base + 'T12:00:00'); d.setDate(d.getDate() + days);
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-  })();
+  }
+  const startDate = shiftDate(endDate, -(rangeN - 1));
 
   let allE = [];
   try {
     const { data: entries } = await db.from('time_entries').select('*').gte('date', startDate).lte('date', endDate).order('date');
     allE = entries || [];
-  } catch(e) { console.warn('time_entries table not found — run create_time_entries.sql in Supabase'); }
+  } catch(e) { console.warn('time_entries table missing'); }
 
-  // ── Totals by category
-  const catTotals = {};
-  TS_CATS.forEach(c => catTotals[c] = 0);
-  allE.forEach(e => { if (catTotals[e.category] !== undefined) catTotals[e.category] += e.duration_mins || 0; });
-
-  const maxCatMins = Math.max(...Object.values(catTotals), 1);
-  const catBars = TS_CATS.map(cat => {
-    if (!catTotals[cat]) return '';
-    const pct = Math.round(catTotals[cat] / maxCatMins * 100);
-    const hrs = (catTotals[cat] / 60).toFixed(1);
-    return '<div style="margin-bottom:8px">'
-      + '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">'
-      + '<span style="color:var(--parch)">' + cat + '</span>'
-      + '<span style="color:var(--ash);font-family:var(--fc)">' + hrs + 'h</span>'
-      + '</div>'
-      + '<div style="height:8px;background:var(--card2);border-radius:4px;overflow:hidden">'
-      + '<div style="height:100%;width:' + pct + '%;background:' + (TS_CAT_COLORS[cat] || 'var(--gold)') + ';border-radius:4px"></div>'
-      + '</div></div>';
-  }).join('');
-
-  // ── Top activities
-  const actTotals = {};
-  allE.forEach(e => {
-    if (!e.activity) return;
-    actTotals[e.activity] = (actTotals[e.activity] || 0) + (e.duration_mins || 0);
-  });
-  const topActs = Object.entries(actTotals).sort((a,b) => b[1]-a[1]).slice(0,8);
-  const topActHTML = topActs.length ? topActs.map(([act, mins], i) => {
-    const hrs = (mins/60).toFixed(1);
-    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)">'
-      + '<div style="font-family:var(--fc);font-size:12px;color:var(--ash);width:20px">#' + (i+1) + '</div>'
-      + '<div style="flex:1;font-size:13px;color:var(--parch)">' + escHtml(act) + '</div>'
-      + '<div style="font-family:var(--fc);font-size:13px;color:var(--gold)">' + hrs + 'h</div>'
-      + '</div>';
-  }).join('') : '<div style="font-size:13px;color:var(--ash);font-style:italic;padding:8px 0">No data</div>';
-
-  // ── Project time
-  const projTotals = {};
-  allE.forEach(e => {
-    if (!e.project_id) return;
-    projTotals[e.project_id] = (projTotals[e.project_id] || 0) + (e.duration_mins || 0);
-  });
-  const projHTML = Object.keys(projTotals).length ? Object.entries(projTotals).sort((a,b)=>b[1]-a[1]).map(([pid, mins]) => {
-    const hrs = (mins/60).toFixed(1);
-    const maxP = Math.max(...Object.values(projTotals), 1);
-    return '<div style="margin-bottom:8px">'
-      + '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">'
-      + '<span style="color:var(--parch)">' + pid.replace('The ','') + '</span>'
-      + '<span style="color:var(--ash);font-family:var(--fc)">' + hrs + 'h</span>'
-      + '</div>'
-      + '<div style="height:8px;background:var(--card2);border-radius:4px;overflow:hidden">'
-      + '<div style="height:100%;width:' + Math.round(mins/maxP*100) + '%;background:var(--gold);border-radius:4px"></div>'
-      + '</div></div>';
-  }).join('') : '<div style="font-size:13px;color:var(--ash);font-style:italic">No project-linked entries</div>';
-
-  // ── Daily totals chart (last 7 days stacked)
+  // Build date list and dayMap
   const days = [];
-  for (let i = parseInt(range)-1; i >= 0; i--) {
-    const d = new Date(endDate + 'T12:00:00');
-    d.setDate(d.getDate() - i);
-    days.push(d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'));
-  }
-  const dayMap = {};
+  for (let i = rangeN - 1; i >= 0; i--) days.push(shiftDate(endDate, -i));
+  const dayMap = {}; // date → { cat: mins }
   allE.forEach(e => {
     if (!dayMap[e.date]) dayMap[e.date] = {};
     dayMap[e.date][e.category] = (dayMap[e.date][e.category] || 0) + (e.duration_mins || 0);
   });
+
+  // ── Stat helpers
+  const totalMins = allE.reduce((s, e) => s + (e.duration_mins || 0), 0);
+  const totalHrs = (totalMins / 60).toFixed(1);
+  const daysLogged = days.filter(d => dayMap[d]).length;
+  const consistency = days.length ? Math.round(daysLogged / days.length * 100) : 0;
+  const avgDayMins = daysLogged ? Math.round(totalMins / daysLogged) : 0;
+  const avgDayStr = avgDayMins >= 60 ? Math.floor(avgDayMins/60)+'h '+(avgDayMins%60)+'m' : avgDayMins+'m';
+
+  // Sleep
+  const sleepEntries = allE.filter(e => e.category === 'Sleep');
+  const sleepDaysSet = new Set(sleepEntries.map(e => e.date));
+  const avgSleepMins = sleepDaysSet.size ? Math.round(sleepEntries.reduce((s,e)=>s+(e.duration_mins||0),0) / sleepDaysSet.size) : 0;
+  const avgSleepStr = avgSleepMins ? Math.floor(avgSleepMins/60)+'h '+(avgSleepMins%60)+'m' : '—';
+
+  // ── Category totals
+  const catTotals = {};
+  TS_CATS.forEach(cat => catTotals[cat] = 0);
+  allE.forEach(e => { if (e.category && catTotals[e.category] !== undefined) catTotals[e.category] += e.duration_mins || 0; });
+  const sortedCats = TS_CATS.filter(c => catTotals[c] > 0).sort((a,b) => catTotals[b] - catTotals[a]);
+  const maxCatMins = sortedCats.length ? catTotals[sortedCats[0]] : 1;
+
+  // ── Activity totals
+  const actTotals = {};
+  allE.forEach(e => { if (e.activity) actTotals[e.activity] = (actTotals[e.activity] || 0) + (e.duration_mins || 0); });
+  const topActs = Object.entries(actTotals).sort((a,b) => b[1]-a[1]).slice(0, 10);
+
+  // ── Project totals
+  const projTotals = {};
+  allE.forEach(e => { if (e.project_id) projTotals[e.project_id] = (projTotals[e.project_id] || 0) + (e.duration_mins || 0); });
+  const sortedProjs = Object.entries(projTotals).sort((a,b) => b[1]-a[1]);
+
+  // ── Peak hours (0–23 buckets)
+  const hourBuckets = Array(24).fill(0);
+  allE.forEach(e => {
+    if (!e.start_time || !e.end_time) return;
+    const sh = parseInt(e.start_time.split(':')[0]);
+    const eh = parseInt(e.end_time.split(':')[0]);
+    for (let h = sh; h <= eh && h < 24; h++) hourBuckets[h] += (e.duration_mins || 0);
+  });
+  const maxHourMins = Math.max(...hourBuckets, 1);
+
+  // ── HTML builders
+
+  // Range tabs
+  const rangeHTML = '<div style="display:flex;gap:6px;margin-bottom:20px">'
+    + ['7','14','30'].map(r => '<button class="cal-nav-btn'+(range===r?' active':'')+'" onclick="S.tsRange=\''+r+'\';renderTimeStudy()">'+r+' days</button>').join('')
+    + '</div>';
+
+  // Stat tiles
+  const statsHTML = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">'
+    + tsTile(totalHrs+'h', 'Total logged')
+    + tsTile(consistency+'%', 'Consistency')
+    + tsTile(avgDayStr, 'Avg / day logged')
+    + tsTile(avgSleepStr, 'Avg sleep')
+    + '</div>';
+
+  // Category breakdown — donut-style list with colour bars, sorted, with % of total
+  const catHTML = sortedCats.length
+    ? sortedCats.map(cat => {
+        const mins = catTotals[cat];
+        const hrs = (mins/60).toFixed(1);
+        const pct = totalMins ? Math.round(mins/totalMins*100) : 0;
+        const barPct = Math.round(mins/maxCatMins*100);
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)">'
+          + '<div style="width:10px;height:10px;border-radius:50%;flex-shrink:0;background:'+(TS_CAT_COLORS[cat]||'var(--ash)')+'"></div>'
+          + '<div style="flex:1">'
+          + '<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
+          + '<span style="font-size:13px;color:var(--parch)">'+cat+'</span>'
+          + '<span style="font-family:var(--fc);font-size:12px;color:var(--ash)">'+hrs+'h &nbsp;<span style="color:var(--border2)">'+pct+'%</span></span>'
+          + '</div>'
+          + '<div style="height:5px;background:var(--card2);border-radius:3px;overflow:hidden">'
+          + '<div style="height:100%;width:'+barPct+'%;background:'+(TS_CAT_COLORS[cat]||'var(--gold)')+';border-radius:3px"></div>'
+          + '</div></div></div>';
+      }).join('')
+    : '<div style="font-size:13px;color:var(--ash);font-style:italic;padding:12px 0">No entries yet</div>';
+
+  // Daily bar chart — taller, proper scale, day labels
   const maxDayMins = Math.max(...days.map(d => Object.values(dayMap[d]||{}).reduce((s,v)=>s+v,0)), 60);
-  const dailyChart = '<div style="display:flex;gap:4px;align-items:flex-end;height:80px">'
+  const BAR_H = 120;
+  const dailyBars = '<div style="display:flex;gap:3px;align-items:flex-end;height:'+(BAR_H+24)+'px;padding-bottom:24px;position:relative">'
     + days.map(d => {
-      const dayCats = dayMap[d] || {};
-      const totalDay = Object.values(dayCats).reduce((s,v)=>s+v,0);
-      const barH = Math.round(totalDay / maxDayMins * 80);
-      const label = d.slice(5); // MM-DD
-      const segments = TS_CATS.filter(c => dayCats[c]).map(c => {
-        const h = Math.round(dayCats[c] / maxDayMins * 80);
-        return '<div style="height:' + h + 'px;background:' + (TS_CAT_COLORS[c]||'var(--ash)') + ';width:100%"></div>';
-      }).join('');
-      return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">'
-        + '<div style="width:100%;display:flex;flex-direction:column-reverse;height:80px;border-radius:3px 3px 0 0;overflow:hidden">' + (barH > 0 ? segments : '<div style="height:4px;background:var(--border)"></div>') + '</div>'
-        + '<div style="font-size:9px;color:var(--ash);margin-top:2px">' + label.replace('-','/') + '</div>'
-        + '</div>';
-    }).join('')
+        const dayCats = dayMap[d] || {};
+        const dayTotal = Object.values(dayCats).reduce((s,v)=>s+v,0);
+        const barH = Math.round(dayTotal / maxDayMins * BAR_H);
+        const label = d.slice(5).replace('-','/');
+        const isToday = d === localToday();
+        // Stack segments bottom-up
+        const segments = TS_CATS.filter(cat => dayCats[cat]).reverse().map(cat => {
+          const h = Math.max(2, Math.round(dayCats[cat] / maxDayMins * BAR_H));
+          return '<div style="height:'+h+'px;background:'+(TS_CAT_COLORS[cat]||'var(--ash)')+';width:100%;flex-shrink:0"></div>';
+        }).join('');
+        const hrsLabel = dayTotal >= 60 ? (dayTotal/60).toFixed(1)+'h' : dayTotal+'m';
+        return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0">'
+          + (barH > 0 ? '<div style="font-size:8px;color:var(--ash);margin-bottom:2px">'+hrsLabel+'</div>' : '<div style="height:14px"></div>')
+          + '<div style="width:100%;display:flex;flex-direction:column-reverse;height:'+BAR_H+'px;border-radius:2px 2px 0 0;overflow:hidden;background:var(--card2)">'
+          + (barH > 0 ? segments : '')
+          + '</div>'
+          + '<div style="font-size:8px;color:'+(isToday?'var(--gold)':'var(--ash)')+';margin-top:3px;white-space:nowrap">'+label+'</div>'
+          + '</div>';
+      }).join('')
     + '</div>';
 
-  // ── Consistency
-  const daysWithEntries = days.filter(d => dayMap[d] && Object.keys(dayMap[d]).length > 0).length;
-  const consistency = Math.round(daysWithEntries / days.length * 100);
-
-  // ── Sleep avg
-  const sleepDays = days.filter(d => dayMap[d]?.Sleep);
-  const avgSleep = sleepDays.length ? Math.round(sleepDays.reduce((s,d)=>s+(dayMap[d].Sleep||0),0) / sleepDays.length) : 0;
-  const avgSleepStr = avgSleep ? Math.floor(avgSleep/60) + 'h ' + (avgSleep%60) + 'm avg sleep' : 'No sleep logged';
-
-  // Range selector
-  const rangeHTML = '<div style="display:flex;gap:6px;margin-bottom:16px">'
-    + ['7','14','30'].map(r => '<button class="cal-nav-btn'+(range===r?' active':'')+'" onclick="S.tsRange=\''+r+'\';renderTimeStudy()">'+r+'d</button>').join('')
+  // Peak hours heatmap
+  const peakHTML = '<div style="display:flex;gap:2px;align-items:flex-end">'
+    + hourBuckets.map((mins, h) => {
+        const pct = mins / maxHourMins;
+        const opacity = pct > 0 ? Math.max(0.15, pct) : 0;
+        const label = h === 0 ? '12a' : h < 12 ? h+'a' : h === 12 ? '12p' : (h-12)+'p';
+        return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">'
+          + '<div style="width:100%;height:32px;border-radius:2px;background:'+(opacity > 0 ? 'var(--gold)' : 'var(--card2)')+';opacity:'+opacity+'" title="'+label+': '+(mins>=60?(mins/60).toFixed(1)+'h':mins+'m')+'"></div>'
+          + (h%4===0?'<div style="font-size:7px;color:var(--ash)">'+label+'</div>':'<div style="height:10px"></div>')
+          + '</div>';
+      }).join('')
     + '</div>';
 
-  // Legend
-  const legend = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">'
-    + TS_CATS.map(c => '<span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--ash)"><div style="width:8px;height:8px;border-radius:50%;background:'+(TS_CAT_COLORS[c]||'var(--ash)')+'"></div>'+c+'</span>').join('')
+  // Top activities
+  const actHTML = topActs.length
+    ? topActs.map(([act, mins], i) => {
+        const hrs = (mins/60).toFixed(1);
+        const pct = totalMins ? Math.round(mins/totalMins*100) : 0;
+        // Find category for this activity
+        const catForAct = allE.find(e => e.activity === act)?.category;
+        return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:0.5px solid var(--border)">'
+          + '<div style="font-family:var(--fc);font-size:11px;color:var(--ash);width:18px;text-align:right">'+(i+1)+'</div>'
+          + '<div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:'+(TS_CAT_COLORS[catForAct]||'var(--border2)')+'"></div>'
+          + '<div style="flex:1;font-size:13px;color:var(--parch)">'+escHtml(act)+'</div>'
+          + '<div style="font-size:11px;color:var(--ash)">'+pct+'%</div>'
+          + '<div style="font-family:var(--fc);font-size:13px;color:var(--gold);width:36px;text-align:right">'+hrs+'h</div>'
+          + '</div>';
+      }).join('')
+    : '<div style="font-size:13px;color:var(--ash);font-style:italic;padding:12px 0">Log activities to see rankings</div>';
+
+  // Project time
+  const maxProjMins = sortedProjs.length ? sortedProjs[0][1] : 1;
+  const projHTML = sortedProjs.length
+    ? sortedProjs.map(([pid, mins]) => {
+        const hrs = (mins/60).toFixed(1);
+        const pct = totalMins ? Math.round(mins/totalMins*100) : 0;
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)">'
+          + '<div style="flex:1">'
+          + '<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
+          + '<span style="font-size:13px;color:var(--parch)">'+pid.replace('The ','')+'</span>'
+          + '<span style="font-family:var(--fc);font-size:12px;color:var(--ash)">'+hrs+'h &nbsp;<span style="color:var(--border2)">'+pct+'%</span></span>'
+          + '</div>'
+          + '<div style="height:5px;background:var(--card2);border-radius:3px;overflow:hidden">'
+          + '<div style="height:100%;width:'+Math.round(mins/maxProjMins*100)+'%;background:var(--gold);border-radius:3px"></div>'
+          + '</div></div></div>';
+      }).join('')
+    : '<div style="font-size:13px;color:var(--ash);font-style:italic;padding:12px 0">Link entries to projects to see this</div>';
+
+  // Category legend
+  const legend = '<div style="display:flex;flex-wrap:wrap;gap:6px 12px;margin-bottom:14px">'
+    + TS_CATS.map(cat => '<span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--ash)">'
+        + '<div style="width:8px;height:8px;border-radius:50%;background:'+(TS_CAT_COLORS[cat]||'var(--ash)')+'"></div>'+cat+'</span>').join('')
     + '</div>';
 
   el.innerHTML = '<div class="pt">Time Study</div>'
     + rangeHTML
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'
-    + '<div class="card" style="padding:14px 16px;text-align:center"><div style="font-family:var(--fc);font-size:28px;color:var(--gold)">' + consistency + '%</div><div style="font-size:11px;color:var(--ash);margin-top:4px">Consistency</div></div>'
-    + '<div class="card" style="padding:14px 16px;text-align:center"><div style="font-family:var(--fc);font-size:14px;color:var(--safe)">' + avgSleepStr.split(' avg')[0] + '</div><div style="font-size:11px;color:var(--ash);margin-top:4px">Avg Sleep</div></div>'
-    + '</div>'
+    + statsHTML
+    // Daily breakdown
     + '<div class="card" style="margin-bottom:14px;padding:16px 20px">'
-    + '<div class="st" style="margin-bottom:12px">Daily Breakdown</div>'
-    + legend + dailyChart
+    + '<div class="st" style="margin-bottom:4px">Daily Breakdown</div>'
+    + '<div style="font-size:11px;color:var(--ash);margin-bottom:12px">Stacked by category · hover for hours</div>'
+    + legend + dailyBars
     + '</div>'
+    // Hours by category
     + '<div class="card" style="margin-bottom:14px;padding:16px 20px">'
-    + '<div class="st" style="margin-bottom:12px">Hours by Category</div>'
-    + (catBars || '<div style="font-size:13px;color:var(--ash);font-style:italic">No data</div>')
+    + '<div class="st" style="margin-bottom:12px">Time by Category</div>'
+    + catHTML
     + '</div>'
+    // Peak hours
     + '<div class="card" style="margin-bottom:14px;padding:16px 20px">'
-    + '<div class="st" style="margin-bottom:12px">Project Time</div>'
+    + '<div class="st" style="margin-bottom:4px">Peak Hours</div>'
+    + '<div style="font-size:11px;color:var(--ash);margin-bottom:12px">Which hours of the day you use most</div>'
+    + peakHTML
+    + '</div>'
+    // Top activities
+    + '<div class="card" style="margin-bottom:14px;padding:16px 20px">'
+    + '<div class="st" style="margin-bottom:12px">Top Activities</div>'
+    + actHTML
+    + '</div>'
+    // Project time
+    + '<div class="card" style="margin-bottom:14px;padding:16px 20px">'
+    + '<div class="st" style="margin-bottom:12px">Time by Project</div>'
     + projHTML
-    + '</div>'
-    + '<div class="card" style="margin-bottom:14px;padding:16px 20px">'
-    + '<div class="st" style="margin-bottom:4px">Top Activities</div>'
-    + topActHTML
     + '</div>';
 }
+
+function tsTile(val, label) {
+  return '<div class="card" style="padding:12px 14px;text-align:center">'
+    + '<div style="font-family:var(--fc);font-size:20px;color:var(--gold);line-height:1.1">' + val + '</div>'
+    + '<div style="font-size:10px;color:var(--ash);margin-top:4px;letter-spacing:0.05em">' + label + '</div>'
+    + '</div>';
+}
+
 
 
 // ── AUTO SNAPSHOT ────────────────────────────────────────────────────
