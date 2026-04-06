@@ -341,8 +341,6 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
     <div class="sb-item" onclick="nav('projmgmt')"><span class="sb-icon">◈</span>Projects</div>
     <div class="sb-item" onclick="nav('body')"><span class="sb-icon">⚖</span>Body</div>
     <div class="sb-item" onclick="nav('todos')"><span class="sb-icon">✓</span>To-Do</div>
-    <div class="sb-item" onclick="nav('timesheet')"><span class="sb-icon">⏱</span>Timesheet</div>
-    <div class="sb-item" onclick="nav('timestudy')"><span class="sb-icon">📊</span>Time Study</div>
   </div>
   <div class="sb-footer">
     <div class="sb-footer-label">Days to Reckoning</div>
@@ -371,8 +369,6 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
   <div id="screen-projmgmt" class="screen"><div class="loading">Loading...</div></div>
   <div id="screen-body" class="screen"><div class="loading">Loading body composition...</div></div>
   <div id="screen-todos" class="screen"><div class="loading">Loading to-dos...</div></div>
-  <div id="screen-timesheet" class="screen"><div class="loading">Loading timesheet...</div></div>
-  <div id="screen-timestudy" class="screen"><div class="loading">Loading time study...</div></div>
 </div>
 
 
@@ -461,6 +457,8 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
 <div class="modal-overlay" id="ms-modal">
   <div class="modal">
     <div class="modal-title">Log a milestone</div>
+    <label>Date</label>
+    <input type="date" id="ms-date" style="width:100%;padding:7px 10px;background:var(--card2);border:0.5px solid var(--border2);border-radius:6px;color:var(--parch);font-size:13px;margin-bottom:10px">
     <label>Project</label><select id="ms-project"><option value="">Select project</option></select>
     <label>Description</label><textarea id="ms-desc" placeholder="What happened. What it means."></textarea>
     <div class="modal-btns">
@@ -523,6 +521,10 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
     <div style="font-family:var(--fc);font-size:16px;color:var(--gold);margin-bottom:14px" id="missed-date"></div>
     <div class="st">Commandments — how did this day go?</div>
     <div style="margin-bottom:14px" id="missed-ct-list"></div>
+    <div id="missed-proj-section" style="display:none;margin-bottom:14px">
+      <div class="st" style="margin-bottom:8px">Projects — log what you did</div>
+      <div id="missed-proj-list"></div>
+    </div>
     <label>Reflection</label>
     <textarea id="missed-reflection" placeholder="What happened that day..." style="min-height:60px"></textarea>
     <div class="modal-btns">
@@ -1210,7 +1212,7 @@ function pinSubmit(){
     if(pinBuf===getPin()){
       document.getElementById('pin-screen').classList.remove('active');
       updateSidebarDates();
-      loadData().then(()=>{loadAll();tsRestoreTimer();setTimeout(runDailySnapshot,3000);});
+      loadData().then(()=>{loadAll();setTimeout(runDailySnapshot,3000);});
     } else {
       upDots(4,true);
       document.getElementById('pin-error').textContent='Incorrect PIN';
@@ -1236,7 +1238,6 @@ function startChangePIN(){
   document.getElementById('pin-label').textContent='Enter new PIN';
   document.getElementById('pin-error').textContent='';
   upDots(0,false);
-  tsRestoreTimer();
 document.getElementById('pin-screen').classList.add('active');
 }
 
@@ -1279,8 +1280,6 @@ function renderActive(){
   else if(id==='todos')renderTodos();
   else if(id==='settings')renderSettings();
   else if(id==='projmgmt')renderProjectMgmt();
-  else if(id==='timesheet')renderTimesheet();
-  else if(id==='timestudy')renderTimeStudy();
 }
 
 // ── FORGE ──────────────────────────────────────────────
@@ -2447,6 +2446,7 @@ async function renderProject(screenKey){
       <div class="sm"><div class="sm-val">${allPS.length}</div><div class="sm-lbl">Sessions</div></div>
       <div class="sm"><div class="sm-val" style="color:var(--gold)">${totalPts.toLocaleString()}</div><div class="sm-lbl">Points earned</div></div>
       <div class="sm"><div class="sm-val" style="color:${totalPen<0?'var(--ember)':'var(--ash)'}">${totalPen}</div><div class="sm-lbl">Penalties</div></div>
+      <div class="sm"><div class="sm-val" style="color:${(totalPts+totalPen)>=0?'var(--safe)':'var(--ember)'}">${(totalPts+totalPen).toLocaleString()}</div><div class="sm-lbl">Net points</div></div>
     </div>
 
     ${pb?`<div class="card card-gold" style="margin-bottom:14px">
@@ -2521,6 +2521,11 @@ async function renderProject(screenKey){
         allDates.push(localDateStr(dd));
       }
       const chartData=allDates.map(function(d){return dateMap[d]||0;});
+      const DAY_SHORT=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      const chartLabels=allDates.map(function(d){
+        const dt=new Date(d+'T12:00:00');
+        return d.slice(5)+' '+DAY_SHORT[dt.getDay()];
+      });
       const ptColors=allDates.map(function(d){
         if(dateMap[d]&&dateMap[d]>0)return'#2A8060';
         if(penaltyDates[d])return'#C04030';
@@ -2534,7 +2539,7 @@ async function renderProject(screenKey){
       const yTickCb=(function(u){return function(v){return Number.isInteger(v)&&v>=0?v+' '+u:null;};})(pUnit);
       new Chart(ctx,{
         type:'line',
-        data:{labels:allDates,datasets:[{
+        data:{labels:chartLabels,datasets:[{
           label:pUnit,data:chartData,
           borderColor:'rgba(120,100,80,0.4)',backgroundColor:'transparent',
           borderWidth:1.5,pointRadius:ptRadii,pointBackgroundColor:ptColors,
@@ -2677,14 +2682,24 @@ async function renderMeta(){
 
 // ── CALENDAR ───────────────────────────────────────────
 // ── MILESTONES ─────────────────────────────────────────
-function openMilestone(){document.getElementById('ms-modal').classList.add('open');}
+function openMilestone(){
+  var dateEl=document.getElementById('ms-date');
+  if(dateEl){dateEl.value=localToday();dateEl.max=localToday();if(getGameStart())dateEl.min=getGameStart();}
+  var sel=document.getElementById('ms-project');
+  sel.innerHTML='<option value="">Select project</option>'+PROJECTS.map(function(p){
+    return'<option value="'+p.id+'">'+p.id+'</option>';
+  }).join('');
+  document.getElementById('ms-desc').value='';
+  document.getElementById('ms-modal').classList.add('open');
+}
 async function submitMilestone(){
   const pid=document.getElementById('ms-project').value;
   const desc=document.getElementById('ms-desc').value.trim();
   if(!pid||!desc){toast('Select a project and enter a description.','error');return;}
   const s=S.projects.find(p=>p.project===pid)||{};
   const total=s.total_tangible||0;
-  await db.from('milestones').insert({date:today(),project:pid,description:desc,tangible_at_time:total,level_at_time:getLvl(pid,total,getCatCountsAll()[pid]||{})});
+  const msDate=(document.getElementById('ms-date')?.value)||today();
+  await db.from('milestones').insert({date:msDate,project:pid,description:desc,tangible_at_time:total,level_at_time:getLvl(pid,total,getCatCountsAll()[pid]||{})});
   closeModal('ms-modal');S.milestones=[];S.allSessions=[];S.allLogs=[];
   await loadAll();renderMilestones();
 }
@@ -3625,7 +3640,30 @@ function showMissedDayPrompt(){
         +'</div>';
     }).join('');
   }
+  // Build project nudge buttons
+  var projSec=document.getElementById('missed-proj-section');
+  var projList2=document.getElementById('missed-proj-list');
+  if(projList2){
+    var activeProjs2=PROJECTS.filter(function(p){
+      var cfg=S.projectConfig&&S.projectConfig[p.id];
+      return cfg?cfg.is_active!==false:true;
+    });
+    if(activeProjs2.length>0){
+      projList2.innerHTML=activeProjs2.map(function(p){
+        return'<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:0.5px solid var(--border)">'
+          +'<span style="font-size:13px;color:var(--parch)">'+p.id.replace('The ','')+'</span>'
+          +'<button class="btn btn-sm" style="padding:3px 10px;font-size:11px" data-mpid="'+p.id+'" data-mdate="'+dateStr+'" onclick="missedProjLog(this.dataset.mpid,this.dataset.mdate)">Log session</button>'
+          +'</div>';
+      }).join('');
+      if(projSec)projSec.style.display='block';
+    }
+  }
   document.getElementById('missed-modal').classList.add('open');
+}
+
+function missedProjLog(pid,date){
+  S.pendingSessionDate=date;
+  openSession(pid,date);
 }
 
 async function submitMissedDay(){
@@ -4373,660 +4411,6 @@ function closeUnlock(){document.getElementById('unlock').classList.remove('open'
 
 // ── INIT ───────────────────────────────────────────────
 document.getElementById('pin-screen').classList.add('active');
-
-// ── TIMESHEET & TIME STUDY ──────────────────────────────────────────
-
-const TS_CATS = ['Fitness','Leisure','Sleep','Reading','Business','Food','Socialising','Travel'];
-const TS_CAT_COLORS = {
-  'Fitness':     'var(--safe)',
-  'Leisure':     '#7B68EE',
-  'Sleep':       '#4A9EBF',
-  'Reading':     '#D4A84C',
-  'Business':    'var(--ember)',
-  'Food':        '#E8A87C',
-  'Socialising': '#C084FC',
-  'Travel':      '#34D399'
-};
-
-let tsDate = localToday();
-let tsView = 'list'; // 'list' or 'timeline'
-let tsTimer = null; // {startMs, pausedMs, totalPausedMs, category, activity, projectId, intervalId}
-
-// ── TIMER LOGIC ─────────────────────────────────────────────────────
-function tsTimerStart(category, activity, projectId) {
-  if (tsTimer) return;
-  const startMs = Date.now();
-  tsTimer = {
-    startMs, pausedMs: null, totalPausedMs: 0,
-    category, activity, projectId: projectId || null,
-    intervalId: setInterval(tsTimerTick, 1000)
-  };
-  localStorage.setItem('qa_timer', JSON.stringify({
-    startMs, totalPausedMs: 0, pausedMs: null, category, activity, projectId: projectId || null
-  }));
-  tsTimerTick();
-}
-
-function tsTimerPause() {
-  if (!tsTimer || tsTimer.pausedMs) return;
-  clearInterval(tsTimer.intervalId);
-  tsTimer.pausedMs = Date.now();
-  const stored = JSON.parse(localStorage.getItem('qa_timer') || '{}');
-  stored.pausedMs = tsTimer.pausedMs;
-  localStorage.setItem('qa_timer', JSON.stringify(stored));
-  tsTimerTick();
-}
-
-function tsTimerResume() {
-  if (!tsTimer || !tsTimer.pausedMs) return;
-  const pausedDuration = Date.now() - tsTimer.pausedMs;
-  tsTimer.totalPausedMs += pausedDuration;
-  tsTimer.pausedMs = null;
-  tsTimer.intervalId = setInterval(tsTimerTick, 1000);
-  const stored = JSON.parse(localStorage.getItem('qa_timer') || '{}');
-  stored.totalPausedMs = tsTimer.totalPausedMs;
-  stored.pausedMs = null;
-  localStorage.setItem('qa_timer', JSON.stringify(stored));
-  tsTimerTick();
-}
-
-async function tsTimerStop() {
-  if (!tsTimer) return;
-  clearInterval(tsTimer.intervalId);
-  const now = Date.now();
-  const elapsedMs = now - tsTimer.startMs - tsTimer.totalPausedMs - (tsTimer.pausedMs ? now - tsTimer.pausedMs : 0);
-  const durationMins = Math.round(elapsedMs / 60000);
-  if (durationMins < 1) { toast('Session too short (< 1 min)', 'error'); tsTimer = null; localStorage.removeItem('qa_timer'); if(document.querySelector('.screen.active')?.id==='screen-timesheet')renderTimesheet(); return; }
-  // Calculate start/end times
-  const startDt = new Date(tsTimer.startMs);
-  const endDt = new Date(now);
-  const startTime = String(startDt.getHours()).padStart(2,'0')+':'+String(startDt.getMinutes()).padStart(2,'0');
-  const endTime = String(endDt.getHours()).padStart(2,'0')+':'+String(endDt.getMinutes()).padStart(2,'0');
-  const date = localToday();
-  await db.from('time_entries').insert({
-    date, start_time: startTime, end_time: endTime, duration_mins: durationMins,
-    category: tsTimer.category, activity: tsTimer.activity,
-    project_id: tsTimer.projectId || null, notes: null
-  });
-  tsTimer = null;
-  localStorage.removeItem('qa_timer');
-  toast('Logged: '+durationMins+' min · '+startTime+'–'+endTime, 'success', 3000);
-  if(document.querySelector('.screen.active')?.id==='screen-timesheet')renderTimesheet();
-}
-
-function tsTimerTick() {
-  const el = document.getElementById('ts-timer-display');
-  if (!el || !tsTimer) return;
-  const now = Date.now();
-  const elapsedMs = now - tsTimer.startMs - tsTimer.totalPausedMs - (tsTimer.pausedMs ? now - tsTimer.pausedMs : 0);
-  const totalSec = Math.floor(elapsedMs / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  el.textContent = (h > 0 ? h + ':' : '') + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
-  const pauseBtn = document.getElementById('ts-pause-btn');
-  const resumeBtn = document.getElementById('ts-resume-btn');
-  if (pauseBtn) pauseBtn.style.display = tsTimer.pausedMs ? 'none' : 'inline-block';
-  if (resumeBtn) resumeBtn.style.display = tsTimer.pausedMs ? 'inline-block' : 'none';
-}
-
-function tsRestoreTimer() {
-  const stored = localStorage.getItem('qa_timer');
-  if (!stored) return;
-  try {
-    const d = JSON.parse(stored);
-    if (!d.startMs) return;
-    tsTimer = { ...d, intervalId: setInterval(tsTimerTick, 1000) };
-    tsTimerTick();
-  } catch(e) { localStorage.removeItem('qa_timer'); }
-}
-
-// ── RENDER TIMESHEET ─────────────────────────────────────────────────
-async function renderTimesheet() {
-  const el = document.getElementById('screen-timesheet');
-  el.innerHTML = '<div class="loading">Loading timesheet...</div>';
-  await loadAll();
-
-  // Load entries for selected date
-  let allEntries = [];
-  try {
-    const { data: entries } = await db.from('time_entries').select('*').eq('date', tsDate).order('start_time');
-    allEntries = entries || [];
-  } catch(e) { console.warn('time_entries table not found — run create_time_entries.sql in Supabase'); }
-
-  // Timer section
-  let timerHTML = '';
-  if (tsTimer) {
-    timerHTML = '<div class="card" style="margin-bottom:14px;padding:16px 20px">'
-      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
-      + '<div>'
-      + '<div style="font-family:var(--fc);font-size:9px;letter-spacing:0.15em;color:var(--ash);margin-bottom:4px">TIMER RUNNING</div>'
-      + '<div style="font-size:13px;color:var(--parch)">' + (tsTimer.category || '—') + (tsTimer.activity ? ' · ' + tsTimer.activity : '') + '</div>'
-      + '</div>'
-      + '<div id="ts-timer-display" style="font-family:var(--fc);font-size:28px;color:var(--gold)">00:00</div>'
-      + '</div>'
-      + '<div style="display:flex;gap:8px">'
-      + '<button id="ts-pause-btn" class="btn btn-sm" onclick="tsTimerPause();renderTimesheet()">⏸ Pause</button>'
-      + '<button id="ts-resume-btn" class="btn btn-sm" style="display:none" onclick="tsTimerResume();renderTimesheet()">▶ Resume</button>'
-      + '<button class="btn btn-sm btn-danger" onclick="tsTimerStop()">⏹ Stop & Log</button>'
-      + '</div>'
-      + '</div>';
-  } else {
-    // Quick-start timer form
-    const recentCats = [...new Set(allEntries.map(e => e.category).filter(Boolean))];
-    const catOpts = TS_CATS.map(cat => '<option value="'+cat+'">' + cat + '</option>').join('');
-    const projOpts = '<option value="">No project</option>' + PROJECTS.map(p => '<option value="'+p.id+'">' + p.id.replace('The ','') + '</option>').join('');
-    timerHTML = '<div class="card" style="margin-bottom:14px;padding:16px 20px">'
-      + '<div style="font-family:var(--fc);font-size:9px;letter-spacing:0.15em;color:var(--ash);margin-bottom:12px">START TIMER</div>'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
-      + '<select id="ts-new-cat" style="padding:7px;background:var(--card2);border:0.5px solid var(--border2);border-radius:6px;color:var(--parch);font-size:13px"><option value="">Category</option>' + catOpts + '</select>'
-      + '<input type="text" id="ts-new-act" placeholder="Activity..." style="padding:7px 10px;background:var(--card2);border:0.5px solid var(--border2);border-radius:6px;color:var(--parch);font-size:13px">'
-      + '</div>'
-      + '<div style="display:flex;gap:8px;align-items:center">'
-      + '<select id="ts-new-proj" style="flex:1;padding:7px;background:var(--card2);border:0.5px solid var(--border2);border-radius:6px;color:var(--parch);font-size:13px">' + projOpts + '</select>'
-      + '<button class="btn btn-sm btn-safe" onclick="tsStartFromForm()">▶ Start</button>'
-      + '</div>'
-      + '</div>';
-  }
-
-  // Date nav
-  const dateNav = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
-    + '<button class="cal-nav-btn" onclick="tsDateShift(-1)">← Prev</button>'
-    + '<div style="font-family:var(--fc);font-size:14px;color:var(--parch)">' + tsDate + (tsDate === localToday() ? ' <span style="font-size:10px;color:var(--gold)">Today</span>' : '') + '</div>'
-    + '<button class="cal-nav-btn" onclick="tsDateShift(1)" ' + (tsDate >= localToday() ? 'disabled style="opacity:0.3"' : '') + '>Next →</button>'
-    + '</div>';
-
-  // Add block button
-  const addBtn = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
-    + '<div class="st" style="margin:0">Entries</div>'
-    + '<button class="btn btn-sm" onclick="tsOpenAddModal()">+ Add block</button>'
-    + '</div>';
-
-  // Entries list
-  let entriesHTML = '';
-  if (allEntries.length === 0) {
-    entriesHTML = '<div style="font-size:13px;color:var(--ash);font-style:italic;padding:16px 0;text-align:center">No entries for this day</div>';
-  } else {
-    // Gap detection
-    const gaps = tsDetectGaps(allEntries);
-    let combined = [];
-    allEntries.forEach((e, i) => {
-      combined.push({ type: 'entry', data: e });
-      if (gaps[i]) combined.push({ type: 'gap', duration: gaps[i] });
-    });
-    entriesHTML = combined.map(item => {
-      if (item.type === 'gap') {
-        return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;opacity:0.5">'
-          + '<div style="flex:1;border-top:1px dashed var(--border)"></div>'
-          + '<div style="font-size:10px;color:var(--warn);white-space:nowrap">⚠ ' + item.duration + ' min gap</div>'
-          + '<div style="flex:1;border-top:1px dashed var(--border)"></div>'
-          + '</div>';
-      }
-      const e = item.data;
-      const dot = '<div style="width:10px;height:10px;border-radius:50%;background:' + (TS_CAT_COLORS[e.category] || 'var(--ash)') + ';flex-shrink:0"></div>';
-      const proj = e.project_id ? '<span style="font-size:10px;color:var(--ash);margin-left:6px">· ' + e.project_id.replace('The ','') + '</span>' : '';
-      return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:0.5px solid var(--border)">'
-        + dot
-        + '<div style="flex:1">'
-        + '<div style="font-size:13px;color:var(--parch)">' + (e.activity || e.category) + proj + '</div>'
-        + '<div style="font-size:11px;color:var(--ash);margin-top:2px">' + e.start_time + '–' + e.end_time + ' · ' + e.duration_mins + ' min</div>'
-        + (e.notes ? '<div style="font-size:11px;color:var(--ash);margin-top:2px;font-style:italic">' + escHtml(e.notes) + '</div>' : '')
-        + '</div>'
-        + '<div style="font-size:11px;color:' + (TS_CAT_COLORS[e.category] || 'var(--ash)') + ';flex-shrink:0">' + e.category + '</div>'
-        + '<button class="btn btn-sm" style="color:var(--ember);border-color:var(--ember);padding:2px 6px;flex-shrink:0" data-eid="'+e.id+'" onclick="tsDeleteEntry(this.dataset.eid)">✕</button>'
-        + '</div>';
-    }).join('');
-  }
-
-  // Total for the day
-  const totalMins = allEntries.reduce((s, e) => s + (e.duration_mins || 0), 0);
-  const totalStr = totalMins >= 60 ? Math.floor(totalMins/60) + 'h ' + (totalMins%60) + 'm' : totalMins + 'm';
-
-  el.innerHTML = '<div class="pt">Timesheet</div>'
-    + timerHTML
-    + '<div class="card" style="padding:16px 20px">'
-    + dateNav
-    + addBtn
-    + '<div style="font-size:12px;color:var(--ash);margin-bottom:10px">Total logged: <span style="color:var(--gold);font-family:var(--fc)">' + totalStr + '</span></div>'
-    + entriesHTML
-    + '</div>';
-
-  // Restore timer display if running
-  if (tsTimer) setTimeout(tsTimerTick, 50);
-}
-
-function tsDetectGaps(entries) {
-  const gaps = {};
-  for (let i = 0; i < entries.length - 1; i++) {
-    const endA = tsTimeToMins(entries[i].end_time);
-    const startB = tsTimeToMins(entries[i+1].start_time);
-    const gap = startB - endA;
-    if (gap >= 5) gaps[i] = gap; // flag gaps of 5+ mins
-  }
-  return gaps;
-}
-
-function tsTimeToMins(t) {
-  if (!t) return 0;
-  const [h, m] = t.split(':').map(Number);
-  return h * 60 + m;
-}
-
-function tsDateShift(dir) {
-  const d = new Date(tsDate + 'T12:00:00');
-  d.setDate(d.getDate() + dir);
-  const newDate = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-  if (newDate > localToday()) return;
-  tsDate = newDate;
-  renderTimesheet();
-}
-
-function tsStartFromForm() {
-  const cat = document.getElementById('ts-new-cat')?.value;
-  const act = document.getElementById('ts-new-act')?.value.trim();
-  const proj = document.getElementById('ts-new-proj')?.value;
-  if (!cat) { toast('Select a category', 'error'); return; }
-  tsTimerStart(cat, act, proj);
-  renderTimesheet();
-}
-
-// ── ADD BLOCK MODAL ──────────────────────────────────────────────────
-function tsOpenAddModal(prefill) {
-  const p = prefill || {};
-  const catOpts = TS_CATS.map(cat => '<option value="'+cat+'"'+(p.category===cat?' selected':'')+'>'+cat+'</option>').join('');
-  const projOpts = '<option value="">No project</option>' + PROJECTS.map(pr => '<option value="'+pr.id+'"'+(p.project_id===pr.id?' selected':'')+'>'+pr.id.replace('The ','')+'</option>').join('');
-  const wrap = document.createElement('div');
-  wrap.innerHTML = '<div class="modal-overlay open" id="ts-add-modal" style="z-index:1100">'
-    + '<div class="modal" style="max-width:400px">'
-    + '<div class="modal-title">Add Time Block</div>'
-    + '<label>Date</label><input type="date" id="ts-add-date" value="'+tsDate+'" max="'+localToday()+'" style="width:100%;padding:7px 10px;background:var(--card2);border:0.5px solid var(--border2);border-radius:6px;color:var(--parch);font-size:13px;margin-bottom:10px">'
-    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
-    + '<div><label>Start</label><input type="time" id="ts-add-start" value="'+(p.start_time||'')+'" style="width:100%;padding:7px;background:var(--card2);border:0.5px solid var(--border2);border-radius:6px;color:var(--parch);font-size:13px"></div>'
-    + '<div><label>End</label><input type="time" id="ts-add-end" value="'+(p.end_time||'')+'" style="width:100%;padding:7px;background:var(--card2);border:0.5px solid var(--border2);border-radius:6px;color:var(--parch);font-size:13px"></div>'
-    + '</div>'
-    + '<label>Category</label><select id="ts-add-cat" style="width:100%;padding:7px;background:var(--card2);border:0.5px solid var(--border2);border-radius:6px;color:var(--parch);font-size:13px;margin-bottom:10px"><option value="">Select</option>'+catOpts+'</select>'
-    + '<label>Activity</label><input type="text" id="ts-add-act" placeholder="What you did..." value="'+(p.activity||'')+'" style="width:100%;padding:7px 10px;background:var(--card2);border:0.5px solid var(--border2);border-radius:6px;color:var(--parch);font-size:13px;margin-bottom:10px">'
-    + '<label>Project (optional)</label><select id="ts-add-proj" style="width:100%;padding:7px;background:var(--card2);border:0.5px solid var(--border2);border-radius:6px;color:var(--parch);font-size:13px;margin-bottom:10px">'+projOpts+'</select>'
-    + '<label>Notes</label><input type="text" id="ts-add-notes" placeholder="Optional..." value="'+(p.notes||'')+'" style="width:100%;padding:7px 10px;background:var(--card2);border:0.5px solid var(--border2);border-radius:6px;color:var(--parch);font-size:13px;margin-bottom:16px">'
-    + '<div class="modal-btns">'
-    + '<button class="btn btn-sm btn-danger" onclick="document.getElementById(\'ts-add-modal\').remove()">Cancel</button>'
-    + '<button class="btn btn-sm" onclick="tsSubmitBlock()">Add Block</button>'
-    + '</div>'
-    + '</div></div>';
-  document.body.appendChild(wrap.firstChild);
-}
-
-async function tsSubmitBlock() {
-  const date = document.getElementById('ts-add-date').value;
-  const start = document.getElementById('ts-add-start').value;
-  const end = document.getElementById('ts-add-end').value;
-  const cat = document.getElementById('ts-add-cat').value;
-  const act = document.getElementById('ts-add-act').value.trim();
-  const proj = document.getElementById('ts-add-proj').value;
-  const notes = document.getElementById('ts-add-notes').value.trim();
-  if (!date || !start || !end || !cat) { toast('Date, start, end and category required', 'error'); return; }
-  const startMins = tsTimeToMins(start);
-  const endMins = tsTimeToMins(end);
-  if (endMins <= startMins) { toast('End time must be after start time', 'error'); return; }
-  const durationMins = endMins - startMins;
-  // Overlap check
-  const { data: existing } = await db.from('time_entries').select('start_time,end_time').eq('date', date);
-  const overlap = (existing || []).some(e => {
-    const es = tsTimeToMins(e.start_time), ee = tsTimeToMins(e.end_time);
-    return startMins < ee && endMins > es;
-  });
-  if (overlap) { toast('This block overlaps an existing entry', 'error'); return; }
-  await db.from('time_entries').insert({ date, start_time: start, end_time: end, duration_mins: durationMins, category: cat, activity: act || null, project_id: proj || null, notes: notes || null });
-  document.getElementById('ts-add-modal').remove();
-  if (date === tsDate) renderTimesheet();
-  toast('Block added', 'success', 1500);
-}
-
-async function tsDeleteEntry(id) {
-  if (!(await gameConfirm('Delete this time entry?', 'Delete Entry', 'Delete', 'Cancel'))) return;
-  await db.from('time_entries').delete().eq('id', id);
-  renderTimesheet();
-}
-
-// ── RENDER TIME STUDY ────────────────────────────────────────────────
-
-function tsDayClose(){var m=document.getElementById("ts-day-modal");if(m)m.remove();}
-async function tsShowDayDetail(date) {
-  let entries = [];
-  try {
-    const { data } = await db.from('time_entries').select('*').eq('date', date).order('start_time');
-    entries = data || [];
-  } catch(e) {}
-
-  const totalMins = entries.reduce((s,e) => s+(e.duration_mins||0), 0);
-  const totalStr = totalMins >= 60 ? Math.floor(totalMins/60)+'h '+(totalMins%60)+'m' : totalMins+'m';
-  const d = new Date(date+'T12:00:00');
-  const dayLabel = d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
-
-  const rowsHTML = entries.map(e => {
-    const dot = '<div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:'+(TS_CAT_COLORS[e.category]||'var(--ash)')+'"></div>';
-    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)">'
-      + dot
-      + '<div style="flex:1">'
-      + '<div style="font-size:13px;color:var(--parch)">'+(e.activity||e.category||'—')+'</div>'
-      + '<div style="font-size:11px;color:var(--ash);margin-top:2px">'+e.start_time+'–'+e.end_time+' · '+e.duration_mins+'m</div>'
-      + (e.notes?'<div style="font-size:11px;color:var(--ash);font-style:italic">'+escHtml(e.notes)+'</div>':'')
-      + '</div>'
-      + '<div style="font-size:11px;color:'+(TS_CAT_COLORS[e.category]||'var(--ash)')+'">'+e.category+'</div>'
-      + '</div>';
-  }).join('');
-
-  const wrap = document.createElement('div');
-  wrap.innerHTML = '<div class="modal-overlay open" id="ts-day-modal" style="z-index:1100">'
-    + '<div class="modal" style="max-width:420px;max-height:80vh;overflow-y:auto">'
-    + '<div class="modal-title">'+dayLabel+'</div>'
-    + '<div style="font-size:12px;color:var(--ash);margin-bottom:14px">Total: <span style="color:var(--gold);font-family:var(--fc)">'+totalStr+'</span></div>'
-    + (rowsHTML || '<div style="font-size:13px;color:var(--ash);font-style:italic;padding:12px 0">No entries</div>')
-    + '<div style="margin-top:16px"><button class="btn btn-sm" onclick="tsDayClose()">Close</button></div>'
-    + '</div></div>';
-  document.getElementById('ts-day-modal')?.remove();
-  document.body.appendChild(wrap.firstChild);
-}
-
-async function renderTimeStudy() {
-  const el = document.getElementById('screen-timestudy');
-  el.innerHTML = '<div class="loading">Loading time study...</div>';
-
-  const range = S.tsRange || '7';
-  const rangeN = parseInt(range);
-  const endDate = localToday();
-  function shiftDate(base, days) {
-    const d = new Date(base + 'T12:00:00'); d.setDate(d.getDate() + days);
-    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-  }
-  const startDate = shiftDate(endDate, -(rangeN - 1));
-
-  let allE = [];
-  try {
-    const { data: entries } = await db.from('time_entries').select('*').gte('date', startDate).lte('date', endDate).order('date');
-    allE = entries || [];
-  } catch(e) { console.warn('time_entries table missing'); }
-
-  // Build date list and dayMap
-  const days = [];
-  for (let i = rangeN - 1; i >= 0; i--) days.push(shiftDate(endDate, -i));
-  const dayMap = {}; // date → { cat: mins }
-  allE.forEach(e => {
-    if (!dayMap[e.date]) dayMap[e.date] = {};
-    dayMap[e.date][e.category] = (dayMap[e.date][e.category] || 0) + (e.duration_mins || 0);
-  });
-
-  // ── Stat helpers
-  const totalMins = allE.reduce((s, e) => s + (e.duration_mins || 0), 0);
-  const totalHrs = (totalMins / 60).toFixed(1);
-  const daysLogged = days.filter(d => dayMap[d]).length;
-  const consistency = days.length ? Math.round(daysLogged / days.length * 100) : 0;
-  const avgDayMins = daysLogged ? Math.round(totalMins / daysLogged) : 0;
-  const avgDayStr = avgDayMins >= 60 ? Math.floor(avgDayMins/60)+'h '+(avgDayMins%60)+'m' : avgDayMins+'m';
-
-  // Sleep
-  const sleepEntries = allE.filter(e => e.category === 'Sleep');
-  const sleepDaysSet = new Set(sleepEntries.map(e => e.date));
-  const avgSleepMins = sleepDaysSet.size ? Math.round(sleepEntries.reduce((s,e)=>s+(e.duration_mins||0),0) / sleepDaysSet.size) : 0;
-  const avgSleepStr = avgSleepMins ? Math.floor(avgSleepMins/60)+'h '+(avgSleepMins%60)+'m' : '—';
-
-  // ── Category totals
-  const catTotals = {};
-  TS_CATS.forEach(cat => catTotals[cat] = 0);
-  allE.forEach(e => { if (e.category && catTotals[e.category] !== undefined) catTotals[e.category] += e.duration_mins || 0; });
-  const sortedCats = TS_CATS.filter(c => catTotals[c] > 0).sort((a,b) => catTotals[b] - catTotals[a]);
-  const maxCatMins = sortedCats.length ? catTotals[sortedCats[0]] : 1;
-
-  // ── Activity totals
-  const actTotals = {};
-  allE.forEach(e => { if (e.activity) actTotals[e.activity] = (actTotals[e.activity] || 0) + (e.duration_mins || 0); });
-  const topActs = Object.entries(actTotals).sort((a,b) => b[1]-a[1]).slice(0, 10);
-
-  // ── Project totals
-  const projTotals = {};
-  allE.forEach(e => { if (e.project_id) projTotals[e.project_id] = (projTotals[e.project_id] || 0) + (e.duration_mins || 0); });
-  const sortedProjs = Object.entries(projTotals).sort((a,b) => b[1]-a[1]);
-
-  // ── Peak hours (0–23 buckets)
-  const hourBuckets = Array(24).fill(0);
-  allE.forEach(e => {
-    if (!e.start_time || !e.end_time) return;
-    const sh = parseInt(e.start_time.split(':')[0]);
-    const eh = parseInt(e.end_time.split(':')[0]);
-    for (let h = sh; h <= eh && h < 24; h++) hourBuckets[h] += (e.duration_mins || 0);
-  });
-  const maxHourMins = Math.max(...hourBuckets, 1);
-
-  // ── HTML builders
-
-  // Range tabs
-  const rangeHTML = '<div style="display:flex;gap:6px;margin-bottom:20px">'
-    + ['7','14','30'].map(r => '<button class="cal-nav-btn'+(range===r?' active':'')+'" onclick="S.tsRange=\''+r+'\';renderTimeStudy()">'+r+' days</button>').join('')
-    + '</div>';
-
-  // Stat tiles
-  const statsHTML = '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">'
-    + tsTile(totalHrs+'h', 'Total logged')
-    + tsTile(consistency+'%', 'Consistency')
-    + tsTile(avgDayStr, 'Avg / day logged')
-    + tsTile(avgSleepStr, 'Avg sleep')
-    + '</div>';
-
-  // Category breakdown — donut-style list with colour bars, sorted, with % of total
-  const catHTML = sortedCats.length
-    ? sortedCats.map(cat => {
-        const mins = catTotals[cat];
-        const hrs = (mins/60).toFixed(1);
-        const pct = totalMins ? Math.round(mins/totalMins*100) : 0;
-        const barPct = Math.round(mins/maxCatMins*100);
-        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)">'
-          + '<div style="width:10px;height:10px;border-radius:50%;flex-shrink:0;background:'+(TS_CAT_COLORS[cat]||'var(--ash)')+'"></div>'
-          + '<div style="flex:1">'
-          + '<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
-          + '<span style="font-size:13px;color:var(--parch)">'+cat+'</span>'
-          + '<span style="font-family:var(--fc);font-size:12px;color:var(--ash)">'+hrs+'h &nbsp;<span style="color:var(--border2)">'+pct+'%</span></span>'
-          + '</div>'
-          + '<div style="height:5px;background:var(--card2);border-radius:3px;overflow:hidden">'
-          + '<div style="height:100%;width:'+barPct+'%;background:'+(TS_CAT_COLORS[cat]||'var(--gold)')+';border-radius:3px"></div>'
-          + '</div></div></div>';
-      }).join('')
-    : '<div style="font-size:13px;color:var(--ash);font-style:italic;padding:12px 0">No entries yet</div>';
-
-  // Daily bar chart — taller, proper scale, day labels
-  const maxDayMins = Math.max(...days.map(d => Object.values(dayMap[d]||{}).reduce((s,v)=>s+v,0)), 60);
-  const BAR_H = 120;
-  const dailyBars = '<div style="display:flex;gap:3px;align-items:flex-end;height:'+(BAR_H+24)+'px;padding-bottom:24px;position:relative">'
-    + days.map(d => {
-        const dayCats = dayMap[d] || {};
-        const dayTotal = Object.values(dayCats).reduce((s,v)=>s+v,0);
-        const barH = Math.round(dayTotal / maxDayMins * BAR_H);
-        const label = d.slice(5).replace('-','/');
-        const isToday = d === localToday();
-        const segments = TS_CATS.filter(cat => dayCats[cat]).reverse().map(cat => {
-          const h = Math.max(2, Math.round(dayCats[cat] / maxDayMins * BAR_H));
-          return '<div style="height:'+h+'px;background:'+(TS_CAT_COLORS[cat]||'var(--ash)')+';width:100%;flex-shrink:0"></div>';
-        }).join('');
-        const hrsLabel = dayTotal >= 60 ? (dayTotal/60).toFixed(1)+'h' : dayTotal+'m';
-        var dayDiv='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0'+(barH>0?';cursor:pointer':'')+'"';
-        if(barH>0)dayDiv+=' data-d="'+d+'" onclick="tsShowDayDetail(this.dataset.d)"';
-        dayDiv+='>';
-        dayDiv+=(barH>0?'<div style="font-size:8px;color:var(--ash);margin-bottom:2px">'+hrsLabel+'</div>':'<div style="height:14px"></div>');
-        dayDiv+='<div style="width:100%;display:flex;flex-direction:column-reverse;height:'+BAR_H+'px;border-radius:2px 2px 0 0;overflow:hidden;background:var(--card2)">';
-        dayDiv+=(barH>0?segments:'');
-        dayDiv+='</div>';
-        dayDiv+='<div style="font-size:8px;color:'+(isToday?'var(--gold)':'var(--ash)')+';margin-top:3px;white-space:nowrap">'+label+'</div>';
-        dayDiv+='</div>';
-        return dayDiv;
-      }).join('')
-    + '</div>';
-
-  // Peak hours heatmap
-  const peakHTML = '<div style="display:flex;gap:2px;align-items:flex-end">'
-    + hourBuckets.map((mins, h) => {
-        const pct = mins / maxHourMins;
-        const opacity = pct > 0 ? Math.max(0.15, pct) : 0;
-        const label = h === 0 ? '12a' : h < 12 ? h+'a' : h === 12 ? '12p' : (h-12)+'p';
-        return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:1px">'
-          + '<div style="width:100%;height:32px;border-radius:2px;background:'+(opacity > 0 ? 'var(--gold)' : 'var(--card2)')+';opacity:'+opacity+'" title="'+label+': '+(mins>=60?(mins/60).toFixed(1)+'h':mins+'m')+'"></div>'
-          + (h%4===0?'<div style="font-size:7px;color:var(--ash)">'+label+'</div>':'<div style="height:10px"></div>')
-          + '</div>';
-      }).join('')
-    + '</div>';
-
-  // Top activities
-  const actHTML = topActs.length
-    ? topActs.map(([act, mins], i) => {
-        const hrs = (mins/60).toFixed(1);
-        const pct = totalMins ? Math.round(mins/totalMins*100) : 0;
-        // Find category for this activity
-        const catForAct = allE.find(e => e.activity === act)?.category;
-        return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:0.5px solid var(--border)">'
-          + '<div style="font-family:var(--fc);font-size:11px;color:var(--ash);width:18px;text-align:right">'+(i+1)+'</div>'
-          + '<div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;background:'+(TS_CAT_COLORS[catForAct]||'var(--border2)')+'"></div>'
-          + '<div style="flex:1;font-size:13px;color:var(--parch)">'+escHtml(act)+'</div>'
-          + '<div style="font-size:11px;color:var(--ash)">'+pct+'%</div>'
-          + '<div style="font-family:var(--fc);font-size:13px;color:var(--gold);width:36px;text-align:right">'+hrs+'h</div>'
-          + '</div>';
-      }).join('')
-    : '<div style="font-size:13px;color:var(--ash);font-style:italic;padding:12px 0">Log activities to see rankings</div>';
-
-  // Project time
-  const maxProjMins = sortedProjs.length ? sortedProjs[0][1] : 1;
-  const projHTML = sortedProjs.length
-    ? sortedProjs.map(([pid, mins]) => {
-        const hrs = (mins/60).toFixed(1);
-        const pct = totalMins ? Math.round(mins/totalMins*100) : 0;
-        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border)">'
-          + '<div style="flex:1">'
-          + '<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
-          + '<span style="font-size:13px;color:var(--parch)">'+pid.replace('The ','')+'</span>'
-          + '<span style="font-family:var(--fc);font-size:12px;color:var(--ash)">'+hrs+'h &nbsp;<span style="color:var(--border2)">'+pct+'%</span></span>'
-          + '</div>'
-          + '<div style="height:5px;background:var(--card2);border-radius:3px;overflow:hidden">'
-          + '<div style="height:100%;width:'+Math.round(mins/maxProjMins*100)+'%;background:var(--gold);border-radius:3px"></div>'
-          + '</div></div></div>';
-      }).join('')
-    : '<div style="font-size:13px;color:var(--ash);font-style:italic;padding:12px 0">Link entries to projects to see this</div>';
-
-  // Category legend
-  const legend = '<div style="display:flex;flex-wrap:wrap;gap:6px 12px;margin-bottom:14px">'
-    + TS_CATS.map(cat => '<span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--ash)">'
-        + '<div style="width:8px;height:8px;border-radius:50%;background:'+(TS_CAT_COLORS[cat]||'var(--ash)')+'"></div>'+cat+'</span>').join('')
-    + '</div>';
-
-  el.innerHTML = '<div class="pt">Time Study</div>'
-    + rangeHTML
-    + statsHTML
-    // Daily breakdown
-    + '<div class="card" style="margin-bottom:14px;padding:16px 20px">'
-    + '<div class="st" style="margin-bottom:4px">Daily Breakdown</div>'
-    + '<div style="font-size:11px;color:var(--ash);margin-bottom:12px">Stacked by category · hover for hours</div>'
-    + legend + dailyBars
-    + '</div>'
-    // Hours by category
-    + '<div class="card" style="margin-bottom:14px;padding:16px 20px">'
-    + '<div class="st" style="margin-bottom:12px">Time by Category</div>'
-    + catHTML
-    + '</div>'
-    // Peak hours
-    + '<div class="card" style="margin-bottom:14px;padding:16px 20px">'
-    + '<div class="st" style="margin-bottom:4px">Peak Hours</div>'
-    + '<div style="font-size:11px;color:var(--ash);margin-bottom:12px">Which hours of the day you use most</div>'
-    + peakHTML
-    + '</div>'
-    // Top activities
-    + '<div class="card" style="margin-bottom:14px;padding:16px 20px">'
-    + '<div class="st" style="margin-bottom:12px">Top Activities</div>'
-    + actHTML
-    + '</div>'
-    // Project time
-    + '<div class="card" style="margin-bottom:14px;padding:16px 20px">'
-    + '<div class="st" style="margin-bottom:12px">Time by Project</div>'
-    + projHTML
-    + '</div>';
-}
-
-function tsTile(val, label) {
-  return '<div class="card" style="padding:12px 14px;text-align:center">'
-    + '<div style="font-family:var(--fc);font-size:20px;color:var(--gold);line-height:1.1">' + val + '</div>'
-    + '<div style="font-size:10px;color:var(--ash);margin-top:4px;letter-spacing:0.05em">' + label + '</div>'
-    + '</div>';
-}
-
-
-
-// ── AUTO SNAPSHOT ────────────────────────────────────────────────────
-async function runDailySnapshot(){
-  try{
-    const today_s=localToday();
-    // Check if already snapshotted today
-    const{data:existing}=await db.from('daily_snapshots').select('id').eq('snapshot_date',today_s).limit(1);
-    if(existing&&existing.length>0)return; // already done today
-
-    // Gather all campaign table data
-    const[sR,lR,pR,csR,msR,dcR,flR,pcR,bkR]=await Promise.all([
-      db.from('sessions').select('*').order('date'),
-      db.from('daily_log').select('*').order('date'),
-      db.from('project_summary').select('*'),
-      db.from('commandment_streaks').select('*'),
-      db.from('milestones').select('*').order('date'),
-      db.from('declarations').select('*').order('start_date'),
-      db.from('food_log').select('*').order('date'),
-      db.from('project_config').select('*'),
-      db.from('backups').select('id,created_at,type,date_from,date_to').order('created_at',{ascending:false}).limit(10),
-    ]);
-
-    const payload={
-      snapshot_date:today_s,
-      schema_version:1,
-      sessions:sR.data||[],
-      daily_log:lR.data||[],
-      project_summary:pR.data||[],
-      commandment_streaks:csR.data||[],
-      milestones:msR.data||[],
-      declarations:dcR.data||[],
-      food_log:flR.data||[],
-      project_config:pcR.data||[],
-      backups_index:bkR.data||[],
-    };
-
-    const rowCounts={
-      sessions:(sR.data||[]).length,
-      daily_log:(lR.data||[]).length,
-      project_summary:(pR.data||[]).length,
-      commandment_streaks:(csR.data||[]).length,
-    };
-
-    // Save to daily_snapshots table
-    await db.from('daily_snapshots').insert({
-      snapshot_date:today_s,
-      payload:payload,
-      row_counts:rowCounts,
-      app_version:'1'
-    });
-
-    // Auto-download JSON to computer
-    const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url;
-    a.download='quiet-anvil-backup-'+today_s+'.json';
-    document.body.appendChild(a);a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    // Prune snapshots older than 90 days
-    const cutoff=new Date(today_s);cutoff.setDate(cutoff.getDate()-90);
-    const cutoffStr=cutoff.toISOString().slice(0,10);
-    await db.from('daily_snapshots').delete().lt('snapshot_date',cutoffStr);
-
-    console.log('Auto-snapshot complete:',today_s,'rows:',JSON.stringify(rowCounts));
-    toast('Daily backup saved locally ↓','success',3000);
-  }catch(e){
-    console.warn('Auto-snapshot failed:',e.message);
-  }
-}
-
 
 // ── GAME CONFIRM MODAL ──────────────────────────────────────────────
 let _confirmResolve = null;
