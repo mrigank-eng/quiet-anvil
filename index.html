@@ -59,7 +59,7 @@ body{background:var(--bg);color:var(--parch);font-family:var(--ff);font-size:15p
 /* ── GRIDS ── */
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
-.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px}
+.g4{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
 
 /* ── SCORE BOXES ── */
 .sb{background:var(--card2);border-radius:8px;padding:14px;text-align:center}
@@ -156,7 +156,7 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
 
 /* ── STAT MINI ── */
 .sm{text-align:center;padding:12px 8px;background:var(--card2);border-radius:8px}
-.sm-val{font-family:var(--fc);font-size:22px;color:var(--parch);line-height:1}
+.sm-val{font-family:var(--fc);font-size:17px;color:var(--parch);line-height:1}
 .sm-lbl{font-size:10px;color:var(--ash);margin-top:3px}
 
 /* ── LEVEL JOURNEY ── */
@@ -2447,6 +2447,7 @@ async function renderProject(screenKey){
       <div class="sm"><div class="sm-val" style="color:var(--gold)">${totalPts.toLocaleString()}</div><div class="sm-lbl">Points earned</div></div>
       <div class="sm"><div class="sm-val" style="color:${totalPen<0?'var(--ember)':'var(--ash)'}">${totalPen}</div><div class="sm-lbl">Penalties</div></div>
       <div class="sm"><div class="sm-val" style="color:${(totalPts+totalPen)>=0?'var(--safe)':'var(--ember)'}">${(totalPts+totalPen).toLocaleString()}</div><div class="sm-lbl">Net points</div></div>
+      <div class="sm"><div class="sm-val" style="color:${(totalPts+totalPen)>=0?'var(--safe)':'var(--ember)'}">${(totalPts+totalPen).toLocaleString()}</div><div class="sm-lbl">Net points</div></div>
     </div>
 
     ${pb?`<div class="card card-gold" style="margin-bottom:14px">
@@ -2480,6 +2481,12 @@ async function renderProject(screenKey){
     <div class="g2" style="align-items:start">
       <div>
         <div class="st">${proj.unit} over time</div>
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <button class="cal-nav-btn ${(S.chartView&&S.chartView[screenKey]||'all')==='week'?'active':''}" onclick="S.chartView=S.chartView||{};S.chartView['${screenKey}']='week';S.chartsDrawn['${screenKey}']=false;renderProject('${screenKey}')">7d</button>
+          <button class="cal-nav-btn ${(S.chartView&&S.chartView[screenKey]||'all')==='month'?'active':''}" onclick="S.chartView=S.chartView||{};S.chartView['${screenKey}']='month';S.chartsDrawn['${screenKey}']=false;renderProject('${screenKey}')">30d</button>
+          <button class="cal-nav-btn ${(S.chartView&&S.chartView[screenKey]||'all')==='year'?'active':''}" onclick="S.chartView=S.chartView||{};S.chartView['${screenKey}']='year';S.chartsDrawn['${screenKey}']=false;renderProject('${screenKey}')">1yr</button>
+          <button class="cal-nav-btn ${(S.chartView&&S.chartView[screenKey]||'all')==='all'?'active':''}" onclick="S.chartView=S.chartView||{};S.chartView['${screenKey}']='all';S.chartsDrawn['${screenKey}']=false;renderProject('${screenKey}')">All</button>
+        </div>
         <div class="card" style="margin-bottom:14px"><div style="position:relative;height:180px"><canvas id="chart-${screenKey}"></canvas></div></div>
         ${catHTML}
         ${langHTML}
@@ -2513,12 +2520,18 @@ async function renderProject(screenKey){
       const penaltyDates={};
       S.allSessions.filter(function(s){return s.project===proj.id&&(s.penalty||0)<0&&!(s.tangible_logged>0);})
         .forEach(function(s){penaltyDates[s.date]=true;});
-      // Build full date range from campaign start to today
+          // Build date range based on chart view
+      if(!S.chartView)S.chartView={};
+      const chartView=S.chartView[screenKey]||'all';
       const allDates=[];
-      const cStart=new Date(getGameStart()+'T12:00:00');
-      const cEnd=new Date(today()+'T12:00:00');
-      for(var dd=new Date(cStart);dd<=cEnd;dd.setDate(dd.getDate()+1)){
-        allDates.push(localDateStr(dd));
+      const cEnd2=new Date(today()+'T12:00:00');
+      var cStart2;
+      if(chartView==='week'){cStart2=new Date(cEnd2.getTime());cStart2.setDate(cStart2.getDate()-6);}
+      else if(chartView==='month'){cStart2=new Date(cEnd2.getTime());cStart2.setDate(cStart2.getDate()-29);}
+      else if(chartView==='year'){cStart2=new Date(cEnd2.getTime());cStart2.setFullYear(cStart2.getFullYear()-1);}
+      else{cStart2=new Date(getGameStart()+'T12:00:00');}
+      for(var dd2=new Date(cStart2);dd2<=cEnd2;dd2.setDate(dd2.getDate()+1)){
+        allDates.push(localDateStr(dd2));
       }
       const chartData=allDates.map(function(d){return dateMap[d]||0;});
       const DAY_SHORT=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -2696,10 +2709,22 @@ async function submitMilestone(){
   const pid=document.getElementById('ms-project').value;
   const desc=document.getElementById('ms-desc').value.trim();
   if(!pid||!desc){toast('Select a project and enter a description.','error');return;}
-  const s=S.projects.find(p=>p.project===pid)||{};
-  const total=s.total_tangible||0;
-  const msDate=(document.getElementById('ms-date')?.value)||today();
-  await db.from('milestones').insert({date:msDate,project:pid,description:desc,tangible_at_time:total,level_at_time:getLvl(pid,total,getCatCountsAll()[pid]||{})});
+  const msDate=(document.getElementById('ms-date')&&document.getElementById('ms-date').value)||today();
+  const msEditId=document.getElementById('ms-modal').dataset.editId||'';
+  document.getElementById('ms-modal').dataset.editId='';
+  // Count tangibles up to that date (not today's running total)
+  const allProjSess=S.allSessions.filter(function(s){return s.project===pid&&s.tangible_logged>0&&s.date<=msDate;});
+  const proj2=PROJECTS.find(function(p){return p.id===pid;});
+  const msTotal=proj2&&proj2.uniqueDays
+    ?new Set(allProjSess.map(function(s){return s.date;})).size
+    :allProjSess.reduce(function(sum,s){return sum+(s.tangible_logged||0);},0);
+  const total=msTotal;
+  const lvl=getLvl(pid,total,getCatCountsAll()[pid]||{});
+  if(msEditId){
+    await db.from('milestones').update({date:msDate,project:pid,description:desc,tangible_at_time:total,level_at_time:lvl}).eq('id',msEditId);
+    closeModal('ms-modal');S.milestones=[];await loadAll();renderMilestones();return;
+  }
+  await db.from('milestones').insert({date:msDate,project:pid,description:desc,tangible_at_time:total,level_at_time:lvl});
   closeModal('ms-modal');S.milestones=[];S.allSessions=[];S.allLogs=[];
   await loadAll();renderMilestones();
 }
@@ -2976,6 +3001,23 @@ function loadFromLocalFile(input){
 }
 
 
+async function downloadBackupNow(){
+  try{
+    const{data:snaps}=await db.from('daily_snapshots').select('payload,snapshot_date').order('snapshot_date',{ascending:false}).limit(1);
+    if(snaps&&snaps.length>0){
+      const blob=new Blob([JSON.stringify(snaps[0].payload,null,2)],{type:'application/json'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;
+      a.download='quiet-anvil-backup-'+snaps[0].snapshot_date+'.json';
+      document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+      toast('Backup downloaded','success',2000);
+    } else {
+      // No snapshot exists yet - create one now
+      await runDailySnapshot();
+    }
+  }catch(e){toast('Download failed: '+e.message,'error');}
+}
+
 async function renderBackup(){
   const el = document.getElementById('screen-backup');
   el.innerHTML = '<div class="loading">Loading backups...</div>';
@@ -3007,7 +3049,7 @@ async function renderBackup(){
       +'<div class="pt">Backup</div>'
       +'<div class="ps">Full system restore points · All data restored exactly as saved</div>'
       +'<div style="display:flex;gap:8px;margin-bottom:16px">'
-      +'<button class="btn btn-sm btn-safe" onclick="runDailySnapshot()">↓ Download backup now</button>'
+      +'<button class="btn btn-sm btn-safe" onclick="downloadBackupNow()">↓ Download backup now</button>'
       +'<div style="font-size:11px;color:var(--ash);align-self:center">Auto-downloads daily on first load</div>'
       +'</div>'
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'
@@ -3658,8 +3700,24 @@ function showMissedDayPrompt(){
       if(projSec)projSec.style.display='block';
     }
   }
+  var projSec=document.getElementById('missed-proj-section');
+  var projList2=document.getElementById('missed-proj-list');
+  if(projList2){
+    var activeProjs2=PROJECTS.filter(function(p){var cfg=S.projectConfig&&S.projectConfig[p.id];return cfg?cfg.is_active!==false:true;});
+    if(activeProjs2.length>0){
+      projList2.innerHTML=activeProjs2.map(function(p){
+        return'<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:0.5px solid var(--border)">'
+          +'<span style="font-size:13px;color:var(--parch)">'+p.id.replace('The ','')+'</span>'
+          +'<button class="btn btn-sm" style="padding:3px 10px;font-size:11px" data-mpid="'+p.id+'" data-mdate="'+dateStr+'" onclick="missedProjLog(this.dataset.mpid,this.dataset.mdate)">Log session</button>'
+          +'</div>';
+      }).join('');
+      if(projSec)projSec.style.display='block';
+    }
+  }
   document.getElementById('missed-modal').classList.add('open');
 }
+
+function missedProjLog(pid,date){S.pendingSessionDate=date;openSession(pid,date);}
 
 function missedProjLog(pid,date){
   S.pendingSessionDate=date;
@@ -4014,12 +4072,31 @@ function foodDayClick(dateStr){
 let milestoneFilter='all';
 
 
+async function deleteMilestone(id){
+  if(!(await gameConfirm('Delete this milestone?','Delete Milestone','Delete','Cancel')))return;
+  await db.from('milestones').delete().eq('id',id);
+  S.milestones=[];await loadAll();renderMilestones();
+  toast('Milestone deleted','info',1500);
+}
+function editMilestone(btn){
+  var titleEl=document.getElementById('ms-modal-title');
+  var dateEl=document.getElementById('ms-date');
+  if(titleEl)titleEl.textContent='Edit milestone';
+  if(dateEl){dateEl.value=btn.dataset.msdate||localToday();dateEl.max=localToday();}
+  var sel=document.getElementById('ms-project');
+  sel.innerHTML='<option value="">Select project</option>'+PROJECTS.map(function(p){return'<option value="'+p.id+'"'+(p.id===btn.dataset.msproj?' selected':'')+'>'+p.id+'</option>';}).join('');
+  document.getElementById('ms-desc').value=btn.dataset.msdesc||'';
+  document.getElementById('ms-modal').dataset.editId=btn.dataset.msid;
+  document.getElementById('ms-modal').classList.add('open');
+}
+
 async function renderMilestones(){
   await loadAll();
   const filtered=milestoneFilter==='all'?S.milestones:S.milestones.filter(m=>m.project===milestoneFilter);
   const msHTML=filtered.length>0?filtered.map(function(m){
-    return`<div style="display:flex;gap:16px;padding:12px 0;border-bottom:0.5px solid var(--border)">
-      <div style="font-family:var(--fc);font-size:11px;color:var(--ash);width:90px;flex-shrink:0;padding-top:2px">${m.date}</div>
+    const mDesc=(m.description||'').replace(/"/g,'&quot;');
+    return`<div style="display:flex;gap:16px;padding:12px 0;border-bottom:0.5px solid var(--border);align-items:flex-start">
+      <div style="font-family:var(--fc);font-size:11px;color:var(--ash);width:80px;flex-shrink:0;padding-top:2px">${m.date}</div>
       <div style="flex:1">
         <div style="font-size:13px;color:var(--parch);margin-bottom:4px;line-height:1.5">${m.description}</div>
         <div style="display:flex;gap:10px;font-size:11px">
@@ -4027,6 +4104,10 @@ async function renderMilestones(){
           ${m.tangible_at_time!==null?`<span style="color:var(--ash)">${m.tangible_at_time} ${PROJECTS.find(p=>p.id===m.project)?.unit||''}</span>`:''}
           ${m.level_at_time!==null?`<span style="color:var(--ash)">Level ${m.level_at_time}</span>`:''}
         </div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button class="btn btn-sm" style="padding:2px 8px;color:var(--ash);border-color:var(--border2)" data-msid="${m.id}" data-msdate="${m.date}" data-msproj="${m.project}" data-msdesc="${mDesc}" onclick="editMilestone(this)">✎</button>
+        <button class="btn btn-sm" style="padding:2px 8px;color:var(--ember);border-color:var(--ember)" data-msid="${m.id}" onclick="deleteMilestone(this.dataset.msid)">✕</button>
       </div>
     </div>`;
   }).join('')
