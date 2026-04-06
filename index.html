@@ -1207,7 +1207,7 @@ function pinSubmit(){
     if(pinBuf===getPin()){
       document.getElementById('pin-screen').classList.remove('active');
       updateSidebarDates();
-      loadData().then(()=>loadAll());
+      loadData().then(()=>{loadAll();tsRestoreTimer();setTimeout(runDailySnapshot,3000);});
     } else {
       upDots(4,true);
       document.getElementById('pin-error').textContent='Incorrect PIN';
@@ -1254,8 +1254,6 @@ function nav(screen){
   document.getElementById('screen-'+screen).classList.add('active');
   document.querySelectorAll('.sb-item').forEach(i=>{if(i.getAttribute('onclick')===`nav('${screen}')`)i.classList.add('active');});
   S.chartsDrawn[screen]=false;
-  // Clear session cache so loadAll always fetches fresh data on tab switch
-  S.allSessions=[];S.allLogs=[];S._milestonesLoaded=false;
   closeSidebar();
   renderActive();
 }
@@ -2990,6 +2988,10 @@ async function renderBackup(){
     el.innerHTML=''
       +'<div class="pt">Backup</div>'
       +'<div class="ps">Full system restore points · All data restored exactly as saved</div>'
+      +'<div style="display:flex;gap:8px;margin-bottom:16px">'
+      +'<button class="btn btn-sm btn-safe" onclick="runDailySnapshot()">↓ Download backup now</button>'
+      +'<div style="font-size:11px;color:var(--ash);align-self:center">Auto-downloads daily on first load</div>'
+      +'</div>'
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'
       +'<div class="st" style="margin:0">Saved backups</div>'
       +'<div style="display:flex;gap:8px">'
@@ -4436,8 +4438,11 @@ async function renderTimesheet() {
   await loadAll();
 
   // Load entries for selected date
-  const { data: entries } = await db.from('time_entries').select('*').eq('date', tsDate).order('start_time');
-  const allEntries = entries || [];
+  let allEntries = [];
+  try {
+    const { data: entries } = await db.from('time_entries').select('*').eq('date', tsDate).order('start_time');
+    allEntries = entries || [];
+  } catch(e) { console.warn('time_entries table not found — run create_time_entries.sql in Supabase'); }
 
   // Timer section
   let timerHTML = '';
@@ -4646,8 +4651,11 @@ async function renderTimeStudy() {
     return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
   })();
 
-  const { data: entries } = await db.from('time_entries').select('*').gte('date', startDate).lte('date', endDate).order('date');
-  const allE = entries || [];
+  let allE = [];
+  try {
+    const { data: entries } = await db.from('time_entries').select('*').gte('date', startDate).lte('date', endDate).order('date');
+    allE = entries || [];
+  } catch(e) { console.warn('time_entries table not found — run create_time_entries.sql in Supabase'); }
 
   // ── Totals by category
   const catTotals = {};
@@ -4775,6 +4783,79 @@ async function renderTimeStudy() {
     + '<div class="st" style="margin-bottom:4px">Top Activities</div>'
     + topActHTML
     + '</div>';
+}
+
+
+// ── AUTO SNAPSHOT ────────────────────────────────────────────────────
+async function runDailySnapshot(){
+  try{
+    const today_s=localToday();
+    // Check if already snapshotted today
+    const{data:existing}=await db.from('daily_snapshots').select('id').eq('snapshot_date',today_s).limit(1);
+    if(existing&&existing.length>0)return; // already done today
+
+    // Gather all campaign table data
+    const[sR,lR,pR,csR,msR,dcR,flR,pcR,bkR]=await Promise.all([
+      db.from('sessions').select('*').order('date'),
+      db.from('daily_log').select('*').order('date'),
+      db.from('project_summary').select('*'),
+      db.from('commandment_streaks').select('*'),
+      db.from('milestones').select('*').order('date'),
+      db.from('declarations').select('*').order('start_date'),
+      db.from('food_log').select('*').order('date'),
+      db.from('project_config').select('*'),
+      db.from('backups').select('id,created_at,type,date_from,date_to').order('created_at',{ascending:false}).limit(10),
+    ]);
+
+    const payload={
+      snapshot_date:today_s,
+      schema_version:1,
+      sessions:sR.data||[],
+      daily_log:lR.data||[],
+      project_summary:pR.data||[],
+      commandment_streaks:csR.data||[],
+      milestones:msR.data||[],
+      declarations:dcR.data||[],
+      food_log:flR.data||[],
+      project_config:pcR.data||[],
+      backups_index:bkR.data||[],
+    };
+
+    const rowCounts={
+      sessions:(sR.data||[]).length,
+      daily_log:(lR.data||[]).length,
+      project_summary:(pR.data||[]).length,
+      commandment_streaks:(csR.data||[]).length,
+    };
+
+    // Save to daily_snapshots table
+    await db.from('daily_snapshots').insert({
+      snapshot_date:today_s,
+      payload:payload,
+      row_counts:rowCounts,
+      app_version:'1'
+    });
+
+    // Auto-download JSON to computer
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download='quiet-anvil-backup-'+today_s+'.json';
+    document.body.appendChild(a);a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    // Prune snapshots older than 90 days
+    const cutoff=new Date(today_s);cutoff.setDate(cutoff.getDate()-90);
+    const cutoffStr=cutoff.toISOString().slice(0,10);
+    await db.from('daily_snapshots').delete().lt('snapshot_date',cutoffStr);
+
+    console.log('Auto-snapshot complete:',today_s,'rows:',JSON.stringify(rowCounts));
+    toast('Daily backup saved locally ↓','success',3000);
+  }catch(e){
+    console.warn('Auto-snapshot failed:',e.message);
+  }
 }
 
 
