@@ -1858,7 +1858,6 @@ async function saveProjectCeiling(pid,psafe){
   var ex=await db.from('project_config').select('id').eq('project',pid).single();
   if(ex.data){await db.from('project_config').update({ceiling:nc}).eq('project',pid);}
   else{await db.from('project_config').insert({project:pid,ceiling:nc});}
-  await db.from('project_summary').update({ceiling:nc}).eq('project',pid);
   S.projectConfig[pid]=Object.assign({},ov,{ceiling:nc});
   toast('Ceiling updated for '+pid,'success');
   renderProjectMgmt();
@@ -1868,7 +1867,6 @@ async function resetProjectDefaults(pid){
   var def=PROJECTS_DEFAULT.find(function(p){return p.id===pid;});
   if(!def)return;
   await db.from('project_config').delete().eq('project',pid);
-  await db.from('project_summary').update({ceiling:def.ceiling}).eq('project',pid);
   delete S.projectConfig[pid];
   toast(pid+' reset to defaults.','success');
   renderProjectMgmt();
@@ -2577,7 +2575,7 @@ function renderTemper(){
   document.getElementById('screen-temper').innerHTML=`
     <div class="pt">Clean Temper</div>
     <div class="ps">The Ten Commandments</div>
-    <div class="g5" style="margin-bottom:24px">
+    <div class="g4" style="margin-bottom:24px">
       <div class="sb"><div class="sb-num" style="color:var(--gold)">${ct}<span style="font-size:14px;color:var(--ash)">/20</span></div><div class="sb-lbl">Today's CT Points</div></div>
       <div class="sb"><div class="sb-num">${kept}<span style="font-size:14px;color:var(--ash)">/10</span></div><div class="sb-lbl">Kept Today</div></div>
       <div class="sb"><div class="sb-num" style="color:var(--safe)">${S.streaks.reduce((m,s)=>Math.max(m,s.current_streak||0),0)}</div><div class="sb-lbl">Best Streak</div></div>
@@ -3491,7 +3489,7 @@ async function renderTodos(){
     +'<div class="ps" style="margin-bottom:20px">Daily tasks · Completed tasks clear when the forge is sealed</div>'
     // Quick add
     +'<div style="display:flex;gap:8px;margin-bottom:20px">'
-    +'<input type="text" id="todo-input" placeholder="Add a task... (press Enter)" style="flex:1;margin:0" id="todo-input" onkeydown="todoKeyDown(event)">'
+    +'<input type="text" id="todo-input" placeholder="Add a task... (press Enter)" style="flex:1;margin:0"  onkeydown="todoKeyDown(event)">'
     +'<button class="btn" onclick="addTodo()">Add</button>'
     +'</div>'
     // Pending
@@ -3869,7 +3867,7 @@ async function renderFood(){
       const color=isFuture?'var(--card2)':data?dayColor(data):'var(--card2)';
       const meals=data?data.meals:[];
       const isToday_w=ds===localToday();
-      weekHTML+=`<div style="background:${color};border-radius:8px;padding:10px;opacity:${isFuture?0.3:1};border:${isToday_w?'1.5px solid #4A9EBF':'1px solid transparent'}">
+      weekHTML+=`<div style="background:${color};border-radius:8px;padding:10px;opacity:${isFuture?0.3:1};border:${isToday_w?'1.5px solid #4A9EBF':'1px solid transparent'};cursor:${data?'pointer':'default'}" ${data?`onclick="foodDayClick('${ds}')"`:''}>  
         <div style="font-family:var(--fc);font-size:9px;color:var(--parch);margin-bottom:6px">${dayNames[i]} ${d.getDate()}</div>
         ${meals.map(m=>`<div style="font-size:11px;margin-bottom:3px;color:var(--parch)"><span style="font-family:var(--fc);font-size:8px;color:${m.healthy?'var(--safe)':'var(--ember)'}">${m.meal_type.substring(0,1)}</span> ${m.description.substring(0,20)}${m.description.length>20?'...':''}</div>`).join('')||`<div style="font-size:11px;color:rgba(255,255,255,0.3)">—</div>`}
       </div>`;
