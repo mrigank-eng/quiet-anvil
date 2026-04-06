@@ -852,12 +852,14 @@ function personalBest(pid){
 
 // Active declaration check
 function isProjectDeclared(pid){
-  const t=today();
+  return isProjectDeclaredOn(pid,today());
+}
+function isProjectDeclaredOn(pid,dateStr){
   return S.declarations.some(function(d){
     if(!d.projects)return false;
     try{
       const projs=JSON.parse(d.projects);
-      return projs.includes(pid)&&d.start_date<=t&&d.end_date>=t;
+      return projs.includes(pid)&&d.start_date<=dateStr&&d.end_date>=dateStr;
     }catch(e){return false;}
   });
 }
@@ -1729,7 +1731,7 @@ async function submitSession(){
   const n=(todaySessions||[]).length;
   // Use integer distribution — no floating point
   // If project is under active declaration, award 0 points even if session logged
-  const projDeclared=isProjectDeclared(S.pendingSessionPid);
+  const projDeclared=isProjectDeclaredOn(S.pendingSessionPid,sessionDate);
   const ptsPerSession=projDeclared?0:proj.pts;
   const pts=distributePoints(ptsPerSession, n);
   for(let i=0;i<(todaySessions||[]).length;i++){
