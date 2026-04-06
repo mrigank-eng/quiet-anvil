@@ -421,6 +421,7 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
     <div id="sm-tangible-wrap"><label>Tangibles</label><input type="number" id="sm-tangible" step="any" min="0"></div>
     <div id="sm-cat-wrap"><label>Category</label><select id="sm-category"><option value="">Optional</option></select></div>
     <div id="sm-lang-wrap" style="display:none"><label>Language</label><select id="sm-language"><option value="">Select</option><option>Urdu</option><option>Hindi</option><option>English</option></select></div>
+    <div id="sm-date-wrap" style="display:none"><label>Date</label><input type="date" id="sm-date"></div>
     <label>Notes</label><input type="text" id="sm-notes" placeholder="What you worked on...">
     <div class="modal-btns">
       <button class="btn btn-danger btn-sm" onclick="closeModal('session-modal')">Cancel</button>
@@ -1627,10 +1628,46 @@ async function confirmSkip(){
 }
 
 // ── SESSION ────────────────────────────────────────────
-function openSession(pid){
+
+function openPastSession(pid){
+  // Show a date input prompt using game modal
+  const wrap=document.createElement('div');
+  wrap.innerHTML=`<div class="modal-overlay open" id="past-date-modal" style="z-index:1100">
+    <div class="modal" style="max-width:340px">
+      <div class="modal-title">Log Past Session</div>
+      <div style="font-size:12px;color:var(--ash);margin-bottom:14px">Select the date you want to log for</div>
+      <label>Date</label>
+      <input type="date" id="past-date-input" max="${localToday()}" value="${localToday()}" style="width:100%;padding:8px;background:var(--card2);border:1px solid var(--border2);border-radius:6px;color:var(--parch);font-size:13px;margin-bottom:16px">
+      <div class="modal-btns">
+        <button class="btn btn-sm btn-danger" onclick="document.getElementById('past-date-modal').remove()">Cancel</button>
+        <button class="btn btn-sm" onclick="
+          var d=document.getElementById('past-date-input').value;
+          if(!d){return;}
+          document.getElementById('past-date-modal').remove();
+          openSession('${pid}',d);
+        ">Continue →</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(wrap.firstChild);
+}
+
+function openSession(pid,date){
   const proj=PROJECTS.find(p=>p.id===pid);
   S.pendingSessionPid=pid;
+  S.pendingSessionDate=date||null;
   document.getElementById('sm-title').textContent=proj.id;
+  // Date field — show only for past sessions
+  const smDateWrap=document.getElementById('sm-date-wrap');
+  const smDateInp=document.getElementById('sm-date');
+  if(date){
+    smDateWrap.style.display='block';
+    smDateInp.value=date;
+    smDateInp.max=localToday();
+  } else {
+    smDateWrap.style.display='none';
+    smDateInp.value='';
+  }
   document.getElementById('sm-notes').value='';
   const catSel=document.getElementById('sm-category');
   catSel.innerHTML='<option value="">Category (optional)</option>';
@@ -1668,6 +1705,8 @@ function distributePoints(total, n){
 
 async function submitSession(){
   const proj=PROJECTS.find(p=>p.id===S.pendingSessionPid);
+  const sessionDate=S.pendingSessionDate||today();
+  const isPastSession=!!(S.pendingSessionDate&&S.pendingSessionDate<today());
   const tangible=proj.uniqueDays?1:parseFloat(document.getElementById('sm-tangible').value);
   if(!proj.uniqueDays&&(!tangible||tangible<=0)){toast('Please enter an amount.','error');return;}
   if(proj.uniqueDays&&!document.getElementById('sm-category').value){toast('Please select a muscle group.','error');return;}
@@ -1677,14 +1716,14 @@ async function submitSession(){
 
   // Insert session with 0 points — recalculate below
   await db.from('sessions').insert({
-    date:today(),project:S.pendingSessionPid,tangible_logged:tangible,
+    date:sessionDate,project:S.pendingSessionPid,tangible_logged:tangible,
     unit:proj.unit,points_earned:0,category:category||null,notes:notes||null,language:language||null
   });
 
   // Get all today's sessions for this project
   const{data:todaySessions}=await db.from('sessions')
     .select('id,tangible_logged')
-    .eq('date',today()).eq('project',S.pendingSessionPid)
+    .eq('date',sessionDate).eq('project',S.pendingSessionPid)
     .gt('tangible_logged',0)
     .order('created_at',{ascending:true});
   const n=(todaySessions||[]).length;
@@ -1718,13 +1757,13 @@ async function submitSession(){
   const addVal=effProjSubmit.uniqueDays?1:tangible;
   if(category&&newSessCC[category]!==undefined)newSessCC[category]=(newSessCC[category]||0)+addVal;
   const newLvl=getLvl(S.pendingSessionPid,newTotal,newSessCC);
-  await db.from('project_summary').update({total_tangible:newTotal,last_session:today()}).eq('project',S.pendingSessionPid);
+  await db.from('project_summary').update({total_tangible:newTotal,last_session:sessionDate}).eq('project',S.pendingSessionPid);
 
-  if(S.committedProjects[S.pendingSessionPid]){
+  if(!isPastSession&&S.committedProjects[S.pendingSessionPid]){
     S.committedProjects[S.pendingSessionPid].hasSession=true;
     await saveCommitted();
   }
-  closeModal('session-modal');S.allSessions=[];S.sessionPages={};await loadData();
+  S.pendingSessionDate=null;closeModal('session-modal');S.allSessions=[];S.sessionPages={};await loadData();
   if(newLvl>oldLvl)showUnlock(proj.titles[newLvl-1],proj.id+' — Level '+newLvl+' of 10',UNLOCK_MSGS[proj.id]?.[newLvl-1]||'The forge marks you.');
 }
 
@@ -2445,6 +2484,7 @@ async function renderProject(screenKey){
     <div class="st">Session history</div>
     <div class="card" style="margin-bottom:14px">${sessHTML}</div>
     <button class="btn" onclick="openSession('${proj.id}')">+ Log a session</button>
+  <button class="btn btn-sm" style="font-size:11px;padding:4px 10px;color:var(--ash);border-color:var(--border2)" onclick="openPastSession('${proj.id}')">+ Log past session</button>
   `;
 
   if(!S.chartsDrawn[screenKey]&&allPS.length>0){
