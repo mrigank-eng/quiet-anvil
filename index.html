@@ -59,7 +59,7 @@ body{background:var(--bg);color:var(--parch);font-family:var(--ff);font-size:15p
 /* ── GRIDS ── */
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
-.g4{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
 
 /* ── SCORE BOXES ── */
 .sb{background:var(--card2);border-radius:8px;padding:14px;text-align:center}
@@ -2441,13 +2441,13 @@ async function renderProject(screenKey){
 
     ${floorStatusHTML}
 
-    <div class="g4" style="margin-bottom:16px">
+    <div class="g5" style="margin-bottom:16px">
       <div class="sm"><div class="sm-val">${total.toLocaleString()}</div><div class="sm-lbl">Total ${proj.unit}</div></div>
       <div class="sm"><div class="sm-val">${allPS.length}</div><div class="sm-lbl">Sessions</div></div>
       <div class="sm"><div class="sm-val" style="color:var(--gold)">${totalPts.toLocaleString()}</div><div class="sm-lbl">Points earned</div></div>
       <div class="sm"><div class="sm-val" style="color:${totalPen<0?'var(--ember)':'var(--ash)'}">${totalPen}</div><div class="sm-lbl">Penalties</div></div>
       <div class="sm"><div class="sm-val" style="color:${(totalPts+totalPen)>=0?'var(--safe)':'var(--ember)'}">${(totalPts+totalPen).toLocaleString()}</div><div class="sm-lbl">Net points</div></div>
-      <div class="sm"><div class="sm-val" style="color:${(totalPts+totalPen)>=0?'var(--safe)':'var(--ember)'}">${(totalPts+totalPen).toLocaleString()}</div><div class="sm-lbl">Net points</div></div>
+      
     </div>
 
     ${pb?`<div class="card card-gold" style="margin-bottom:14px">
@@ -2722,10 +2722,10 @@ async function submitMilestone(){
   const lvl=getLvl(pid,total,getCatCountsAll()[pid]||{});
   if(msEditId){
     await db.from('milestones').update({date:msDate,project:pid,description:desc,tangible_at_time:total,level_at_time:lvl}).eq('id',msEditId);
-    closeModal('ms-modal');S.milestones=[];await loadAll();renderMilestones();return;
+    closeModal('ms-modal');S.milestones=[];S._milestonesLoaded=false;await loadAll();renderMilestones();return;
   }
   await db.from('milestones').insert({date:msDate,project:pid,description:desc,tangible_at_time:total,level_at_time:lvl});
-  closeModal('ms-modal');S.milestones=[];S.allSessions=[];S.allLogs=[];
+  closeModal('ms-modal');S.milestones=[];S._milestonesLoaded=false;S.allSessions=[];S.allLogs=[];
   await loadAll();renderMilestones();
 }
 
@@ -4075,7 +4075,7 @@ let milestoneFilter='all';
 async function deleteMilestone(id){
   if(!(await gameConfirm('Delete this milestone?','Delete Milestone','Delete','Cancel')))return;
   await db.from('milestones').delete().eq('id',id);
-  S.milestones=[];await loadAll();renderMilestones();
+  S.milestones=[];S._milestonesLoaded=false;await loadAll();renderMilestones();
   toast('Milestone deleted','info',1500);
 }
 function editMilestone(btn){
