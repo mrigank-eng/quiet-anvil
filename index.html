@@ -413,27 +413,6 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
       <button class="btn btn-danger btn-sm" onclick="executeCleanState()">Wipe all data</button>
     </div>
   </div>
-
-<!-- PIN RESET -->
-<div id="pin-reset-screen" class="pin-reset-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:10000;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px">
-  <div style="max-width:340px;width:100%;text-align:center">
-    <div class="pin-logo" style="margin-bottom:8px">The Quiet Anvil</div>
-    <div style="font-size:13px;color:var(--ember);font-family:var(--fc);letter-spacing:0.1em;margin-bottom:32px">PIN RESET</div>
-    <div style="font-size:14px;color:var(--parch);margin-bottom:24px" id="pin-reset-label">Enter new 4-digit PIN</div>
-    <div class="pin-dots" style="margin-bottom:24px">
-      <div class="pin-dot" id="rpd0"></div><div class="pin-dot" id="rpd1"></div>
-      <div class="pin-dot" id="rpd2"></div><div class="pin-dot" id="rpd3"></div>
-    </div>
-    <div class="pin-pad">
-      <button class="pin-btn" onclick="rpp('1')">1</button><button class="pin-btn" onclick="rpp('2')">2</button><button class="pin-btn" onclick="rpp('3')">3</button>
-      <button class="pin-btn" onclick="rpp('4')">4</button><button class="pin-btn" onclick="rpp('5')">5</button><button class="pin-btn" onclick="rpp('6')">6</button>
-      <button class="pin-btn" onclick="rpp('7')">7</button><button class="pin-btn" onclick="rpp('8')">8</button><button class="pin-btn" onclick="rpp('9')">9</button>
-      <button class="pin-btn clear" onclick="resetPinClear()">Clear</button><button class="pin-btn" onclick="rpp('0')">0</button><button class="pin-btn clear" onclick="resetPinDel()">&#x232B;</button>
-    </div>
-    <div style="font-size:12px;color:var(--ember);margin-top:16px;min-height:20px" id="pin-reset-error"></div>
-    <div style="margin-top:24px"><a href="/" style="font-size:12px;color:var(--ash);font-family:var(--fc)">&#8592; Back to login</a></div>
-  </div>
-</div>
 </div>
 
 <!-- MODALS -->
@@ -1773,7 +1752,7 @@ async function submitSession(){
     S.committedProjects[S.pendingSessionPid].hasSession=true;
     await saveCommitted();
   }
-  S.pendingSessionDate=null;closeModal('session-modal');S.allSessions=[];S.sessionPages={};await loadData();
+  S.pendingSessionDate=null;closeModal('session-modal');S.allSessions=[];S._allLoaded=false;S.sessionPages={};await loadData();await loadAll();
   if(S._afterMissedSession){S._afterMissedSession=false;showMissedDayPrompt();}
   if(newLvl>oldLvl)showUnlock(proj.titles[newLvl-1],proj.id+' — Level '+newLvl+' of 10',UNLOCK_MSGS[proj.id]?.[newLvl-1]||'The forge marks you.');
 }
@@ -1951,7 +1930,7 @@ async function deleteSession(sessionId, pid, tangible){
     await saveCommitted();
   }
   toast('Session removed','info');
-  S.allSessions=[];await loadData();
+  S.allSessions=[];S._allLoaded=false;await loadData();await loadAll();
 }
 
 // ── CT ─────────────────────────────────────────────────
@@ -4645,5 +4624,28 @@ function resetPinDel(){if(resetPinBuf.length)resetPinBuf=resetPinBuf.slice(0,-1)
     </div>
   </div>
 </div>
+
+
+<!-- PIN RESET -->
+<div id="pin-reset-screen" class="pin-reset-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:10000;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px">
+  <div style="max-width:340px;width:100%;text-align:center">
+    <div class="pin-logo" style="margin-bottom:8px">The Quiet Anvil</div>
+    <div style="font-size:13px;color:var(--ember);font-family:var(--fc);letter-spacing:0.1em;margin-bottom:32px">PIN RESET</div>
+    <div style="font-size:14px;color:var(--parch);margin-bottom:24px" id="pin-reset-label">Enter new 4-digit PIN</div>
+    <div class="pin-dots" style="margin-bottom:24px">
+      <div class="pin-dot" id="rpd0"></div><div class="pin-dot" id="rpd1"></div>
+      <div class="pin-dot" id="rpd2"></div><div class="pin-dot" id="rpd3"></div>
+    </div>
+    <div class="pin-pad">
+      <button class="pin-btn" onclick="rpp('1')">1</button><button class="pin-btn" onclick="rpp('2')">2</button><button class="pin-btn" onclick="rpp('3')">3</button>
+      <button class="pin-btn" onclick="rpp('4')">4</button><button class="pin-btn" onclick="rpp('5')">5</button><button class="pin-btn" onclick="rpp('6')">6</button>
+      <button class="pin-btn" onclick="rpp('7')">7</button><button class="pin-btn" onclick="rpp('8')">8</button><button class="pin-btn" onclick="rpp('9')">9</button>
+      <button class="pin-btn clear" onclick="resetPinClear()">Clear</button><button class="pin-btn" onclick="rpp('0')">0</button><button class="pin-btn clear" onclick="resetPinDel()">&#x232B;</button>
+    </div>
+    <div style="font-size:12px;color:var(--ember);margin-top:16px;min-height:20px" id="pin-reset-error"></div>
+    <div style="margin-top:24px"><a href="/" style="font-size:12px;color:var(--ash);font-family:var(--fc)">&#8592; Back to login</a></div>
+  </div>
+</div>
+
 </body>
 </html>
