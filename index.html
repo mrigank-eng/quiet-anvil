@@ -135,7 +135,6 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
 /* ── PIN ── */
 .pin-screen{display:none;position:fixed;inset:0;background:var(--sidebar);z-index:1000;flex-direction:column;align-items:center;justify-content:center;text-align:center}
 .pin-screen.active{display:flex}
-.pin-reset-screen.active{display:flex}
 .pin-logo{font-family:var(--fc);font-size:20px;color:var(--gold);letter-spacing:0.2em;margin-bottom:6px}
 .pin-sub{font-size:13px;color:var(--ash);font-style:italic;margin-bottom:40px}
 .pin-dots{display:flex;gap:14px;margin-bottom:32px}
@@ -280,6 +279,10 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
 .todo-row:last-child{border-bottom:none;}
 .todo-row:hover{background:rgba(74,66,56,0.1);}
 .todo-row.drag-over{border-top:2px solid var(--gold);}
+
+/* ── PIN RESET MODE: hide everything except reset screen ── */
+body.pin-reset-mode > *:not(#pin-reset-screen) { display:none!important; }
+body.pin-reset-mode #pin-reset-screen { display:flex!important; }
 </style>
 </head>
 <body>
@@ -4541,7 +4544,7 @@ function closeUnlock(){document.getElementById('unlock').classList.remove('open'
 
 // ── INIT ───────────────────────────────────────────────
 if(window.location.search.indexOf('reset_pin=true')>=0){
-  document.getElementById('pin-reset-screen').classList.add('active');
+  document.body.classList.add('pin-reset-mode');
 } else {
   document.getElementById('pin-screen').classList.add('active');
 }
@@ -4665,23 +4668,4 @@ function resetPinDel(){if(resetPinBuf.length)resetPinBuf=resetPinBuf.slice(0,-1)
   </div>
 </div>
 </body>
-</html<div id="pin-reset-screen" class="pin-reset-screen" style="position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px">
-  <div style="max-width:340px;width:100%;text-align:center">
-    <div class="pin-logo" style="margin-bottom:8px">The Quiet Anvil</div>
-    <div style="font-size:13px;color:var(--ember);font-family:var(--fc);letter-spacing:0.1em;margin-bottom:32px">PIN RESET</div>
-    <div style="font-size:14px;color:var(--parch);margin-bottom:24px" id="pin-reset-label">Enter new 4-digit PIN</div>
-    <div class="pin-dots" style="margin-bottom:24px">
-      <div class="pin-dot" id="rpd0"></div><div class="pin-dot" id="rpd1"></div>
-      <div class="pin-dot" id="rpd2"></div><div class="pin-dot" id="rpd3"></div>
-    </div>
-    <div class="pin-pad">
-      <button class="pin-btn" onclick="rpp('1')">1</button><button class="pin-btn" onclick="rpp('2')">2</button><button class="pin-btn" onclick="rpp('3')">3</button>
-      <button class="pin-btn" onclick="rpp('4')">4</button><button class="pin-btn" onclick="rpp('5')">5</button><button class="pin-btn" onclick="rpp('6')">6</button>
-      <button class="pin-btn" onclick="rpp('7')">7</button><button class="pin-btn" onclick="rpp('8')">8</button><button class="pin-btn" onclick="rpp('9')">9</button>
-      <button class="pin-btn clear" onclick="resetPinClear()">Clear</button><button class="pin-btn" onclick="rpp('0')">0</button><button class="pin-btn clear" onclick="resetPinDel()">&#x232B;</button>
-    </div>
-    <div style="font-size:12px;color:var(--ember);margin-top:16px;min-height:20px" id="pin-reset-error"></div>
-    <div style="margin-top:24px"><a href="/" style="font-size:12px;color:var(--ash);font-family:var(--fc)">Back to login</a></div>
-  </div>
-</div>
->
+</html>
