@@ -944,52 +944,17 @@ async function autoClosePastDay(dateStr,logEntry){
 async function advanceDayIfReady(){
   const local=localToday();
   let active=getActiveDate();
-  // If activeDate is before game start, reset to game start
-  if(active<getGameStart()){active=getGameStart();setActiveDate(active);}
-
-  // Case 5: 2+ local days have passed — auto-close all fully elapsed days up to (localToday-2)
-  // Then leave the most recent unclosed day for user to close manually
-  // A "fully elapsed" day = a day that is strictly before yesterday
-  // (yesterday may still need user closure — that's Case 2 handled below)
-  const yest=new Date();yest.setDate(yest.getDate()-1);
-  const yStr=localDateStr(yest);
-
-  // Find all unclosed days between active and yesterday (exclusive of yesterday itself)
-  if(active<yStr){
-    // There are fully elapsed days to auto-close
-    const{data:logs}=await db.from('daily_log').select('date,day_closed').gte('date',active).lt('date',yStr);
-    const logMap={};(logs||[]).forEach(function(l){logMap[l.date]=l;});
-    // Walk each day from active up to (yStr - 1 day)
-    const d=new Date(active+'T00:00:00');
-    const yDate=new Date(yStr+'T00:00:00');
-    while(d<yDate){
-      const ds=localDateStr(d);
-      const log=logMap[ds];
-      if(!log||!log.day_closed){
-        await autoClosePastDay(ds,log||null);
-      }
-      d.setDate(d.getDate()+1);
-    }
-    // Now advance activeDate to yesterday
-    setActiveDate(yStr);
-    active=yStr;
+  // Ensure activeDate is never before game start
+  if(!active||active<getGameStart()){active=getGameStart();setActiveDate(active);}
+  // Always advance activeDate to local date
+  // The forge shows today's date regardless of whether yesterday was closed
+  // Missed days are handled separately by checkMissedDays
+  if(local>active){
+    setActiveDate(local);
     S.allSessions=[];S.allLogs=[];
   }
-
-  // Check if we can advance from activeDate to localToday
-  // Conditions: forge closed for activeDate AND localToday > activeDate
-  if(local>active){
-    // Check if activeDate's forge is closed
-    const{data:log}=await db.from('daily_log').select('day_closed').eq('date',active).maybeSingle();
-    if(log&&log.day_closed){
-      // Both conditions met — advance to localToday
-      setActiveDate(local);
-      S.allSessions=[];S.allLogs=[];
-      toast('The forge advances — Day '+(dayNum())+' begins.','success',3000);
-    }
-    // If forge not closed: stay on activeDate (Case 2 — user must close forge first)
-  }
 }
+
 
 async function loadData(){
   // Initialize activeDate — discover from DB if not set
@@ -1809,6 +1774,7 @@ async function submitSession(){
     await saveCommitted();
   }
   S.pendingSessionDate=null;closeModal('session-modal');S.allSessions=[];S.sessionPages={};await loadData();
+  if(S._afterMissedSession){S._afterMissedSession=false;showMissedDayPrompt();}
   if(newLvl>oldLvl)showUnlock(proj.titles[newLvl-1],proj.id+' — Level '+newLvl+' of 10',UNLOCK_MSGS[proj.id]?.[newLvl-1]||'The forge marks you.');
 }
 
@@ -3769,7 +3735,12 @@ function showMissedDayPrompt(){
   document.getElementById('missed-modal').classList.add('open');
 }
 
-function missedProjLog(pid,date){S.pendingSessionDate=date;openSession(pid,date);}
+function missedProjLog(pid,date){
+  S.pendingSessionDate=date;
+  S._afterMissedSession=true;  // flag to re-show missed prompt after submit
+  closeModal('missed-modal');
+  openSession(pid,date);
+}
 
 async function submitMissedDay(){
   const dateStr=missedDays[missedDayIndex];
@@ -4541,7 +4512,17 @@ function closeUnlock(){document.getElementById('unlock').classList.remove('open'
 
 // ── INIT ───────────────────────────────────────────────
 if(window.location.search.indexOf('reset_pin=true')>=0){
-  document.getElementById('pin-reset-screen').style.cssText='display:flex!important;position:fixed;inset:0;background:var(--bg);z-index:10000;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px';
+  document.getElementById('pin-screen').classList.add('active');
+  var prs=document.getElementById('pin-reset-screen');
+  prs.style.display='flex';
+  prs.style.position='fixed';
+  prs.style.inset='0';
+  prs.style.zIndex='10000';
+  prs.style.flexDirection='column';
+  prs.style.alignItems='center';
+  prs.style.justifyContent='center';
+  prs.style.padding='40px 20px';
+  prs.style.background='#1a1510';
 } else {
   document.getElementById('pin-screen').classList.add('active');
 }
