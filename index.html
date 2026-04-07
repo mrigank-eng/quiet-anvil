@@ -135,6 +135,7 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
 /* ── PIN ── */
 .pin-screen{display:none;position:fixed;inset:0;background:var(--sidebar);z-index:1000;flex-direction:column;align-items:center;justify-content:center;text-align:center}
 .pin-screen.active{display:flex}
+.pin-reset-screen.active{display:flex}
 .pin-logo{font-family:var(--fc);font-size:20px;color:var(--gold);letter-spacing:0.2em;margin-bottom:6px}
 .pin-sub{font-size:13px;color:var(--ash);font-style:italic;margin-bottom:40px}
 .pin-dots{display:flex;gap:14px;margin-bottom:32px}
@@ -414,7 +415,7 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
   </div>
 
 <!-- PIN RESET -->
-<div id="pin-reset-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px">
+<div id="pin-reset-screen" class="pin-reset-screen" style="position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px">
   <div style="max-width:340px;width:100%;text-align:center">
     <div class="pin-logo" style="margin-bottom:8px">The Quiet Anvil</div>
     <div style="font-size:13px;color:var(--ember);font-family:var(--fc);letter-spacing:0.1em;margin-bottom:32px">PIN RESET</div>
@@ -4539,7 +4540,11 @@ function showUnlock(title,sub,msg){document.getElementById('ul-title').textConte
 function closeUnlock(){document.getElementById('unlock').classList.remove('open');}
 
 // ── INIT ───────────────────────────────────────────────
-document.getElementById('pin-screen').classList.add('active');
+if(window.location.search.indexOf('reset_pin=true')>=0){
+  document.getElementById('pin-reset-screen').classList.add('active');
+} else {
+  document.getElementById('pin-screen').classList.add('active');
+}
 
 // ── GAME CONFIRM MODAL ──────────────────────────────────────────────
 let _confirmResolve = null;
@@ -4589,10 +4594,8 @@ var resetPinStep='new'; // 'new' or 'confirm'
 var resetPinFirst='';
 
 function initPinReset(){
-  // Only show reset screen if URL has ?reset_pin=true
-  if(window.location.search.indexOf('reset_pin=true')<0)return;
-  document.getElementById('pin-screen').style.display='none';
-  document.getElementById('pin-reset-screen').style.display='flex';
+  // Handled at startup - this function is now a no-op
+  // The startup INIT block checks the URL before activating the pin screen
 }
 
 function rpp(digit){
@@ -4631,7 +4634,14 @@ function rpp(digit){
 function updateResetDots(){
   for(var i=0;i<4;i++){
     var dot=document.getElementById('rpd'+i);
-    if(dot)dot.style.background=i<resetPinBuf.length?'var(--gold)':'var(--border2)';
+    if(!dot)return;
+    if(i<resetPinBuf.length){
+      dot.classList.add('filled');
+      dot.style.background='var(--gold)';
+    } else {
+      dot.classList.remove('filled');
+      dot.style.background='';
+    }
   }
 }
 
@@ -4639,9 +4649,7 @@ function resetPinClear(){resetPinBuf='';updateResetDots();}
 function resetPinDel(){if(resetPinBuf.length)resetPinBuf=resetPinBuf.slice(0,-1);updateResetDots();}
 
 // Call on load
-window.addEventListener('DOMContentLoaded',function(){
-  initPinReset();
-});
+// initPinReset handled at startup INIT block
 
 </script>
 
@@ -4657,7 +4665,7 @@ window.addEventListener('DOMContentLoaded',function(){
   </div>
 </div>
 </body>
-</html<div id="pin-reset-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px">
+</html<div id="pin-reset-screen" class="pin-reset-screen" style="position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px">
   <div style="max-width:340px;width:100%;text-align:center">
     <div class="pin-logo" style="margin-bottom:8px">The Quiet Anvil</div>
     <div style="font-size:13px;color:var(--ember);font-family:var(--fc);letter-spacing:0.1em;margin-bottom:32px">PIN RESET</div>
