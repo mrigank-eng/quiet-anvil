@@ -164,6 +164,7 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
 .lj-row.done{background:var(--safe-dim)}
 .lj-row.current{background:var(--gold-dim);border:0.5px solid rgba(212,168,76,0.25)}
 .lj-row.future{opacity:0.4}
+.lj-row.blocked{background:rgba(208,136,32,0.08);border:0.5px solid rgba(208,136,32,0.2)}
 .lj-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 .lj-title{font-family:var(--fc);font-size:12px;width:160px;flex-shrink:0}
 .lj-bar-track{flex:1;height:6px;background:var(--card2);border-radius:3px;overflow:hidden}
@@ -411,6 +412,27 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
       <button class="btn btn-danger btn-sm" onclick="executeCleanState()">Wipe all data</button>
     </div>
   </div>
+
+<!-- PIN RESET -->
+<div id="pin-reset-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px">
+  <div style="max-width:340px;width:100%;text-align:center">
+    <div class="pin-logo" style="margin-bottom:8px">The Quiet Anvil</div>
+    <div style="font-size:13px;color:var(--ember);font-family:var(--fc);letter-spacing:0.1em;margin-bottom:32px">PIN RESET</div>
+    <div style="font-size:14px;color:var(--parch);margin-bottom:24px" id="pin-reset-label">Enter new 4-digit PIN</div>
+    <div class="pin-dots" style="margin-bottom:24px">
+      <div class="pin-dot" id="rpd0"></div><div class="pin-dot" id="rpd1"></div>
+      <div class="pin-dot" id="rpd2"></div><div class="pin-dot" id="rpd3"></div>
+    </div>
+    <div class="pin-pad">
+      <button class="pin-btn" onclick="rpp('1')">1</button><button class="pin-btn" onclick="rpp('2')">2</button><button class="pin-btn" onclick="rpp('3')">3</button>
+      <button class="pin-btn" onclick="rpp('4')">4</button><button class="pin-btn" onclick="rpp('5')">5</button><button class="pin-btn" onclick="rpp('6')">6</button>
+      <button class="pin-btn" onclick="rpp('7')">7</button><button class="pin-btn" onclick="rpp('8')">8</button><button class="pin-btn" onclick="rpp('9')">9</button>
+      <button class="pin-btn clear" onclick="resetPinClear()">Clear</button><button class="pin-btn" onclick="rpp('0')">0</button><button class="pin-btn clear" onclick="resetPinDel()">&#x232B;</button>
+    </div>
+    <div style="font-size:12px;color:var(--ember);margin-top:16px;min-height:20px" id="pin-reset-error"></div>
+    <div style="margin-top:24px"><a href="/" style="font-size:12px;color:var(--ash);font-family:var(--fc)">&#8592; Back to login</a></div>
+  </div>
+</div>
 </div>
 
 <!-- MODALS -->
@@ -456,7 +478,7 @@ label{font-size:12px;color:var(--ash);display:block;margin-bottom:4px;font-famil
 
 <div class="modal-overlay" id="ms-modal">
   <div class="modal">
-    <div class="modal-title">Log a milestone</div>
+    <div class="modal-title" id="ms-modal-title">Log a milestone</div>
     <label>Date</label>
     <input type="date" id="ms-date" style="width:100%;padding:7px 10px;background:var(--card2);border:0.5px solid var(--border2);border-radius:6px;color:var(--parch);font-size:13px;margin-bottom:10px">
     <label>Project</label><select id="ms-project"><option value="">Select project</option></select>
@@ -658,6 +680,13 @@ const CMDS=[
   {key:'c10_reflection',short:'C10',label:'Thou shalt not end the day without reflection',pts:1}
 ];
 
+function dailyMax(){
+  var ctMax=CMDS.reduce(function(s,cmd){return s+cmd.pts;},0);
+  var projMax=getActiveProjects().reduce(function(s,p){return s+(p.pts||0);},0);
+  return ctMax+projMax;
+}
+
+
 const CT_TITLES={
   c1_direction:['Dawn Seer','Path Caller','Will Carver','Line Binder','Course Warden','Day Forger','Fate Smith','The Undeviating','The Directed','The Dawnborn','The Dawn Keeper'],
   c2_protein:['First Offering','Steady Ritual','Measured Nourish','Sacred Sustenance','Unbroken Intake','Enduring Provision','Ever-Fed One','The Flesh Forger','The Sacred Feeder','The Eternal Table','The Body Sovereign'],
@@ -727,7 +756,6 @@ const daysToStart=()=>{
 };
 const weekNum=()=>Math.ceil(dayNum()/7);
 const totalCampaignDays=()=>Math.ceil((GEND()-GSTART())/864e5);
-const dailyMax=()=>20+getActiveProjects().reduce(function(s,p){return s+p.pts;},0);
 const maxPoints=()=>totalCampaignDays()*dailyMax();
 
 // Number formatting — always whole numbers for points/tangibles
@@ -985,6 +1013,7 @@ async function loadData(){
   }
   // Check if day should advance
   await advanceDayIfReady();
+  await autoCloseYesterday();
   const[pR,lR,sR,stR,dR]=await Promise.all([
     db.from('project_summary').select('*'),
     db.from('daily_log').select('*').eq('date',today()).maybeSingle(),
@@ -1011,7 +1040,7 @@ async function loadData(){
 }
 
 async function loadAll(){
-  if(S.allSessions.length&&S.allLogs.length&&S._milestonesLoaded)return;
+  if(S._allLoaded&&S._milestonesLoaded)return;
   try{
     const[lR,sR,mR]=await Promise.all([
       db.from('daily_log').select('*').order('date'),
@@ -1021,6 +1050,7 @@ async function loadAll(){
     S.allLogs=lR.data||[];
     S.allSessions=sR.data||[];
     S.milestones=mR.data||[];S._milestonesLoaded=true;
+    S._allLoaded=true;
   }catch(e){
     console.error('loadAll error:',e);
     S.allLogs=S.allLogs||[];
@@ -1282,7 +1312,8 @@ function renderActive(){
 }
 
 // ── FORGE ──────────────────────────────────────────────
-function renderForge(){
+async function renderForge(){
+  await loadAll();
   // Pre-campaign guard
   if(isPreCampaign()){
     const ds=daysToStart();
@@ -1293,6 +1324,8 @@ function renderForge(){
         <div style="font-family:var(--fc);font-size:14px;color:var(--ash);letter-spacing:0.1em;margin-bottom:32px">days until the forge opens</div>
         <div style="font-size:14px;color:var(--parch);font-style:italic">Campaign begins ${ordinalDate(getGameStart())}</div>
       </div>`;
+  const reflTa=document.getElementById('reflection-text');
+  if(reflTa)reflTa.value=S.todayLog?.reflection||'';
     return;
   }
 
@@ -1304,7 +1337,7 @@ function renderForge(){
   const dayAdvancePending=localNow>activeDay&&!dayClosed;
 
   // If forge is sealed AND day has already advanced — show sealed state
-  if(dayClosed&&localNow===activeDay){
+  if(dayClosed&&localNow>=activeDay){
     // Day closed but local date hasn't changed yet — show sealed state
       
 document.getElementById('screen-forge').innerHTML=`
@@ -1351,7 +1384,7 @@ document.getElementById('screen-forge').innerHTML=`
   const pillarsHTML=Object.keys(bal.pillars).map(function(pillar,i){
     const earned=bal.pillars[pillar];const max=bal.maxPts[pillar];
     const isNeg=earned<0;
-    const barPct=Math.min(100,Math.round(Math.abs(earned)/max*100));
+    const barPct=max>0?Math.min(100,Math.round(Math.abs(earned)/max*100)):0;
     const pColor=isNeg?'var(--ember)':earned===0?'var(--ash)':earned===max?'var(--safe)':'var(--gold)';
     return'<div style="flex:1;padding:0 16px;'+(i>0?'border-left:0.5px solid var(--border)':'')+'">'      +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">'      +'<span style="font-family:var(--fc);font-size:13px;letter-spacing:0.15em;color:var(--ash)">'+pillar.toUpperCase()+'</span>'      +'<span style="font-family:var(--fc);font-size:18px;color:'+pColor+'">'+earned+'<span style="font-size:14px;color:var(--ash)">/'+max+'</span></span>'      +'</div>'      +'<div style="height:6px;background:var(--card2);border-radius:3px;overflow:hidden">'      +'<div style="height:100%;width:'+barPct+'%;background:'+pColor+';border-radius:3px"></div></div>'      +'</div>';
   }).join('');
@@ -1465,7 +1498,7 @@ document.getElementById('screen-forge').innerHTML=`
   if(!allSubmitted)gateMsg+=unsubmitted.map(function(p){return p.id;}).join(', ')+' not submitted.';
   const reflHTML=!gateOpen
     ?`<div style="background:var(--ember-dim);border:0.5px solid var(--ember);border-radius:8px;padding:12px 14px;font-size:13px;color:var(--ash)">${gateMsg||'Complete all tasks to unlock reflection.'}</div>`
-    :`<div><textarea id="reflection-text" placeholder="What happened today. What the forge produced. What tomorrow needs." rows="4">${S.todayLog?.reflection||''}</textarea><button class="btn btn-block" onclick="closeDay()">Close the day — submit reflection</button><button class="btn btn-sm btn-warn" onclick="openClearForgeModal()" style="margin-top:8px;width:100%">⚠ Clear today's forge</button></div>`;
+    :`<div><textarea id="reflection-text" placeholder="What happened today. What the forge produced. What tomorrow needs." rows="4"></textarea><button class="btn btn-block" onclick="closeDay()">Close the day — submit reflection</button><button class="btn btn-sm btn-warn" onclick="openClearForgeModal()" style="margin-top:8px;width:100%">⚠ Clear today's forge</button></div>`;
 
   document.
   getElementById('screen-forge').innerHTML=`
@@ -1526,7 +1559,10 @@ async function endDeclaration(id){
   // End by setting end_date to yesterday
   const yesterday=new Date();yesterday.setDate(yesterday.getDate()-1);
   const yd=localDateStr(yesterday);
-  await db.from('declarations').update({end_date:yd}).eq('id',id);
+  // Guard: if declaration started today, end_date can't be yesterday
+  const{data:decl}=await db.from('declarations').select('start_date').eq('id',id).single();
+  const safeEnd=(decl&&yd<decl.start_date)?decl.start_date:yd;
+  await db.from('declarations').update({end_date:safeEnd}).eq('id',id);
   const{data}=await db.from('declarations').select('*').order('start_date',{ascending:false}).limit(20);
   S.declarations=data||[];
   toast('Declaration ended','info');
@@ -1568,7 +1604,7 @@ async function incrementStreaksForDate(date,logEntry){
         pre_break_streak:0
       }).eq('commandment',cmd.short);
     } else {
-      await db.from('commandment_streaks').update({streak_last_updated:date}).eq('commandment',cmd.short);
+      await db.from('commandment_streaks').update({current_streak:0,streak_last_updated:date}).eq('commandment',cmd.short);
     }
   }
 }
@@ -1906,6 +1942,8 @@ async function executeCleanState(){
   S.todayLog=null;S.todaySessions=[];
   closeModal('clean-state-modal');
   toast('Clean state complete. Backup saved locally.','success',5000);
+  S._missedChecked=false;
+  S._missedChecked=false;
   await loadData();await loadAll();nav('forge');
 }
 
@@ -1922,7 +1960,7 @@ async function deleteSession(sessionId, pid, tangible){
   let newTotal;
   if(proj&&proj.uniqueDays){
     // Iron Forge: recount unique days from DB after deletion to stay accurate
-    const{data:allRemain}=await db.from('sessions').select('date').eq('project',pid).gt('tangible_logged',0);
+    const{data:allRemain}=await db.from('sessions').select('date').eq('project',pid).gt('tangible_logged',0).gte('date',getGameStart()).gte('date',getGameStart());
     newTotal=new Set((allRemain||[]).map(s=>s.date)).size;
   } else {
     newTotal=Math.max(0,(sum.total_tangible||0)-tangible);
@@ -1930,7 +1968,7 @@ async function deleteSession(sessionId, pid, tangible){
   await db.from('project_summary').update({total_tangible:newTotal}).eq('project',pid);
   // Recalculate points for remaining today's sessions
   const{data:remaining}=await db.from('sessions')
-    .select('id').eq('date',today()).eq('project',pid).gt('tangible_logged',0)
+    .select('id').eq('date',delDate).eq('project',pid).gt('tangible_logged',0)
     .order('created_at',{ascending:true});
   const n=(remaining||[]).length;
   if(n>0){
@@ -1966,7 +2004,8 @@ async function handleCT(key,label,keeping){
     const wasBrokenToday=S.todayLog?.[key]===false;
     if(wasBrokenToday){
       // Same-day correction: restore the pre-break streak
-      const streak=S.streaks.find(s=>s.commandment===CMDS.find(x=>x.key===key)?.short)||{};
+      const cmdShort2=CMDS.find(x=>x.key===key)?.short||'';
+      const streak=S.streaks.find(s=>s.commandment===cmdShort2)||{};
       const preBreak=streak.pre_break_streak||0;
       const lines=(streak.break_log||'').split('\n').filter(l=>!l.startsWith(today()));
       await db.from('commandment_streaks').update({
@@ -1975,7 +2014,7 @@ async function handleCT(key,label,keeping){
         total_breaks:Math.max(0,(streak.total_breaks||1)-1),
         last_break_date:lines.length>0?(lines[lines.length-1].split(' ')[0]||null):null,
         break_log:lines.join('\n').trim()
-      }).eq('commandment',streak.commandment);
+      }).eq('commandment',cmdShort2||streak.commandment);
       toast('Break undone — streak restored to '+preBreak+' days','success');
     }
     await db.from('daily_log').update({[key]:true}).eq('date',today());
@@ -2002,7 +2041,8 @@ async function confirmCTBreak(){
     pre_break_streak:(streak.current_streak||0),
     last_break_date:today(),
     total_breaks:(streak.total_breaks||0)+1,
-    break_log:breakLog.trim()
+    break_log:breakLog.trim(),
+    streak_last_updated:today()
   }).eq('commandment',cmd.short);
   closeModal('ct-modal');S.pendingCT=null;await loadData();
 }
@@ -2052,13 +2092,13 @@ async function closeDay(){
   if(!S.todayLog)return;
   const unmarked=CMDS.filter(cmd=>S.todayLog[cmd.key]!==true&&S.todayLog[cmd.key]!==false);
   if(unmarked.length>0){toast(unmarked.length+' commandment'+(unmarked.length>1?'s':'')+' still unmarked','error');return;}
-  const uncommitted=PROJECTS.filter(p=>{const cp=S.committedProjects[p.id];return cp&&cp.committed&&!cp.submitted;});
+  const uncommitted=getActiveProjects().filter(p=>{const cp=S.committedProjects[p.id];return cp&&cp.committed&&!cp.submitted;});
   if(uncommitted.length>0){toast('Submit all committed projects first','error');return;}
   const reflection=document.getElementById('reflection-text')?.value?.trim();
   if(!reflection){toast('Write your nightly reflection first.','error');return;}
   const activeDate=today();
   // Save closure
-  await db.from('daily_log').update({reflection,c10_reflection:true,day_closed:true}).eq('date',activeDate);
+  await db.from('daily_log').update({reflection,day_closed:true}).eq('date',activeDate);
   // Update streaks — broken commandments reset to 0
   const sr=await db.from('commandment_streaks').select('*');
   const streaks=sr.data||[];
@@ -2106,6 +2146,7 @@ async function submitDeclaration(){
   const notes=document.getElementById('decl-notes').value;
   const checked=Array.from(document.querySelectorAll('#decl-projects input:checked')).map(x=>x.value);
   if(!start||!end||checked.length===0){toast('Fill in dates and select at least one project.','error');return;}
+  if(end<start){toast('End date must be on or after start date.','error');return;}
   await db.from('declarations').insert({type,start_date:start,end_date:end,projects:JSON.stringify(checked),notes:notes||null});
   closeModal('decl-modal');S.declarations=[];await loadData();
 }
@@ -2125,12 +2166,12 @@ function getProjectTotal(pid){
 async function renderArmoury(){
   await loadAll();
   const armCatCounts=getCatCountsAll();
-  const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,getProjectTotal(p.id),armCatCounts[p.id]||{});})):0;
+  const metaLvl=getActiveProjects().length?Math.min(...getActiveProjects().map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,getProjectTotal(p.id),armCatCounts[p.id]||{});})):0;
   const metaTitle=metaLvl>0?META_T[metaLvl-1]:'Working toward '+META_T[0];
 
   // Pillar summaries
   const pillarData={Soul:{pts:0,maxPts:20,projects:[]},Body:{pts:0,maxPts:20,projects:[]},Business:{pts:0,maxPts:20,projects:[]}};
-  PROJECTS.forEach(function(proj){
+  getActiveProjects().forEach(function(proj){
     const s=S.projects.find(p=>p.project===proj.id)||{};
     const total=getProjectTotal(proj.id);
     const l=getLvl(proj.id,total,armCatCounts[proj.id]||{});
@@ -2170,7 +2211,7 @@ async function renderArmoury(){
   }).join('');
 
   let cardsHTML='';
-  PROJECTS.forEach(function(proj){
+  getActiveProjects().forEach(function(proj){
     const s=S.projects.find(p=>p.project===proj.id)||{};
     const total=getProjectTotal(proj.id);
     const cc=armCatCounts[proj.id]||{};
@@ -2635,7 +2676,7 @@ function renderTemper(){
 // ── META ───────────────────────────────────────────────
 async function renderMeta(){
   await loadAll();
-  const metaCC=getCatCountsAll();const pLvls=PROJECTS.map(function(proj){const s=S.projects.find(p=>p.project===proj.id)||{};const total=getProjectTotal(proj.id);return{proj,l:getLvl(proj.id,total,metaCC[proj.id]||{}),total};});
+  const metaCC=getCatCountsAll();const pLvls=getActiveProjects().map(function(proj){const s=S.projects.find(p=>p.project===proj.id)||{};const total=getProjectTotal(proj.id);return{proj,l:getLvl(proj.id,total,metaCC[proj.id]||{}),total};});
   const metaLvl=Math.min(...pLvls.map(p=>p.l));
   const weakest=pLvls.find(p=>p.l===metaLvl);
   const metaTitle=metaLvl>0?META_T[metaLvl-1]:'Working toward '+META_T[0];
@@ -2764,7 +2805,7 @@ function buildDailyCard(){
   const d=new Date();
   const dayStr=d.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
   const completedProjs=S.todaySessions.filter(s=>s.tangible_logged>0);
-  const pct=Math.round((total+pen)/80*100);
+  const pct=Math.round((total+pen)/dailyMax()*100);
 
   return`<div class="sc" style="display:flex;flex-direction:column;justify-content:center">
     <div class="sc-eyebrow">The Quiet Anvil</div>
@@ -2796,12 +2837,12 @@ function buildDailyCard(){
 
 function buildCampaignCard(){
   const shareCC=getCatCountsAll();
-  const metaLvl=PROJECTS.length?Math.min(...PROJECTS.map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,getProjectTotal(p.id),shareCC[p.id]||{});})):0;
+  const metaLvl=PROJECTS.length?Math.min(...getActiveProjects().map(p=>{const s=S.projects.find(x=>x.project===p.id);return getLvl(p.id,getProjectTotal(p.id),shareCC[p.id]||{});})):0;
   const metaTitle=metaLvl>0?META_T[metaLvl-1]:'Working toward '+META_T[0];
   const bestStreak=S.streaks.reduce((m,s)=>Math.max(m,s.current_streak||0),0);
   const bestStreakCmd=S.streaks.find(s=>(s.current_streak||0)===bestStreak);
   const bestCmdLabel=bestStreakCmd?CMDS.find(x=>x.short===bestStreakCmd.commandment)?.label||bestStreakCmd.commandment:'';
-  const projRows=PROJECTS.map(function(proj){
+  const projRows=getActiveProjects().map(function(proj){
     const s=S.projects.find(p=>p.project===proj.id)||{};
     const total=getProjectTotal(proj.id);
     const l=getLvl(proj.id,total,shareCC[proj.id]||{});
@@ -3113,7 +3154,8 @@ async function confirmLoadBackup(id,type){
   if(!(await gameConfirm(msg,type==='clean-slate'?'Restore Clean Slate Backup':'Restore Backup','Restore','Cancel')))return;
   loadBackup(id);
 }
-
+S._missedChecked=false;
+  
 async function loadBackup(id){
   try{
     toast('Loading backup...','info',3000);
@@ -3189,7 +3231,8 @@ async function loadBackup(id){
     S.todayLog=null;S.todaySessions=[];S.activeDate=null;S._milestonesLoaded=false;
     localStorage.removeItem('qa_activeDate');
     toast('Backup restored successfully. The forge remembers.','success',4000);
-    await loadData();await loadAll();nav('forge');
+    S._missedChecked=false;
+  await loadData();await loadAll();nav('forge');
   }catch(e){
     toast('Restore failed: '+e.message,'error');
     console.error('Restore error:',e);
@@ -3739,9 +3782,9 @@ async function submitMissedDay(){
   // Upsert daily_log for that date
   const existR=await db.from('daily_log').select('id').eq('date',dateStr).maybeSingle();
   if(existR.data){
-    await db.from('daily_log').update(Object.assign({},ctVals,{reflection,day_closed:true,c10_reflection:true})).eq('date',dateStr);
+    await db.from('daily_log').update(Object.assign({},ctVals,{reflection,day_closed:true})).eq('date',dateStr);
   } else {
-    await db.from('daily_log').insert(Object.assign({date:dateStr},ctVals,{reflection,day_closed:true,c10_reflection:true}));
+    await db.from('daily_log').insert(Object.assign({date:dateStr},ctVals,{reflection,day_closed:true}));
   }
   // Update streaks — kept=+1, broken=reset to 0
   const streakR=await db.from('commandment_streaks').select('*');
@@ -3820,7 +3863,7 @@ async function renderFood(){
   }
 
   // Today's entries
-  const todayLogs=logs.filter(l=>l.date===today());
+  const todayLogs=logs.filter(l=>l.date===localToday());
   const todayHTML=todayLogs.length>0?todayLogs.map(function(l){
     return`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:13px">
       <div style="font-family:var(--fc);font-size:10px;color:var(--gold);width:80px;flex-shrink:0">${l.meal_type}</div>
@@ -4101,7 +4144,7 @@ async function renderMilestones(){
     return`<div style="display:flex;gap:16px;padding:12px 0;border-bottom:0.5px solid var(--border);align-items:flex-start">
       <div style="font-family:var(--fc);font-size:11px;color:var(--ash);width:80px;flex-shrink:0;padding-top:2px">${m.date}</div>
       <div style="flex:1">
-        <div style="font-size:13px;color:var(--parch);margin-bottom:4px;line-height:1.5">${m.description}</div>
+        <div style="font-size:13px;color:var(--parch);margin-bottom:4px;line-height:1.5">${m.description||''}</div>
         <div style="display:flex;gap:10px;font-size:11px">
           <span style="color:var(--gold);font-family:var(--fc)">${m.project}</span>
           ${m.tangible_at_time!==null?`<span style="color:var(--ash)">${m.tangible_at_time} ${PROJECTS.find(p=>p.id===m.project)?.unit||''}</span>`:''}
@@ -4171,14 +4214,14 @@ async function renderCalendar(){
     const firstDay=new Date(year,month,1).getDay();
     const daysInMonth=new Date(year,month+1,0).getDate();
     const monthName=S.calDate.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
-    const todayStr=today();
+    const todayStr=localToday();
     let grid='';
     ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d=>grid+=`<div style="font-family:var(--fc);font-size:9px;letter-spacing:0.08em;color:var(--ash);text-align:center;padding:6px 0">${d}</div>`);
     for(let i=0;i<firstDay;i++)grid+=`<div></div>`;
     for(let d=1;d<=daysInMonth;d++){
       const ds=year+'-'+String(month+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
       const data=dayData[ds];const isFuture=ds>todayStr;const isSel=S.calSelected===ds;
-      const t=data?.total||0;const pct=Math.round(t/80*100);
+      const t=data?.total||0;const pct=Math.round(t/dailyMax()*100);
       let pillarDots='';
       if(data){
         const pPts={Soul:0,Body:0,Business:0};
@@ -4359,6 +4402,7 @@ async function renderCalendar(){
       // Include all sessions — tangible ones AND skip/penalty/declaration ones
       if(!projMap[s.project])projMap[s.project]={sessions:[],total:0,pts:0,pen:0,skipNotes:[],proj:PROJECTS.find(p=>p.id===s.project)};
       if(s.tangible_logged>0)projMap[s.project].sessions.push(s);
+      else if((s.penalty||0)<0)projMap[s.project].skipNotes.push({notes:s.notes||'',pen:s.penalty||0});
       projMap[s.project].total+=s.tangible_logged||0;
       projMap[s.project].pts+=(s.points_earned||0)+(s.penalty||0);
       projMap[s.project].pen+=s.penalty||0;
@@ -4468,13 +4512,13 @@ function calJumpWeek(val){
   d.setDate(d.getDate()+(parseInt(week)-1)*7);
   S.calDate=d;S.calSelected=null;renderCalendar();
 }
-function calPrev(){
+function calPrev(){S.calSelected=null;
   if(calView==='month')S.calDate.setMonth(S.calDate.getMonth()-1);
   else if(calView==='week')S.calDate.setDate(S.calDate.getDate()-7);
   else S.calDate.setFullYear(S.calDate.getFullYear()-1);
   renderCalendar();
 }
-function calNext(){
+function calNext(){S.calSelected=null;
   if(calView==='month')S.calDate.setMonth(S.calDate.getMonth()+1);
   else if(calView==='week')S.calDate.setDate(S.calDate.getDate()+7);
   else S.calDate.setFullYear(S.calDate.getFullYear()+1);
@@ -4484,6 +4528,7 @@ async function calSelect(d){S.calSelected=S.calSelected===d?null:d;await renderC
 
 // ── SESSION PAGINATION HELPER ──────────────────────────
 function sessPageChange(pid, screenKey, newPage){
+  newPage=Math.max(0,newPage);
   S.sessionPages[pid]=newPage;
   renderProject(screenKey);
 }
@@ -4502,6 +4547,7 @@ let _confirmResolve = null;
 function gameConfirm(message, title, okLabel, cancelLabel) {
   return new Promise(function(resolve) {
     _confirmResolve = resolve;
+    document.getElementById('confirm-cancel-btn').style.display = '';
     document.getElementById('confirm-title').textContent = title || 'Confirm';
     document.getElementById('confirm-message').textContent = message;
     document.getElementById('confirm-ok-btn').textContent = okLabel || 'Confirm';
@@ -4536,6 +4582,67 @@ function gameAlert(message, title) {
     document.getElementById('confirm-modal').classList.add('open');
   });
 }
+
+// ── PIN RESET (via ?reset_pin=true URL parameter) ─────────────────────
+var resetPinBuf='';
+var resetPinStep='new'; // 'new' or 'confirm'
+var resetPinFirst='';
+
+function initPinReset(){
+  // Only show reset screen if URL has ?reset_pin=true
+  if(window.location.search.indexOf('reset_pin=true')<0)return;
+  document.getElementById('pin-screen').style.display='none';
+  document.getElementById('pin-reset-screen').style.display='flex';
+}
+
+function rpp(digit){
+  if(resetPinBuf.length>=4)return;
+  resetPinBuf+=digit;
+  updateResetDots();
+  if(resetPinBuf.length===4){
+    setTimeout(function(){
+      if(resetPinStep==='new'){
+        resetPinFirst=resetPinBuf;
+        resetPinBuf='';
+        resetPinStep='confirm';
+        document.getElementById('pin-reset-label').textContent='Confirm new PIN';
+        updateResetDots();
+        document.getElementById('pin-reset-error').textContent='';
+      } else {
+        if(resetPinBuf===resetPinFirst){
+          localStorage.setItem('qa_pin',resetPinBuf);
+          document.getElementById('pin-reset-error').style.color='var(--safe)';
+          document.getElementById('pin-reset-error').textContent='PIN updated! Redirecting...';
+          setTimeout(function(){window.location.href='/';},1200);
+        } else {
+          document.getElementById('pin-reset-error').style.color='var(--ember)';
+          document.getElementById('pin-reset-error').textContent='PINs did not match. Try again.';
+          resetPinBuf='';
+          resetPinFirst='';
+          resetPinStep='new';
+          document.getElementById('pin-reset-label').textContent='Enter new 4-digit PIN';
+          updateResetDots();
+        }
+      }
+    },120);
+  }
+}
+
+function updateResetDots(){
+  for(var i=0;i<4;i++){
+    var dot=document.getElementById('rpd'+i);
+    if(dot)dot.style.background=i<resetPinBuf.length?'var(--gold)':'var(--border2)';
+  }
+}
+
+function resetPinClear(){resetPinBuf='';updateResetDots();}
+function resetPinDel(){if(resetPinBuf.length)resetPinBuf=resetPinBuf.slice(0,-1);updateResetDots();}
+
+// Call on load
+window.addEventListener('DOMContentLoaded',function(){
+  initPinReset();
+});
+
 </script>
 
 <!-- CUSTOM CONFIRM MODAL -->
@@ -4550,4 +4657,23 @@ function gameAlert(message, title) {
   </div>
 </div>
 </body>
-</html>
+</html<div id="pin-reset-screen" style="display:none;position:fixed;inset:0;background:var(--bg);z-index:9999;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px">
+  <div style="max-width:340px;width:100%;text-align:center">
+    <div class="pin-logo" style="margin-bottom:8px">The Quiet Anvil</div>
+    <div style="font-size:13px;color:var(--ember);font-family:var(--fc);letter-spacing:0.1em;margin-bottom:32px">PIN RESET</div>
+    <div style="font-size:14px;color:var(--parch);margin-bottom:24px" id="pin-reset-label">Enter new 4-digit PIN</div>
+    <div class="pin-dots" style="margin-bottom:24px">
+      <div class="pin-dot" id="rpd0"></div><div class="pin-dot" id="rpd1"></div>
+      <div class="pin-dot" id="rpd2"></div><div class="pin-dot" id="rpd3"></div>
+    </div>
+    <div class="pin-pad">
+      <button class="pin-btn" onclick="rpp('1')">1</button><button class="pin-btn" onclick="rpp('2')">2</button><button class="pin-btn" onclick="rpp('3')">3</button>
+      <button class="pin-btn" onclick="rpp('4')">4</button><button class="pin-btn" onclick="rpp('5')">5</button><button class="pin-btn" onclick="rpp('6')">6</button>
+      <button class="pin-btn" onclick="rpp('7')">7</button><button class="pin-btn" onclick="rpp('8')">8</button><button class="pin-btn" onclick="rpp('9')">9</button>
+      <button class="pin-btn clear" onclick="resetPinClear()">Clear</button><button class="pin-btn" onclick="rpp('0')">0</button><button class="pin-btn clear" onclick="resetPinDel()">&#x232B;</button>
+    </div>
+    <div style="font-size:12px;color:var(--ember);margin-top:16px;min-height:20px" id="pin-reset-error"></div>
+    <div style="margin-top:24px"><a href="/" style="font-size:12px;color:var(--ash);font-family:var(--fc)">Back to login</a></div>
+  </div>
+</div>
+>
