@@ -923,13 +923,42 @@ async function autoClosePastDay(dateStr,logEntry){
 async function advanceDayIfReady(){
   const local=localToday();
   let active=getActiveDate();
-  // Ensure activeDate is never before game start
   if(!active||active<getGameStart()){active=getGameStart();setActiveDate(active);}
-  // Always advance activeDate to local date
-  // The forge shows today's date regardless of whether yesterday was closed
-  // Missed days are handled separately by checkMissedDays
-  if(local>active){
-    setActiveDate(local);
+  if(local<=active)return; // no change needed
+
+  // How many days have passed?
+  const activeDt=new Date(active+'T12:00:00');
+  const localDt=new Date(local+'T12:00:00');
+  const daysDiff=Math.round((localDt-activeDt)/(1000*60*60*24));
+
+  if(daysDiff===1){
+    // Exactly 1 day passed
+    const{data:log}=await db.from('daily_log').select('day_closed').eq('date',active).maybeSingle();
+    if(log&&log.day_closed){
+      // Forge was closed — advance to today
+      setActiveDate(local);
+      S.activeDate=local;
+      S.allSessions=[];S.allLogs=[];
+    }
+    // If forge NOT closed: keep activeDate as-is, forge shows unclosed day
+    // with "day has turned" banner — user must close before advancing
+  } else {
+    // 2+ days passed — auto-close the gap, set activeDate to yesterday
+    const yest=new Date(localDt);yest.setDate(yest.getDate()-1);
+    const yStr=localDateStr(yest);
+    // Auto-close all days from active up to (not including) yesterday
+    const{data:logs}=await db.from('daily_log').select('date,day_closed').gte('date',active).lt('date',yStr);
+    const logMap={};(logs||[]).forEach(function(l){logMap[l.date]=l;});
+    const d=new Date(activeDt);
+    const yDate=new Date(yStr+'T12:00:00');
+    while(d<yDate){
+      const ds=localDateStr(d);
+      const lg=logMap[ds];
+      if(!lg||!lg.day_closed){await autoClosePastDay(ds,lg||null);}
+      d.setDate(d.getDate()+1);
+    }
+    setActiveDate(yStr);
+    S.activeDate=yStr;
     S.allSessions=[];S.allLogs=[];
   }
 }
@@ -1752,7 +1781,7 @@ async function submitSession(){
     S.committedProjects[S.pendingSessionPid].hasSession=true;
     await saveCommitted();
   }
-  S.pendingSessionDate=null;closeModal('session-modal');S.allSessions=[];S._allLoaded=false;S.sessionPages={};await loadData();await loadAll();
+  S.pendingSessionDate=null;closeModal('session-modal');S.allSessions=[];S._allLoaded=false;S.sessionPages={};await loadAll();await loadData();
   if(S._afterMissedSession){S._afterMissedSession=false;showMissedDayPrompt();}
   if(newLvl>oldLvl)showUnlock(proj.titles[newLvl-1],proj.id+' — Level '+newLvl+' of 10',UNLOCK_MSGS[proj.id]?.[newLvl-1]||'The forge marks you.');
 }
@@ -1930,7 +1959,7 @@ async function deleteSession(sessionId, pid, tangible){
     await saveCommitted();
   }
   toast('Session removed','info');
-  S.allSessions=[];S._allLoaded=false;await loadData();await loadAll();
+  S.allSessions=[];S._allLoaded=false;await loadAll();await loadData();
 }
 
 // ── CT ─────────────────────────────────────────────────
@@ -3654,17 +3683,23 @@ let missedDays=[];
 let missedDayIndex=0;
 
 async function checkMissedDays(){
-  // Find all dates from game start to yesterday (local) with no closed daily_log
-  const yest=new Date();yest.setDate(yest.getDate()-1);
-  const yesterdayStr=localDateStr(yest);
+  // Find unclosed days BEFORE activeDate (not including activeDate itself)
+  // activeDate is the day the user is currently working on
+  const activeStr=today(); // S.activeDate
   const startStr=getGameStart();
-  if(yesterdayStr<startStr)return;
+  if(!activeStr||activeStr<=startStr)return;
+  // Look for unclosed days between game start and (activeDate - 1 day)
+  const activeDt=new Date(activeStr+'T12:00:00');
+  const prevDt=new Date(activeDt);prevDt.setDate(prevDt.getDate()-1);
+  const prevStr=localDateStr(prevDt);
+  if(prevStr<startStr)return;
   const{data:logs}=await db.from('daily_log').select('date,day_closed').order('date');
   const closedDates=new Set((logs||[]).filter(l=>l.day_closed).map(l=>l.date));
   missedDays=[];
   const start=new Date(startStr+'T12:00:00');
   const d=new Date(start);
-  while(localDateStr(d)<=yesterdayStr){
+  const stopDt=new Date(activeStr+'T12:00:00'); // stop before activeDate
+  while(d<stopDt){
     const ds=localDateStr(d);
     if(!closedDates.has(ds))missedDays.push(ds);
     d.setDate(d.getDate()+1);
@@ -4490,21 +4525,24 @@ function showUnlock(title,sub,msg){document.getElementById('ul-title').textConte
 function closeUnlock(){document.getElementById('unlock').classList.remove('open');}
 
 // ── INIT ───────────────────────────────────────────────
-if(window.location.search.indexOf('reset_pin=true')>=0){
-  document.getElementById('pin-screen').classList.add('active');
-  var prs=document.getElementById('pin-reset-screen');
-  prs.style.display='flex';
-  prs.style.position='fixed';
-  prs.style.inset='0';
-  prs.style.zIndex='10000';
-  prs.style.flexDirection='column';
-  prs.style.alignItems='center';
-  prs.style.justifyContent='center';
-  prs.style.padding='40px 20px';
-  prs.style.background='#1a1510';
-} else {
-  document.getElementById('pin-screen').classList.add('active');
-}
+document.addEventListener('DOMContentLoaded',function(){
+  if(window.location.search.indexOf('reset_pin=true')>=0){
+    var prs=document.getElementById('pin-reset-screen');
+    if(prs){
+      prs.style.display='flex';
+      prs.style.position='fixed';
+      prs.style.top='0';prs.style.left='0';prs.style.right='0';prs.style.bottom='0';
+      prs.style.zIndex='10000';
+      prs.style.flexDirection='column';
+      prs.style.alignItems='center';
+      prs.style.justifyContent='center';
+      prs.style.padding='40px 20px';
+      prs.style.background='#1a1510';
+    }
+  } else {
+    document.getElementById('pin-screen').classList.add('active');
+  }
+});
 
 // ── GAME CONFIRM MODAL ──────────────────────────────────────────────
 let _confirmResolve = null;
